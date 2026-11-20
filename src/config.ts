@@ -185,8 +185,7 @@ export const siteConfig = {
     {
       company: "A national smart-home company",
       title: "Operations leader",
-      // TODO: Start date was not provided. Do not invent one. Keep the range as "Current".
-      dateRange: "Current",
+      dateRange: "Aug 2017 – Present",
       bullets: [
         "Operations leader for field teams, including onboarding and training.",
         "Taught the field team to use AI tools to troubleshoot field issues, and AI agents to automate recurring tasks.",
