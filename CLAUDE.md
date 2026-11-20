@@ -18,7 +18,7 @@ npm run preview   # Preview the production build
 
 - Use only facts already in `src/config.ts` or explicitly supplied for this site.
 - Do not invent metrics, clients, testimonials, dates, employers, or skills.
-- Mark gaps as `TODO`. Do not fill them with plausible placeholder copy.
+- Record gaps in `TODO.md` or as code comments. Do not render the word TODO on the site. Do not fill a gap with plausible placeholder copy.
 - Do not name the current employer. Say "operations leader at a national smart-home company."
 - Do not add a phone number.
 - Do not add Salesforce, Figma, or formal UX to the skills.

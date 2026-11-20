@@ -18,7 +18,7 @@ npm run build
 npm run preview
 ```
 
-All public copy lives in `src/config.ts`. Sections with an empty list are hidden. Do not invent metrics, clients, testimonials, dates, or skills. If a fact is missing, mark it `TODO` in that file.
+All public copy lives in `src/config.ts`. Sections with an empty list are hidden. Do not invent metrics, clients, testimonials, dates, or skills. If a fact is missing, record it in `TODO.md` or as a code comment. Do not render the word TODO on the site.
 
 ## Deploy
 

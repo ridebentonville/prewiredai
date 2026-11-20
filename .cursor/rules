@@ -6,7 +6,7 @@ Bryce Nelson's public site, built on Ryan Fitzgerald's devportfolio (Astro, Tail
 
 - Change copy in `src/config.ts` only, unless a section needs a new field.
 - Do not invent metrics, clients, testimonials, dates, or skills.
-- Missing facts are `TODO` strings or `TODO` comments. Never fake data.
+- Missing facts go in `TODO.md` or as code comments. Never render the word TODO. Never fake data.
 - Do not name the current employer. Use "a national smart-home company."
 - Do not add a phone number, Salesforce, Figma, formal UX, or a reporting-automation case study.
 - Keep the MIT license and the Ryan Fitzgerald credit.

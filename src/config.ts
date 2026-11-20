@@ -4,7 +4,7 @@
  * https://github.com/RyanFitzgerald/devportfolio
  *
  * Facts only. Do not invent metrics, clients, testimonials, dates, or skills.
- * Missing facts stay as TODO comments or TODO strings. Never fill them with fake data.
+ * Missing facts stay as comments in this file and in TODO.md. Never render the word TODO, and never fill a gap with fake data.
  *
  * Privacy: do not name the current employer. The public line is
  * "operations leader at a national smart-home company".
@@ -37,10 +37,9 @@ export interface CaseStudy {
   approach: string;
   stack: string[];
   status: string;
-  next: string;
+  /** Omit when unknown. Do not put a TODO string here. */
+  next?: string;
   image?: CaseStudyImage;
-  /** Shown instead of an image. Must start with "TODO:" when the visual does not exist. */
-  imageTodo?: string;
 }
 
 export interface Venture {
@@ -49,8 +48,6 @@ export interface Venture {
   urlLabel: string;
   role: string;
   summary: string;
-  /** Obvious gap. Rendered on the page. Must start with "TODO:" when set. */
-  note?: string;
 }
 
 export interface ExperienceItem {
@@ -114,11 +111,10 @@ export const siteConfig = {
       problem:
         "Door-to-door sales teams need coaching that fits the field. d2dcopilot is an AI coaching app for those teams.",
       approach:
-        "I built it with AI tools: Expo and React Native, on Firebase. It is still in development. The Brinks Home Security use is a pilot, not a finished rollout.",
+        "I built it with AI tools: Expo and React Native, on Firebase. Still in development.",
       stack: ["Expo", "React Native", "Firebase"],
-      status:
-        "Piloted with Brinks Home Security: 5 managers and 5 reps. The app is still in development. These are pilot counts, not a company-wide result.",
-      next: "A spring expansion is planned, with a target rollout to 100+ reps in May. That rollout is a target, not a completed result.",
+      status: "Pilot with Brinks Home Security: 5 managers and 5 reps.",
+      next: "A spring expansion is planned, with a target rollout to 100+ reps in May.",
       image: {
         src: "/images/d2dcopilot.png",
         alt: "Screenshot of the public d2dcopilot.com landing page. The headline reads: Door-to-door reps get a better next line before the next knock.",
@@ -140,10 +136,8 @@ export const siteConfig = {
       stack: ["AI tools", "AI agents"],
       status:
         "In use with the field team I lead at a national smart-home company. This is a practice, not a shipped product.",
-      // TODO: What comes next for this enablement work was not provided. Do not invent a rollout, headcount, or result.
-      next: "TODO: What's next was not provided.",
-      // TODO: No visual was provided. Do not mock a training deck, chat log, or screenshot.
-      imageTodo: "TODO: Visual was not provided.",
+      // TODO: What comes next for this enablement work was not provided. Do not invent a rollout, headcount, or result. Leave `next` unset so the field stays hidden.
+      // TODO: No visual was provided. Do not mock a training deck, chat log, or screenshot. Leave `image` unset.
     },
     {
       name: "Door-to-door market signal table",
@@ -156,10 +150,8 @@ export const siteConfig = {
       stack: ["Clay"],
       status:
         "The table covers 34 companies. Company names and scores are not published on this site.",
-      // TODO: How this table gets used next was not provided. Do not invent outreach, pipeline, or meetings booked.
-      next: "TODO: What's next was not provided.",
-      // TODO: Visual must stay company-level. No contact names, emails, or phone numbers.
-      imageTodo: "TODO: Company-level visual of the Clay table. No contacts.",
+      // TODO: How this table gets used next was not provided. Do not invent outreach, pipeline, or meetings booked. Leave `next` unset.
+      // TODO: A visual must stay company-level. No contact names, emails, or phone numbers. Leave `image` unset.
     },
   ] satisfies CaseStudy[],
   ventures: [
@@ -177,7 +169,7 @@ export const siteConfig = {
       urlLabel: "ridesoakstay.com",
       role: "Founder",
       summary:
-        "A directory that helps English-speaking travelers to Japan find lodging, tattoo-friendly onsens, and experiences with English-speaking guides.",
+        "A directory helping English-speaking travelers to Japan find lodging, tattoo-friendly onsens, and experiences with English-speaking guides.",
     },
   ] satisfies Venture[],
   experience: [
