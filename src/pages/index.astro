@@ -1,0 +1,57 @@
+---
+import Header from "../components/Header.astro";
+import Hero from "../components/Hero.astro";
+import About from "../components/About.astro";
+import CaseStudies from "../components/CaseStudies.astro";
+import Ventures from "../components/Ventures.astro";
+import Experience from "../components/Experience.astro";
+import Education from "../components/Education.astro";
+import Footer from "../components/Footer.astro";
+import { siteConfig } from "../config";
+import "../styles/global.css";
+
+const canonical = Astro.site
+  ? new URL("/", Astro.site).href
+  : "https://prewiredai.com/";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={siteConfig.description} />
+    <meta name="theme-color" content={siteConfig.accentColor} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={`${siteConfig.name} — ${siteConfig.title}`} />
+    <meta property="og:description" content={siteConfig.description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>{siteConfig.name} — {siteConfig.title}</title>
+  </head>
+  <body style={`--accent: ${siteConfig.accentColor}`}>
+    <a
+      href="#about"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-white focus:px-3 focus:py-2"
+    >
+      Skip to content
+    </a>
+    <Header />
+    <main>
+      <Hero />
+      <About />
+      <CaseStudies />
+      <Ventures />
+      <Experience />
+      <Education />
+    </main>
+    <Footer />
+  </body>
+</html>

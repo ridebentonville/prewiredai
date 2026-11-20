@@ -1,0 +1,62 @@
+---
+import { siteConfig } from "../config";
+
+const experience = siteConfig.experience ?? [];
+---
+
+{
+  experience.length > 0 && (
+    <section id="experience" class="anchor border-b border-stone-200">
+      <div class="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-6 py-16 sm:px-10 lg:grid-cols-12 lg:gap-16 lg:py-24">
+        <div class="lg:col-span-4">
+          <h2 class="text-3xl font-medium tracking-tight text-stone-950 sm:text-4xl lg:text-5xl">
+            Experience
+          </h2>
+          <div
+            class="mt-3 h-1 w-14 rounded-full"
+            style={`background-color: ${siteConfig.accentColor}`}
+          />
+        </div>
+
+        <div class="lg:col-span-8">
+          <ol class="border-l border-stone-300">
+            {experience.map((job) => (
+              <li class="relative pb-10 pl-6 last:pb-0">
+                <span
+                  class="absolute top-1.5 -left-[5px] h-2.5 w-2.5 rounded-full"
+                  style={`background-color: ${siteConfig.accentColor}`}
+                  aria-hidden="true"
+                />
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+                  <h3 class="text-base font-medium text-stone-950 sm:text-lg">
+                    {job.title}
+                  </h3>
+                  <p class="text-xs text-stone-500 sm:text-sm">{job.dateRange}</p>
+                </div>
+                <p
+                  class="mt-1 text-sm sm:text-base"
+                  style={`color: ${siteConfig.accentColor}`}
+                >
+                  {job.company}
+                </p>
+                {job.bullets && job.bullets.length > 0 && (
+                  <ul class="mt-3 space-y-2">
+                    {job.bullets.map((bullet) => (
+                      <li class="flex items-start gap-3 text-sm leading-relaxed text-stone-700">
+                        <span
+                          class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-stone-400"
+                          aria-hidden="true"
+                        />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </section>
+  )
+}
