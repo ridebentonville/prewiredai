@@ -168,9 +168,8 @@ export const siteConfig = {
       url: "https://japanima.com",
       urlLabel: "japanima.com",
       role: "Founder",
-      summary: "Still in development.",
-      // TODO: A product description was not provided. Do not guess what JAPANIMA is.
-      note: "TODO: Product description was not provided.",
+      summary:
+        "JAPANIMA brings international adventure travelers to rural Japan, starting with premium e-mountain bike journeys.",
     },
     {
       name: "ridesoakstay.com",
