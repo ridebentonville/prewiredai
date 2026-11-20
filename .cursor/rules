@@ -1,0 +1,18 @@
+# prewiredai portfolio
+
+Bryce Nelson's public site, built on Ryan Fitzgerald's devportfolio (Astro, Tailwind CSS v4, MIT).
+
+## Content
+
+- Change copy in `src/config.ts` only, unless a section needs a new field.
+- Do not invent metrics, clients, testimonials, dates, or skills.
+- Missing facts are `TODO` strings or `TODO` comments. Never fake data.
+- Do not name the current employer. Use "a national smart-home company."
+- Do not add a phone number, Salesforce, Figma, formal UX, or a reporting-automation case study.
+- Keep the MIT license and the Ryan Fitzgerald credit.
+
+## Code
+
+- Astro components, Tailwind utility classes, IBM Plex Mono.
+- New sections read from config and render nothing when their data is empty.
+- `npm run build` must pass.

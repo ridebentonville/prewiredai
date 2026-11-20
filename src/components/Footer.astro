@@ -1,0 +1,103 @@
+---
+import { siteConfig } from "../config";
+
+const hasCaseStudies =
+  siteConfig.caseStudies && siteConfig.caseStudies.length > 0;
+const hasVentures = siteConfig.ventures && siteConfig.ventures.length > 0;
+const hasExperience =
+  siteConfig.experience && siteConfig.experience.length > 0;
+const hasEducation = siteConfig.education && siteConfig.education.length > 0;
+
+const pageLinks = [
+  { href: "#about", label: "About" },
+  hasCaseStudies ? { href: "#case-studies", label: "Case studies" } : null,
+  hasVentures ? { href: "#ventures", label: "Ventures" } : null,
+  hasExperience ? { href: "#experience", label: "Experience" } : null,
+  hasEducation ? { href: "#education", label: "Education" } : null,
+].filter((link) => link !== null);
+
+const contactLinks = [
+  siteConfig.social.email
+    ? {
+        href: `mailto:${siteConfig.social.email}`,
+        label: siteConfig.social.email,
+        external: false,
+      }
+    : null,
+  siteConfig.social.linkedin
+    ? { href: siteConfig.social.linkedin, label: "LinkedIn", external: true }
+    : null,
+  siteConfig.social.website
+    ? {
+        href: siteConfig.social.website,
+        label: siteConfig.social.websiteLabel ?? "Website",
+        external: true,
+      }
+    : null,
+].filter((link) => link !== null);
+---
+
+<footer class="border-t border-stone-200 bg-white">
+  <div class="mx-auto max-w-6xl px-6 py-12 sm:px-10">
+    <div class="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
+      <div class="max-w-md">
+        <p class="text-lg font-medium text-stone-950">{siteConfig.name}</p>
+        <p class="mt-2 text-sm leading-relaxed text-stone-600">
+          {siteConfig.title}. {siteConfig.location}.
+        </p>
+        <ul class="mt-5 flex flex-col gap-2">
+          {
+            contactLinks.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="text-sm text-stone-950 underline decoration-stone-300 underline-offset-4 hover:decoration-[var(--accent)]"
+                  {...(link.external
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : {})}
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <nav aria-label="Footer">
+        <ul class="flex flex-wrap gap-x-6 gap-y-2">
+          {
+            pageLinks.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="text-sm text-stone-600 underline-offset-4 hover:text-stone-950 hover:underline"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+    </div>
+
+    <div class="mt-10 flex flex-col gap-2 border-t border-stone-200 pt-6 text-xs leading-relaxed text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        © {new Date().getFullYear()} {siteConfig.name}
+      </p>
+      <p>
+        Template by
+        <a
+          href="https://github.com/RyanFitzgerald/devportfolio"
+          class="underline decoration-stone-300 underline-offset-4 hover:text-stone-800"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Ryan Fitzgerald
+        </a>
+        (devportfolio, MIT).
+      </p>
+    </div>
+  </div>
+</footer>

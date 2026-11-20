@@ -1,0 +1,41 @@
+---
+import { siteConfig } from "../config";
+---
+
+<section id="about" class="anchor border-b border-stone-200">
+  <div class="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-6 py-16 sm:px-10 lg:grid-cols-12 lg:gap-16 lg:py-24">
+    <div class="lg:col-span-4">
+      <h2 class="text-3xl font-medium tracking-tight text-stone-950 sm:text-4xl lg:text-5xl">
+        About
+      </h2>
+      <div
+        class="mt-3 h-1 w-14 rounded-full"
+        style={`background-color: ${siteConfig.accentColor}`}
+      >
+      </div>
+    </div>
+
+    <div class="lg:col-span-8">
+      <p class="max-w-2xl text-base leading-relaxed text-stone-700 sm:text-lg">
+        {siteConfig.aboutMe}
+      </p>
+
+      {
+        siteConfig.skills.length > 0 && (
+          <div class="mt-8">
+            <h3 class="text-xs uppercase tracking-[0.18em] text-stone-500">
+              Skills
+            </h3>
+            <ul class="mt-4 flex flex-wrap gap-2">
+              {siteConfig.skills.map((skill) => (
+                <li class="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-800 sm:text-sm">
+                  {skill}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      }
+    </div>
+  </div>
+</section>
