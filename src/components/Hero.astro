@@ -27,7 +27,8 @@ const links = [
 ---
 
 <section id="top" class="border-b border-stone-200">
-  <div class="mx-auto max-w-6xl px-6 py-14 sm:px-10 sm:py-20 lg:py-24">
+  <div class="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-14 sm:px-10 sm:py-20 lg:flex-row lg:items-center lg:justify-between lg:py-24">
+    <div class="max-w-3xl">
     <p class="text-xs uppercase tracking-[0.18em] text-stone-500">
       {siteConfig.location}
     </p>
@@ -68,5 +69,17 @@ const links = [
         }
       </ul>
     </div>
+    </div>
+    {
+      siteConfig.headshot && (
+        <img
+          src={siteConfig.headshot.src}
+          alt={siteConfig.headshot.alt}
+          width={siteConfig.headshot.width}
+          height={siteConfig.headshot.height}
+          class="order-first h-36 w-36 shrink-0 rounded-full object-cover ring-1 ring-stone-300 sm:h-44 sm:w-44 lg:order-last lg:h-56 lg:w-56"
+        />
+      )
+    }
   </div>
 </section>

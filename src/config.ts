@@ -74,6 +74,12 @@ export const siteConfig = {
     "Bryce Nelson builds AI tools and adoption for small and field-service go-to-market teams. Based in Bella Vista, Arkansas.",
   location: "Bella Vista, Arkansas",
   accentColor: "#1f4d3a",
+  headshot: {
+    src: "/images/bryce-nelson.jpg",
+    alt: "Bryce Nelson",
+    width: 400,
+    height: 400,
+  },
   roles: ["GTM engineer", "AI implementer", "RevOps"],
   social: {
     email: "brycednelson@gmail.com",
@@ -201,7 +207,6 @@ export const siteConfig = {
   ] satisfies ExperienceItem[],
   // TODO: No school, degree, or dates were provided. Leave this empty so the section stays hidden. Do not invent education.
   education: [] as EducationItem[],
-  // TODO: Headshot was not provided. Do not add a stock photo or a generated portrait.
   // TODO: GitHub profile URL was not provided. Do not guess a username.
   // TODO: Phone number is intentionally omitted.
   // TODO: Open Graph share image was not provided. Do not reuse the d2dcopilot screenshot as a portrait of Bryce.
