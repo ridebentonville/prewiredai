@@ -4,17 +4,21 @@
  * https://github.com/RyanFitzgerald/devportfolio
  *
  * Facts only. Do not invent metrics, clients, testimonials, dates, or skills.
- * Missing facts stay as TODO comments or TODO strings. Never fill them with fake data.
+ * Missing facts stay as TODO comments in this file. Never fill them with fake data,
+ * and never put TODO text in a rendered field: leave the field empty and it is hidden.
  *
  * Privacy: do not name the current employer. The public line is
  * "operations leader at a national smart-home company".
  * Do not add a phone number.
  * Do not add a reporting-automation case study.
+ * Do not name d2dcopilot's pilot client or publish pilot counts. The public line is
+ * "a national home security company".
  */
 
 export interface SocialLinks {
   email?: string;
   linkedin?: string;
+  github?: string;
   website?: string;
   websiteLabel?: string;
 }
@@ -25,6 +29,9 @@ export interface CaseStudyImage {
   width: number;
   height: number;
   caption?: string;
+  /** Optional smaller WebP for narrow screens. */
+  srcSmall?: string;
+  srcSmallWidth?: number;
 }
 
 export interface CaseStudy {
@@ -37,10 +44,19 @@ export interface CaseStudy {
   approach: string;
   stack: string[];
   status: string;
-  next: string;
+  /** Hidden when empty. */
+  next?: string;
+  /** Shows this study as the lead proof. Use on one study only. */
+  featured?: boolean;
   image?: CaseStudyImage;
-  /** Shown instead of an image. Must start with "TODO:" when the visual does not exist. */
-  imageTodo?: string;
+}
+
+export interface Offer {
+  name: string;
+  summary: string;
+  includes: string[];
+  /** Leave empty to show "Pricing on request". Never invent a number. */
+  price?: string;
 }
 
 export interface Venture {
@@ -49,7 +65,7 @@ export interface Venture {
   urlLabel: string;
   role: string;
   summary: string;
-  /** Obvious gap. Rendered on the page. Must start with "TODO:" when set. */
+  /** Optional note. Hidden when empty. Never put TODO text here. */
   note?: string;
 }
 
@@ -69,28 +85,36 @@ export interface EducationItem {
 
 export const siteConfig = {
   name: "Bryce Nelson",
-  title: "AI implementer and GTM tool builder",
+  title: "GTM engineer and AI implementer",
   description:
-    "Bryce Nelson builds AI tools and adoption for small and field-service go-to-market teams. Based in Bella Vista, Arkansas.",
+    "Bryce Nelson builds AI workflows and tools that make sales and field teams faster, and teaches non-technical teams to use them. Based in Bella Vista, Arkansas.",
   location: "Bella Vista, Arkansas",
   accentColor: "#1f4d3a",
   headshot: {
     src: "/images/bryce-nelson.jpg",
+    srcSmall: "/images/bryce-nelson-256.webp",
     alt: "Bryce Nelson",
     width: 400,
     height: 400,
   },
-  roles: ["GTM engineer", "AI implementer", "RevOps"],
+  openTo:
+    "Open to GTM engineering, RevOps and FDE roles, plus fixed-price builds.",
+  /**
+   * TODO: Scheduling link (for example a Cal.com or Calendly URL) was not provided.
+   * Leave empty and the "Book a call" button is hidden. Do not guess a URL.
+   */
+  schedulingUrl: "",
   social: {
     email: "brycednelson@gmail.com",
     linkedin: "https://www.linkedin.com/in/bryce-nelson-8557a364/",
+    github: "https://github.com/ridebentonville",
     website: "https://d2dcopilot.com",
     websiteLabel: "d2dcopilot.com",
   } satisfies SocialLinks,
+  heroHeadline:
+    "I build the AI workflows that make sales and field teams faster.",
   heroLead:
-    "AI implementer and GTM tool builder for small and field-service teams.",
-  heroBody:
-    "Operations leader with 13+ years of building onboarding and training for field teams.",
+    "GTM engineer and AI implementer with 13+ years building onboarding and training for field teams. Now I ship the tools: d2dcopilot (AI sales coaching, in pilot), Clay targeting tables, and agent workflows.",
   aboutMe:
     "I am an operations leader at a national smart-home company. I build AI tools for small and field-service go-to-market teams, and I teach non-technical teams to use them.",
   skills: [
@@ -111,16 +135,19 @@ export const siteConfig = {
       url: "https://d2dcopilot.com",
       urlLabel: "d2dcopilot.com",
       label: "Pilot",
+      featured: true,
       problem:
         "Door-to-door sales teams need coaching that fits the field. d2dcopilot is an AI coaching app for those teams.",
       approach:
-        "I built it with AI tools: Expo and React Native, on Firebase. It is still in development. The Brinks Home Security use is a pilot, not a finished rollout.",
+        "I built it with AI tools: Expo and React Native, on Firebase. It is still in development.",
       stack: ["Expo", "React Native", "Firebase"],
       status:
-        "Piloted with Brinks Home Security: 5 managers and 5 reps. The app is still in development. These are pilot counts, not a company-wide result.",
-      next: "A spring expansion is planned, with a target rollout to 100+ reps in May. That rollout is a target, not a completed result.",
+        "In a pilot with the door-to-door sales team of a national home security company. The app is still in development, and the pilot is not a finished rollout.",
+      // Do not add pilot counts, rollout targets, or the client's name.
       image: {
-        src: "/images/d2dcopilot.png",
+        src: "/images/d2dcopilot.webp",
+        srcSmall: "/images/d2dcopilot-720.webp",
+        srcSmallWidth: 720,
         alt: "Screenshot of the public d2dcopilot.com landing page. The headline reads: Door-to-door reps get a better next line before the next knock.",
         width: 1440,
         height: 900,
@@ -141,9 +168,7 @@ export const siteConfig = {
       status:
         "In use with the field team I lead at a national smart-home company. This is a practice, not a shipped product.",
       // TODO: What comes next for this enablement work was not provided. Do not invent a rollout, headcount, or result.
-      next: "TODO: What's next was not provided.",
       // TODO: No visual was provided. Do not mock a training deck, chat log, or screenshot.
-      imageTodo: "TODO: Visual was not provided.",
     },
     {
       name: "Door-to-door market signal table",
@@ -157,11 +182,42 @@ export const siteConfig = {
       status:
         "The table covers 34 companies. Company names and scores are not published on this site.",
       // TODO: How this table gets used next was not provided. Do not invent outreach, pipeline, or meetings booked.
-      next: "TODO: What's next was not provided.",
-      // TODO: Visual must stay company-level. No contact names, emails, or phone numbers.
-      imageTodo: "TODO: Company-level visual of the Clay table. No contacts.",
+      // TODO: A company-level visual of the Clay table was not provided. No contact names, emails, or phone numbers.
     },
   ] satisfies CaseStudy[],
+  // Fixed-scope offers. Prices stay empty ("Pricing on request") until Bryce sets them.
+  offers: [
+    {
+      name: "GTM workflow build",
+      summary:
+        "One AI workflow for a sales or operations team, scoped up front and built to a fixed scope.",
+      includes: [
+        "Scoping call and written scope",
+        "Build in your tools (for example Clay, MCP connectors, AI agents)",
+        "Handoff notes so your team can run it",
+      ],
+    },
+    {
+      name: "AI enablement for field teams",
+      summary:
+        "Training and adoption so a non-technical field team actually uses AI tools on the job.",
+      includes: [
+        "Use cases picked from the team's real work",
+        "Hands-on training for reps and managers",
+        "Simple guides the team keeps",
+      ],
+    },
+    {
+      name: "GTM tooling retainer",
+      summary:
+        "Ongoing help building and maintaining AI tools and workflows for a go-to-market team.",
+      includes: [
+        "A standing monthly scope",
+        "New workflows and fixes as needs change",
+        "Regular check-ins",
+      ],
+    },
+  ] satisfies Offer[],
   ventures: [
     {
       name: "JAPANIMA",
@@ -205,7 +261,12 @@ export const siteConfig = {
   ] satisfies ExperienceItem[],
   // TODO: No school, degree, or dates were provided. Leave this empty so the section stays hidden. Do not invent education.
   education: [] as EducationItem[],
-  // TODO: GitHub profile URL was not provided. Do not guess a username.
-  // TODO: Phone number is intentionally omitted.
-  // TODO: Open Graph share image was not provided. Do not reuse the d2dcopilot screenshot as a portrait of Bryce.
+  // Phone number is intentionally omitted.
+  // The Open Graph share image is a text card at /og-image.png. Do not swap in the d2dcopilot screenshot.
+  ogImage: {
+    src: "/og-image.png",
+    alt: "Bryce Nelson: I build the AI workflows that make sales and field teams faster.",
+    width: 1200,
+    height: 630,
+  },
 };

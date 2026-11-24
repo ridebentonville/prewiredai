@@ -18,7 +18,9 @@ npm run preview   # Preview the production build
 
 - Use only facts already in `src/config.ts` or explicitly supplied for this site.
 - Do not invent metrics, clients, testimonials, dates, employers, or skills.
-- Mark gaps as `TODO`. Do not fill them with plausible placeholder copy.
+- Mark gaps as `TODO` code comments and leave the field empty so it is hidden. Never render TODO text. Do not fill gaps with plausible placeholder copy.
+- Do not name d2dcopilot's pilot client or publish pilot counts or rollout targets. Say "a national home security company."
+- Offer prices stay empty ("Pricing on request") until Bryce sets them.
 - Do not name the current employer. Say "operations leader at a national smart-home company."
 - Do not add a phone number.
 - Do not add Salesforce, Figma, or formal UX to the skills.

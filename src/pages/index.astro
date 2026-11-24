@@ -3,6 +3,7 @@ import Header from "../components/Header.astro";
 import Hero from "../components/Hero.astro";
 import About from "../components/About.astro";
 import CaseStudies from "../components/CaseStudies.astro";
+import Offers from "../components/Offers.astro";
 import Ventures from "../components/Ventures.astro";
 import Experience from "../components/Experience.astro";
 import Education from "../components/Education.astro";
@@ -13,6 +14,28 @@ import "../styles/global.css";
 const canonical = Astro.site
   ? new URL("/", Astro.site).href
   : "https://prewiredai.com/";
+const pageTitle = `${siteConfig.name} — ${siteConfig.title}`;
+const ogImageUrl = new URL(siteConfig.ogImage.src, canonical).href;
+const sameAs = [siteConfig.social.linkedin, siteConfig.social.github].filter(
+  (url): url is string => Boolean(url),
+);
+const personJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  name: siteConfig.name,
+  url: canonical,
+  image: new URL(siteConfig.headshot.src, canonical).href,
+  jobTitle: siteConfig.title,
+  description: siteConfig.description,
+  email: siteConfig.social.email ? `mailto:${siteConfig.social.email}` : undefined,
+  address: {
+    "@type": "PostalAddress",
+    addressLocality: "Bella Vista",
+    addressRegion: "AR",
+    addressCountry: "US",
+  },
+  sameAs,
+};
 ---
 
 <html lang="en">
@@ -24,17 +47,29 @@ const canonical = Astro.site
     <meta name="description" content={siteConfig.description} />
     <meta name="theme-color" content={siteConfig.accentColor} />
     <link rel="canonical" href={canonical} />
-    <meta property="og:title" content={`${siteConfig.name} — ${siteConfig.title}`} />
+    <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={siteConfig.description} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content={siteConfig.name} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:width" content={String(siteConfig.ogImage.width)} />
+    <meta property="og:image:height" content={String(siteConfig.ogImage.height)} />
+    <meta property="og:image:alt" content={siteConfig.ogImage.alt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={siteConfig.description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+    <meta name="twitter:image:alt" content={siteConfig.ogImage.alt} />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <script type="application/ld+json" set:html={JSON.stringify(personJsonLd)} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <title>{siteConfig.name} — {siteConfig.title}</title>
+    <title>{pageTitle}</title>
   </head>
   <body style={`--accent: ${siteConfig.accentColor}`}>
     <a
@@ -48,6 +83,7 @@ const canonical = Astro.site
       <Hero />
       <About />
       <CaseStudies />
+      <Offers />
       <Ventures />
       <Experience />
       <Education />
