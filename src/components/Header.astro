@@ -10,18 +10,19 @@ const hasExperience =
 const hasEducation = siteConfig.education && siteConfig.education.length > 0;
 
 const links = [
-  { href: "#about", label: "About" },
-  hasCaseStudies ? { href: "#case-studies", label: "Case studies" } : null,
-  hasOffers ? { href: "#work-with-me", label: "Work with me" } : null,
-  hasVentures ? { href: "#ventures", label: "Ventures" } : null,
-  hasExperience ? { href: "#experience", label: "Experience" } : null,
-  hasEducation ? { href: "#education", label: "Education" } : null,
+  { href: "/#about", label: "About" },
+  hasCaseStudies ? { href: "/#case-studies", label: "Case studies" } : null,
+  hasOffers ? { href: "/#work-with-me", label: "Work with me" } : null,
+  { href: "/templates", label: "Templates" },
+  hasVentures ? { href: "/#ventures", label: "Ventures" } : null,
+  hasExperience ? { href: "/#experience", label: "Experience" } : null,
+  hasEducation ? { href: "/#education", label: "Education" } : null,
 ].filter((link) => link !== null);
 ---
 
 <header class="sticky top-0 z-40 border-b border-stone-200 bg-[#fafaf9]/90 backdrop-blur-sm">
   <nav class="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-10" aria-label="Page">
-    <a href="#top" class="text-sm font-medium text-stone-950">
+    <a href="/#top" class="text-sm font-medium text-stone-950">
       {siteConfig.name}
     </a>
     <ul class="grid grid-cols-2 gap-x-4 gap-y-1 sm:flex sm:flex-wrap sm:justify-end sm:gap-x-5 sm:gap-y-2">
