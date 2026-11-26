@@ -1,0 +1,165 @@
+---
+const controlClass =
+  "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-stone-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
+const inputs = [
+  { name: "volume", label: "Monthly manual hours", max: 1e9 },
+  { name: "minutes", label: "Average manual minutes per lead", max: 1e9 },
+  { name: "hourly", label: "Loaded hourly cost (USD)", max: 1e9 },
+  { name: "percent", label: "Conservative time saved (%)", max: 100 },
+  {
+    name: "investment",
+    label: "Your assumed one-time investment (USD, optional)",
+    max: 1e9,
+  },
+];
+---
+
+<section id="automation-roi" aria-labelledby="roi-title" class="flex min-w-0 flex-col rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">
+  <h2 id="roi-title" class="text-lg font-medium tracking-tight text-stone-950">
+    Automation ROI Calculator
+  </h2>
+  <p class="mt-3 text-sm leading-relaxed text-stone-600">
+    This interactive estimator uses your own inputs. Results are estimates, not benchmarks or a promise of savings.
+  </p>
+  <div class="mt-5 space-y-4 text-sm text-stone-700">
+    <div>
+      <label for="roi-unit" class="mb-1 block font-medium">What do you track monthly?</label>
+      <select id="roi-unit" class={controlClass}>
+        <option value="hours">Manual hours</option>
+        <option value="leads">Leads</option>
+        <option value="tickets">Support tickets</option>
+      </select>
+    </div>
+    {inputs.map(({ name, label, max }) => (
+      <div hidden={name === "minutes"}>
+        <label for={`roi-${name}`} class="mb-1 block font-medium">{label}</label>
+        <input
+          id={`roi-${name}`}
+          type="number"
+          inputmode="decimal"
+          min="0"
+          max={max}
+          step="any"
+          class={controlClass}
+        />
+      </div>
+    ))}
+  </div>
+
+  <p class="mt-5 text-sm leading-relaxed text-stone-600">
+    For leads or tickets, multiply monthly volume by average manual minutes per item and divide by 60 to get monthly manual hours. Multiply those hours by the time-saved percentage to get hours saved, then multiply by loaded hourly cost to value that time. Divide your assumed one-time investment by the monthly value to estimate payback in months.
+  </p>
+  <div class="mt-auto pt-5">
+    <div aria-live="polite" aria-atomic="true" class="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm">
+      <dl class="grid gap-3">
+        <div>
+          <dt class="text-stone-600">Monthly hours saved</dt>
+          <dd id="roi-hours" class="font-medium text-[var(--accent)]">—</dd>
+        </div>
+        <div>
+          <dt class="text-stone-600">Monthly value of time saved</dt>
+          <dd id="roi-value" class="font-medium text-[var(--accent)]">—</dd>
+        </div>
+        <div>
+          <dt class="text-stone-600">Estimated payback</dt>
+          <dd id="roi-payback" class="font-medium text-[var(--accent)]">Enter an assumed investment to estimate payback.</dd>
+        </div>
+      </dl>
+      <p id="roi-status" class="mt-3 text-stone-700">Enter your monthly workload, loaded hourly cost, and time saved to see estimates.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+  const roi = document.querySelector("#automation-roi");
+  const unit = roi?.querySelector<HTMLSelectElement>("#roi-unit");
+  const volume = roi?.querySelector<HTMLInputElement>("#roi-volume");
+  const minutes = roi?.querySelector<HTMLInputElement>("#roi-minutes");
+  const hourly = roi?.querySelector<HTMLInputElement>("#roi-hourly");
+  const percent = roi?.querySelector<HTMLInputElement>("#roi-percent");
+  const investment = roi?.querySelector<HTMLInputElement>("#roi-investment");
+  const volumeLabel = roi?.querySelector('label[for="roi-volume"]');
+  const minutesLabel = roi?.querySelector('label[for="roi-minutes"]');
+  const minutesRow = minutes?.parentElement;
+  const hoursResult = roi?.querySelector("#roi-hours");
+  const valueResult = roi?.querySelector("#roi-value");
+  const paybackResult = roi?.querySelector("#roi-payback");
+  const status = roi?.querySelector<HTMLParagraphElement>("#roi-status");
+
+  const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+  const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+  const months = new Intl.NumberFormat("en-US", {
+    style: "unit",
+    unit: "month",
+    unitDisplay: "long",
+    maximumFractionDigits: 2,
+  });
+
+  function estimatePayback(cost: number, monthlyValue: number) {
+    if (cost === 0) return months.format(0);
+    if (monthlyValue <= 0) return "Payback requires a positive monthly value.";
+    const payback = cost / monthlyValue;
+    if (!Number.isFinite(payback)) return "Payback exceeds the calculator’s range.";
+    if (payback < 0.01) return "Less than 0.01 months";
+    return months.format(payback);
+  }
+
+  if (roi && unit && volume && minutes && hourly && percent && investment &&
+      volumeLabel && minutesLabel && minutesRow && hoursResult && valueResult &&
+      paybackResult && status) {
+    let previousUnit = unit.value;
+
+    const update = () => {
+      const usesVolume = unit.value !== "hours";
+      const isTickets = unit.value === "tickets";
+      if (unit.value !== previousUnit) {
+        volume.value = "";
+        minutes.value = "";
+        previousUnit = unit.value;
+      }
+      volumeLabel.textContent = usesVolume
+        ? (isTickets ? "Monthly support tickets" : "Monthly leads")
+        : "Monthly manual hours";
+      minutesLabel.textContent = isTickets
+        ? "Average manual minutes per support ticket"
+        : "Average manual minutes per lead";
+      minutesRow.toggleAttribute("hidden", !usesVolume);
+
+      const required = usesVolume ? [volume, minutes, hourly, percent] : [volume, hourly, percent];
+      const active = [...required, investment];
+      for (const input of active) {
+        input.setAttribute("aria-invalid", String(!input.validity.valid));
+      }
+      const invalid = active.find((input) => !input.validity.valid);
+      const complete = required.every((input) => input.validity.valid && input.value !== "");
+      const manualHours = usesVolume
+        ? volume.valueAsNumber * minutes.valueAsNumber / 60
+        : volume.valueAsNumber;
+      const hoursSaved = manualHours * (percent.valueAsNumber / 100);
+      const monthlyValue = hoursSaved * hourly.valueAsNumber;
+
+      hoursResult.textContent = complete ? number.format(hoursSaved) : "—";
+      valueResult.textContent = complete ? currency.format(monthlyValue) : "—";
+      if (!investment.validity.valid) {
+        paybackResult.textContent = "Enter a valid assumed investment.";
+      } else if (investment.value === "") {
+        paybackResult.textContent = "Enter an assumed investment to estimate payback.";
+      } else {
+        paybackResult.textContent = complete
+          ? estimatePayback(investment.valueAsNumber, monthlyValue)
+          : "Complete the workload and cost inputs to estimate payback.";
+      }
+
+      status.hidden = !invalid && complete;
+      if (invalid) {
+        const label = invalid.labels?.[0]?.textContent;
+        status.textContent = `${label}: enter a number from 0 to ${number.format(Number(invalid.max))}.`;
+      } else if (!complete) {
+        status.textContent = "Enter your monthly workload, loaded hourly cost, and time saved to see estimates.";
+      }
+    };
+
+    roi.addEventListener("input", update);
+    update();
+  }
+</script>
