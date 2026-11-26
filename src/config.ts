@@ -217,6 +217,28 @@ export const siteConfig = {
         "Regular check-ins",
       ],
     },
+    {
+      name: "Draft-First Support & Post-Sales Triage Agent",
+      summary:
+        "A done-for-you fixed-price install of the post-sales triage agent, also available as a downloadable template pack. Incoming tickets are classified, enriched with HubSpot and knowledge-base context, and turned into an internal Slack summary plus a draft customer reply held for your approval.",
+      includes: [
+        "Scoping, connector setup, and knowledge-base wiring",
+        "Production Guardrails: draft-first approval, test mode on by default, pre-launch edge-case tests, and an owner-signed Go-Live checklist",
+        "Handoff notes and a rollback switch so the agent can be paused without deleting the workflow",
+      ],
+      price: "[Proposed / TBD] — custom quote",
+    },
+    {
+      name: "Account Health & Onboarding QA Agent",
+      summary:
+        "A done-for-you fixed-price install of the account-health agent, also available as a downloadable template pack. It watches onboarding milestones and underused accounts, posts a structured Slack digest, holds draft check-in emails, and queues CRM hygiene updates for dry-run, approved-rows-only apply.",
+      includes: [
+        "Scoping and a written onboarding-milestone map in your CRM",
+        "Production Guardrails: test mode and dry-run defaults, draft-only check-ins, approved-rows-only CRM updates, and an owner-signed Go-Live checklist",
+        "Handoff notes and a rollback switch; no silent overwrites or deletes",
+      ],
+      price: "[Proposed / TBD] — custom quote",
+    },
   ] satisfies Offer[],
   ventures: [
     {

@@ -30,20 +30,20 @@ export interface TemplatePack {
 export const templatesPage = {
   title: "Templates — Prewired AI automation packs",
   description:
-    "Draft list of Prewired AI automation packs: lead response, booking, invoice sync, and CRM cleanup. Safety-first, with test mode on by default.",
+    "Draft list of Prewired AI automation packs and post-sales AI agents: lead response, booking, invoice sync, CRM cleanup, support triage, and account health. Available as downloadable template packs and done-for-you fixed-price installs. Production Guardrails are the default.",
   heading: "Prewired AI automation packs",
   intro:
-    "Automation packs for small sales and service teams, built so nothing reaches a real customer until you decide it should.",
+    "Automation packs and post-sales AI agents for small sales and service teams. Each offer is available as a downloadable template pack and as a done-for-you fixed-price install, built so nothing reaches a real customer until you decide it should.",
   priceNote:
-    "Prices are draft ranges, not a live checkout. Nothing on this page is for sale yet, and [TBD] means the price is not set.",
+    "Prices are draft ranges, not a live checkout. Nothing on this page is for sale yet. [TBD] means the price is not set. [Proposed / TBD] means a range is still under review and is not an accepted list price.",
   safetyNote:
-    "Every pack ships with test mode on by default and a hard stop before the first live action.",
+    "Production Guardrails are the core of every pack: draft-first human approval before any customer-facing send, test mode and dry-run on by default, pre-launch edge-case tests, and an owner-signed Go-Live checklist. Nothing reaches a real customer, and no CRM record is changed, until you sign off.",
 };
 
 export const templatesTeaser = {
   heading: "Templates",
   summary:
-    "Prewired AI automation packs for lead response, booking, invoice sync, and CRM cleanup. Safety-first: test mode is the default and the first live action is a conscious step.",
+    "Prewired AI automation packs and post-sales AI agents, available as downloadable template packs and done-for-you fixed-price installs. Production Guardrails are the differentiator: draft-first approval, test mode and dry-run defaults, pre-launch tests, and an owner-signed Go-Live checklist.",
   linkLabel: "See the template packs",
 };
 
@@ -133,6 +133,30 @@ export const templatePacks: TemplatePack[] = [
     prices: [
       { label: "Template", value: "[TBD]" },
       { label: "Done-for-you", value: "$750–$1,500" },
+    ],
+  },
+  {
+    name: "Draft-First Support & Post-Sales Triage Agent",
+    tag: "Post-sales AI agent",
+    summary:
+      "Ingest a support ticket or email, classify and route it, pull HubSpot account context and matching knowledge-base articles, post an internal Slack summary or escalation for high-risk or VIP accounts, and hold a draft customer reply for a human to approve.",
+    safety:
+      "Draft-first: customer replies are never auto-sent. Test mode is the default, pre-launch edge-case tests ship with the pack, and go-live requires an owner-signed checklist.",
+    prices: [
+      { label: "Template pack", value: "[Proposed / TBD]" },
+      { label: "Done-for-you install", value: "[Proposed / TBD]" },
+    ],
+  },
+  {
+    name: "Account Health & Onboarding QA Agent",
+    tag: "Post-sales AI agent",
+    summary:
+      "Watch new-customer onboarding milestones and active-account activity. Flag stalled steps, missing CRM fields, and underutilization risks. Post a structured owner digest in Slack, hold draft-only check-in emails, and queue CRM hygiene updates for a dry-run, approved-rows-only apply.",
+    safety:
+      "Check-in emails stay draft-only. CRM updates are dry-run and approved-rows-only, with no silent overwrites or deletes. Test mode is the default, and go-live requires an owner-signed checklist.",
+    prices: [
+      { label: "Template pack", value: "[Proposed / TBD]" },
+      { label: "Done-for-you install", value: "[Proposed / TBD]" },
     ],
   },
 ];
