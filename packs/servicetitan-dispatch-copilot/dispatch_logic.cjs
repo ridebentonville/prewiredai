@@ -42,6 +42,45 @@ function toBool(v, d) {
   if (['false', 'no', 'n', '0'].includes(s)) return false;
   return d;
 }
+function toBoolKnown(v) {
+  if (typeof v === 'boolean') return { value: v, known: true, blank: false };
+  if (isBlank(v)) return { value: null, known: false, blank: true };
+  const s = String(v).trim().toLowerCase();
+  if (['true', 'yes', 'y', '1'].includes(s)) return { value: true, known: true, blank: false };
+  if (['false', 'no', 'n', '0'].includes(s)) return { value: false, known: true, blank: false };
+  return { value: null, known: false, blank: false };
+}
+// Canonical job-status vocabulary. Aliases collapse to one display value and one lowercase key.
+const JOB_STATUS_CANONICAL = {
+  unassigned: 'Unassigned',
+  scheduled: 'Scheduled',
+  pending: 'Pending',
+  open: 'Open',
+  dispatched: 'Dispatched',
+  'in progress': 'In Progress',
+  working: 'In Progress',
+  'in-progress': 'In Progress',
+  'on hold': 'On Hold',
+  hold: 'On Hold',
+  'on-hold': 'On Hold',
+  completed: 'Completed',
+  done: 'Completed',
+  closed: 'Completed',
+  canceled: 'Canceled',
+  cancelled: 'Canceled',
+};
+const OPEN_JOB_STATUS_KEYS = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'on hold'];
+const TERMINAL_JOB_STATUS_KEYS = ['completed', 'canceled'];
+function normalizeJobStatus(v) {
+  const raw = String(v == null ? '' : v).trim();
+  if (!raw) return { raw: '', canonical: '', key: '', known: false, blank: true };
+  const lookup = lc(raw);
+  if (Object.prototype.hasOwnProperty.call(JOB_STATUS_CANONICAL, lookup)) {
+    const canonical = JOB_STATUS_CANONICAL[lookup];
+    return { raw: raw, canonical: canonical, key: lc(canonical), known: true, blank: false };
+  }
+  return { raw: raw, canonical: raw, key: lookup, known: false, blank: false };
+}
 function parseTime(iso) {
   if (isBlank(iso)) return null;
   const t = Date.parse(iso);
@@ -279,8 +318,8 @@ const TABLE_COLUMNS = {
   jobs: JOB_COLUMNS,
   aging_jobs: JOB_COLUMNS,
   technicians: [
-    { key: 'tech_id', aliases: ['Technician ID', 'Tech ID', 'ID', 'Employee ID'] },
-    { key: 'name', aliases: ['Name', 'Technician', 'Technician Name', 'Tech', 'Tech Name', 'Employee'] },
+    { key: 'tech_id', label: 'Technician ID', aliases: ['Technician ID', 'Tech ID', 'ID', 'Employee ID'] },
+    { key: 'name', label: 'Technician Name', aliases: ['Name', 'Technician', 'Technician Name', 'Tech', 'Tech Name', 'Employee'] },
     { key: 'trade', aliases: ['Trade', 'Business Unit', 'Department'] },
     { key: 'sales_capable', aliases: ['Sales Capable', 'Can Sell', 'Sales'] },
     { key: 'shift_hours', aliases: ['Shift Hours', 'Shift Length', 'Hours'] },
@@ -288,32 +327,32 @@ const TABLE_COLUMNS = {
   capacity: [
     { key: 'window_id', aliases: ['Window ID', 'Slot ID', 'ID'] },
     { key: 'business_unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
-    { key: 'window_start', aliases: ['Window Start', 'Slot Start', 'Start'] },
-    { key: 'window_end', aliases: ['Window End', 'Slot End', 'End'] },
-    { key: 'open_slots', aliases: ['Open Slots', 'Open Capacity', 'Available Slots', 'Slots Open'] },
+    { key: 'window_start', label: 'Window Start', required: true, aliases: ['Window Start', 'Slot Start', 'Start'] },
+    { key: 'window_end', label: 'Window End', required: true, aliases: ['Window End', 'Slot End', 'End'] },
+    { key: 'open_slots', label: 'Open Slots', required: true, aliases: ['Open Slots', 'Open Capacity', 'Available Slots', 'Slots Open'] },
   ],
   memberships: [
-    { key: 'membership_id', aliases: ['Membership ID', 'Membership #', 'Membership Number', 'ID'] },
+    { key: 'membership_id', label: 'Membership ID', required: true, aliases: ['Membership ID', 'Membership #', 'Membership Number', 'ID'] },
     { key: 'customer_name', aliases: ['Customer', 'Customer Name'] },
     { key: 'customer_phone', aliases: ['Customer Phone', 'Phone', 'Phone Number'] },
     { key: 'business_unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
     { key: 'plan', aliases: ['Plan', 'Membership Plan', 'Membership Type'] },
-    { key: 'status', aliases: ['Status', 'Membership Status'] },
-    { key: 'next_service_due', aliases: ['Next Service Due', 'Next Service Date', 'Next Due', 'Next Visit Due'] },
+    { key: 'status', label: 'Membership Status', required: true, aliases: ['Membership Status', 'Status'] },
+    { key: 'next_service_due', label: 'Next Service Due', required: true, aliases: ['Next Service Due', 'Next Service Date', 'Next Due', 'Next Visit Due'] },
   ],
   estimates: [
-    { key: 'estimate_id', aliases: ['Estimate ID', 'Estimate #', 'Estimate Number', 'ID'] },
+    { key: 'estimate_id', label: 'Estimate ID', required: true, aliases: ['Estimate ID', 'Estimate #', 'Estimate Number', 'ID'] },
     { key: 'customer_name', aliases: ['Customer', 'Customer Name'] },
     { key: 'customer_phone', aliases: ['Customer Phone', 'Phone', 'Phone Number'] },
     { key: 'business_unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
-    { key: 'status', aliases: ['Status', 'Estimate Status'] },
+    { key: 'status', label: 'Estimate Status', required: true, aliases: ['Estimate Status', 'Status'] },
     { key: 'amount', aliases: ['Amount', 'Total', 'Estimate Total', 'Subtotal'] },
     { key: 'created_at', aliases: ['Created At', 'Created On', 'Created Date'] },
     { key: 'last_followup_at', aliases: ['Last Followup At', 'Last Follow Up', 'Last Follow-Up', 'Last Followup', 'Last Follow Up On'] },
   ],
   calls: [
     { key: 'call_id', aliases: ['Call ID', 'Call #', 'Call Number', 'ID'] },
-    { key: 'received_at', aliases: ['Received At', 'Received On', 'Call Time', 'Call Date', 'Date'] },
+    { key: 'received_at', label: 'Received At', required: true, aliases: ['Received At', 'Received On', 'Call Time', 'Call Date', 'Date'] },
     { key: 'caller_name', aliases: ['Caller Name', 'Caller', 'Customer Name'] },
     { key: 'caller_phone', aliases: ['Caller Phone', 'Phone', 'Phone Number', 'From'] },
     { key: 'address', aliases: ['Address', 'Location'] },
@@ -329,6 +368,9 @@ const TABLE_DATE_KEYS = {
   capacity: ['window_start', 'window_end'],
   estimates: ['created_at', 'last_followup_at'],
   calls: ['received_at'],
+};
+const TABLE_CALENDAR_KEYS = {
+  memberships: ['next_service_due'],
 };
 
 function columnNames(col) {
@@ -437,6 +479,30 @@ function toIsoInZone(v, tz) {
   const result = { iso: new Date(matches[0] + sec * 1000).toISOString(), bad: false };
   // For fall-back folds, use the first occurrence unless the export provides an explicit offset.
   if (matches.length > 1) result.ambiguous = true;
+  return result;
+}
+
+// Calendar dates (membership due dates, date-only cells) stay YYYY-MM-DD. US dates like 3/10/2026
+// are accepted. Timestamps are reduced to the shop-local calendar date. Invalid dates are blanked.
+function parseCalendarDate(v, tz) {
+  if (isBlank(v)) return { date: '', bad: false };
+  const raw = String(v).trim();
+  let y; let mo; let d; let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else {
+    m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) { mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000; }
+  }
+  if (m) {
+    if (!validCalendarDate(y, mo, d)) return { date: '', bad: true };
+    return { date: y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0'), bad: false };
+  }
+  const t = toIsoInZone(raw, tz || 'America/Chicago');
+  if (t.bad || !t.iso) return { date: '', bad: true, gap: t.gap };
+  const ms = parseTime(t.iso);
+  if (ms === null) return { date: '', bad: true };
+  const result = { date: localDate(ms, tz || 'America/Chicago'), bad: false };
+  if (t.ambiguous) result.ambiguous = true;
   return result;
 }
 
@@ -654,7 +720,11 @@ function prepareJobRows(rowsIn, opts) {
     });
     windows.forEach(function (w) { r[w.key] = jobWindowValue(raw, w.headers, w.pairs); });
     if (isBlank(r.job_id)) { res.skipped.push({ row: line, reason: 'missing job id' }); return; }
-    if (isBlank(r.status) && isBlank(r.scheduled_start)) { res.skipped.push({ row: line, reason: 'no status and no scheduled start (subtotal or footer row?)' }); return; }
+    if (/^(?:grand total|subtotal|totals?)$/i.test(r.job_id) && isBlank(r.status) && isBlank(r.scheduled_start)) {
+      res.skipped.push({ row: line, reason: 'totals row' });
+      return;
+    }
+    const rawStart = r.scheduled_start;
     JOB_DATE_KEYS.forEach(function (k) {
       const t = toIsoInZone(r[k], tz);
       const location = 'Row ' + line + ' in the ' + label + ', job ' + r.job_id + ' ' + k + ' "' + r[k] + '"';
@@ -663,10 +733,32 @@ function prepareJobRows(rowsIn, opts) {
       else if (t.bad) badDates.push('row ' + line + ', job ' + r.job_id + ' ' + k + ' "' + r[k] + '"');
       r[k] = t.iso;
     });
-    if (lc(r.status) === 'working') r.status = 'In Progress';
+    const stn = normalizeJobStatus(r.status);
+    if (stn.blank) {
+      res.headsUp.push('Row ' + line + ' in the ' + label + ', job ' + r.job_id + ' has no status. Status-dependent metrics have partial coverage.');
+    } else if (!stn.known) {
+      res.headsUp.push('Row ' + line + ' in the ' + label + ', job ' + r.job_id + ' has unrecognized status "' + stn.raw + '". It was left out of aging and completed KPIs until a known status is provided.');
+    } else {
+      r.status = stn.canonical;
+    }
+    if (isBlank(r.scheduled_start)) {
+      if (isBlank(rawStart)) {
+        res.headsUp.push('Row ' + line + ' in the ' + label + ', job ' + r.job_id + ' has no scheduled start. The job was kept as unscheduled (partial coverage).');
+      } else {
+        res.headsUp.push('Row ' + line + ' in the ' + label + ', job ' + r.job_id + ' has an unreadable scheduled start "' + rawStart + '". The job was kept as unscheduled (partial coverage).');
+      }
+    }
     validated.push(r);
   });
   res.technicians = resolveTechnicians(validated, res.headsUp);
+  validated.forEach(function (r) {
+    const techs = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id)));
+    const status = normalizeJobStatus(r.status);
+    const unassigned = status.key === 'unassigned' || (OPEN_JOB_STATUS_KEYS.includes(status.key) && techs.length === 0);
+    if (unassigned && isBlank(r.unassigned_since) && isBlank(r.booked_at)) {
+      res.headsUp.push('Job ' + r.job_id + ' is unassigned but has no usable Unassigned Since or Created On timestamp, so its age could not be computed.');
+    }
+  });
   validated.forEach(function (r) {
     const prev = byId.get(r.job_id);
     if (!prev) { byId.set(r.job_id, r); return; }
@@ -731,6 +823,19 @@ function normalizeJobsExport(input, opts) {
   return res;
 }
 
+function siblingSchemaGaps(kind, canonical) {
+  const columns = TABLE_COLUMNS[kind] || [];
+  const missing = columns.filter(function (col) { return col.required && canonical.mapped[col.key] === undefined; });
+  if (kind === 'technicians' && canonical.mapped.tech_id === undefined && canonical.mapped.name === undefined) {
+    missing.push({ key: 'tech_id', label: 'Technician ID or Name' });
+  }
+  return missing;
+}
+
+function siblingSchemaMessage(kind, missing) {
+  return kind + '.csv is missing required column(s): ' + missing.map(function (col) { return col.label || col.key; }).join('; ') + '. Rows in this file were not used for metrics.';
+}
+
 // Canonicalize every table that was supplied. Jobs tables go through prepareJobRows (required-column
 // check, date normalization, duplicate merge). Idempotent for the snake_case fixture files.
 function prepareCsvTables(settings, tables) {
@@ -747,16 +852,77 @@ function prepareCsvTables(settings, tables) {
       out[name] = r.rows;
       if (!technicians.length) technicians = r.technicians;
     } else if (TABLE_COLUMNS[name]) {
-      const c = canonicalizeRows(rows, TABLE_COLUMNS[name]);
-      (TABLE_DATE_KEYS[name] || []).forEach(function (k) {
-        c.rows.forEach(function (r, idx) {
-          const t = toIsoInZone(r[k], tz);
-          const notice = localTimeNotice(t, 'Row ' + (idx + 2) + ' in ' + name + '.csv, ' + k + ' "' + r[k] + '"', tz);
+      const columns = TABLE_COLUMNS[name];
+      const c = canonicalizeRows(rows, columns);
+      const missingRequired = siblingSchemaGaps(name, c);
+      if (missingRequired.length) {
+        headsUp.push('CSV import: ' + siblingSchemaMessage(name, missingRequired));
+        out[name] = [];
+        return;
+      }
+      const kept = [];
+      c.rows.forEach(function (r, idx) {
+        const line = idx + 2;
+        let skip = false;
+        (TABLE_DATE_KEYS[name] || []).forEach(function (k) {
+          const raw = r[k];
+          if (isBlank(raw)) return;
+          const t = toIsoInZone(raw, tz);
+          const location = 'Row ' + line + ' in ' + name + '.csv, ' + k + ' "' + raw + '"';
+          const notice = localTimeNotice(t, location, tz);
           if (notice) headsUp.push('CSV import: ' + notice);
+          else if (t.bad) headsUp.push('CSV import: ' + location + ' could not be read and was left blank.');
           r[k] = t.iso;
         });
+        (TABLE_CALENDAR_KEYS[name] || []).forEach(function (k) {
+          const raw = r[k];
+          if (isBlank(raw)) return;
+          const d = parseCalendarDate(raw, tz);
+          if (d.ambiguous) headsUp.push('CSV import: Row ' + line + ' in ' + name + '.csv, ' + k + ' "' + raw + '" is an ambiguous local time in ' + tz + '. The earlier occurrence was used.');
+          if (d.bad) {
+            headsUp.push('CSV import: Row ' + line + ' in ' + name + '.csv, ' + k + ' "' + raw + '" is not a usable calendar date and this row was skipped.');
+            r[k] = '';
+            skip = true;
+          } else r[k] = d.date;
+        });
+        if (name === 'capacity') {
+          const slots = toNum(r.open_slots, null);
+          if (!Number.isInteger(slots) || slots < 0 || parseTime(r.window_start) === null || parseTime(r.window_end) === null || parseTime(r.window_end) <= parseTime(r.window_start)) {
+            headsUp.push('CSV import: Row ' + line + ' in capacity.csv is missing a usable window start, end, or open-slot count and was skipped. Missing slot counts are not treated as zero.');
+            skip = true;
+          } else r.open_slots = String(slots);
+        }
+        if (name === 'memberships' && (isBlank(r.membership_id) || isBlank(r.next_service_due) || isBlank(r.status))) {
+          headsUp.push('CSV import: Row ' + line + ' in memberships.csv is missing a membership id or a usable next service due date or status and was skipped.');
+          skip = true;
+        }
+        if (name === 'estimates' && (isBlank(r.estimate_id) || isBlank(r.status))) {
+          headsUp.push('CSV import: Row ' + line + ' in estimates.csv is missing an estimate id or status and was skipped.');
+          skip = true;
+        }
+        if (name === 'calls' && isBlank(r.received_at)) {
+          headsUp.push('CSV import: Row ' + line + ' in calls.csv has no usable received time and was skipped.');
+          skip = true;
+        }
+        if (name === 'technicians') {
+          if (isBlank(r.tech_id) && isBlank(r.name)) {
+            headsUp.push('CSV import: Row ' + line + ' in technicians.csv has no technician id or name and was skipped.');
+            skip = true;
+          } else {
+            const sales = toBoolKnown(r.sales_capable);
+            if (!sales.known) {
+              headsUp.push('CSV import: ' + (r.name || r.tech_id || ('Row ' + line)) + ' has no usable sales-capability value, so sales routing will not assume yes or no.');
+              r.sales_capable = '';
+            }
+            if (!isBlank(r.shift_hours) && toNum(r.shift_hours, null) === null) {
+              headsUp.push('CSV import: ' + (r.name || r.tech_id || ('Row ' + line)) + ' has an unreadable shift-hours value and it was left blank.');
+              r.shift_hours = '';
+            }
+          }
+        }
+        if (!skip) kept.push(r);
       });
-      out[name] = c.rows;
+      out[name] = kept;
     } else {
       out[name] = rows;
     }
@@ -779,7 +945,8 @@ function datasetFromTables(settings, tables) {
   return {
     settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),
     technicians: (t.technicians || []).map(function (r) {
-      return { id: r.tech_id, name: r.name, trade: r.trade, salesCapable: toBool(r.sales_capable, false), shiftHours: numOrNull(r.shift_hours) };
+      const sales = toBoolKnown(r.sales_capable);
+      return { id: r.tech_id, name: r.name, trade: r.trade, salesCapable: sales.known ? sales.value : null, shiftHours: numOrNull(r.shift_hours) };
     }),
     jobs: (t.jobs || []).map(function (r) {
       const techIds = splitIds(r.tech_ids);
@@ -792,7 +959,7 @@ function datasetFromTables(settings, tables) {
       }, techIds.length > 1 ? { techIds: techIds } : {});
     }),
     capacityWindows: (t.capacity || []).map(function (r) {
-      return { id: r.window_id, businessUnit: r.business_unit, start: r.window_start, end: r.window_end, openSlots: toNum(r.open_slots, 0) };
+      return { id: r.window_id, businessUnit: r.business_unit, start: r.window_start, end: r.window_end, openSlots: toNum(r.open_slots, null) };
     }),
     memberships: (t.memberships || []).map(function (r) {
       return {
@@ -855,7 +1022,13 @@ function datasetFromCsvFiles(settings, files) {
     } else if (kind === 'jobs') {
       jobFiles.push({ name: name, table: t });
     } else {
-      tables[kind] = (tables[kind] || []).concat(canonicalizeRows(t.rows, TABLE_COLUMNS[kind], t.headers).rows);
+      const c = canonicalizeRows(t.rows, TABLE_COLUMNS[kind], t.headers);
+      const missingRequired = siblingSchemaGaps(kind, c);
+      if (missingRequired.length) {
+        notes.push('CSV import: ' + siblingSchemaMessage(kind, missingRequired));
+      } else {
+        tables[kind] = (tables[kind] || []).concat(c.rows);
+      }
     }
   });
   // One Jobs/Dispatch snapshot per batch. Merging two exports of the same job number
@@ -904,10 +1077,11 @@ function bookingQa(data) {
   const techById = Object.create(null);
   techs.forEach(function (t) { techById[t.id] = t; });
   const open = { scheduled: true, dispatched: true };
-  const busy = function (job) { return open[lc(job.status)] === true || lc(job.status) === 'in progress'; };
+  const statusKey = function (job) { return normalizeJobStatus(job.status).key; };
+  const busy = function (job) { return open[statusKey(job)] === true || statusKey(job) === 'in progress'; };
   const reviewed = jobs.filter(function (j) {
     const b = parseTime(j.bookedAt);
-    return b !== null && b >= since && b <= asOf && open[lc(j.status)] === true;
+    return b !== null && b >= since && b <= asOf && open[statusKey(j)] === true;
   });
   const repeatSince = asOf - s.repeatWindowDays * DAY;
   const overlaps = function (a, b) {
@@ -925,7 +1099,7 @@ function bookingQa(data) {
     if (key) {
       const priors = jobs.filter(function (o) {
         const st = parseTime(o.start);
-        return o.id !== job.id && normAddr(o.address) === key && lc(o.status) === 'completed' && st !== null && st >= repeatSince && st <= asOf;
+        return o.id !== job.id && normAddr(o.address) === key && normalizeJobStatus(o.status).key === 'completed' && st !== null && st >= repeatSince && st <= asOf;
       });
       if (priors.length > 0) {
         const last = Math.max.apply(null, priors.map(function (o) { return parseTime(o.start); }));
@@ -942,14 +1116,17 @@ function bookingQa(data) {
         code: 'replacement_opportunity',
         text: 'Possible replacement opportunity: ' + (job.equipmentType || 'equipment') + ' is ' + job.equipmentAgeYears + ' years old (threshold ' + s.replacementAgeYears + ')',
       });
-      if (assignedIds.some(function (id) { return techById[id] && techById[id].salesCapable; })) {
+      if (assignedIds.some(function (id) { return techById[id] && techById[id].salesCapable === true; })) {
         routing = { status: 'already_sales_capable', suggested: [] };
       } else {
-        const free = techs.filter(function (t) {
-          if (!t.salesCapable || assignedIds.includes(t.id) || lc(t.trade) !== lc(job.businessUnit)) return false;
+        const available = techs.filter(function (t) {
+          if (assignedIds.includes(t.id) || lc(t.trade) !== lc(job.businessUnit)) return false;
           return !jobs.some(function (o) { return busy(o) && overlaps(o, job) && assignedTechIds(o).includes(t.id); });
-        }).map(function (t) { return { id: t.id, name: t.name }; });
-        routing = { status: free.length > 0 ? 'suggested' : 'none_free', suggested: free };
+        });
+        const free = available.filter(function (t) { return t.salesCapable === true; }).map(function (t) { return { id: t.id, name: t.name }; });
+        const unknown = assignedIds.some(function (id) { return !techById[id] || techById[id].salesCapable == null; }) ||
+          available.some(function (t) { return t.salesCapable == null; });
+        routing = { status: free.length > 0 ? 'suggested' : unknown ? 'capability_unknown' : 'none_free', suggested: free };
       }
     }
     if (flags.length > 0) {
@@ -979,9 +1156,10 @@ function capacityFiller(data) {
   const today = localDate(asOf, tz);
   const windows = (data.capacityWindows || []).filter(function (w) {
     const st = parseTime(w.start), en = parseTime(w.end);
-    return st !== null && en !== null && en > st && st >= asOf && st < horizon && w.openSlots > 0;
+    const slots = toNum(w.openSlots, null);
+    return st !== null && en !== null && en > st && st >= asOf && st < horizon && slots !== null && slots > 0;
   }).map(function (w) {
-    return { id: w.id, businessUnit: w.businessUnit, startMs: parseTime(w.start), endMs: parseTime(w.end), openSlots: w.openSlots, left: w.openSlots };
+    return { id: w.id, businessUnit: w.businessUnit, startMs: parseTime(w.start), endMs: parseTime(w.end), openSlots: Number(w.openSlots), left: Number(w.openSlots) };
   }).sort(function (a, b) { return a.startMs - b.startMs; });
   let openHours = 0, openSlots = 0;
   windows.forEach(function (w) {
@@ -1015,8 +1193,10 @@ function capacityFiller(data) {
   let overdueCount = 0;
   (data.memberships || []).forEach(function (m) {
     if (lc(m.status) !== 'active' || isBlank(m.nextServiceDue)) return;
-    const od = dayDiff(String(m.nextServiceDue).slice(0, 10), today);
-    if (od < s.membershipOverdueDays) return;
+    const due = parseCalendarDate(m.nextServiceDue, tz);
+    if (due.bad || !due.date) return;
+    const od = dayDiff(due.date, today);
+    if (!Number.isFinite(od) || od < s.membershipOverdueDays) return;
     overdueCount++;
     const k = keyOf(m);
     cands[k] = cands[k] || { customerName: m.customerName, customerPhone: m.customerPhone, businessUnit: m.businessUnit, reasons: [], estimateAmount: 0, overdueDays: 0 };
@@ -1070,7 +1250,7 @@ function kpiDigest(data) {
   const headsUp = (s.headsUp || []).slice();
   const onDay = jobs.filter(function (j) {
     const st = parseTime(j.start);
-    return st !== null && localDate(st, tz) === reportDate && lc(j.status) === 'completed';
+    return st !== null && localDate(st, tz) === reportDate && normalizeJobStatus(j.status).key === 'completed';
   });
   let missingMinutes = 0;
   const completedByTech = new Map();
@@ -1115,7 +1295,8 @@ function kpiDigest(data) {
 
   const urgent = jobs.filter(function (j) {
     const st = parseTime(j.start);
-    return (lc(j.priority) === 'emergency' || lc(j.priority) === 'same-day') && st !== null && localDate(st, tz) === reportDate && lc(j.status) !== 'canceled';
+    const stKey = normalizeJobStatus(j.status).key;
+    return (lc(j.priority) === 'emergency' || lc(j.priority) === 'same-day') && st !== null && localDate(st, tz) === reportDate && stKey !== 'canceled';
   });
   const times = [];
   let missingArrival = 0;
@@ -1247,6 +1428,7 @@ function renderMessage(data) {
     if (f.routing) {
       if (f.routing.status === 'suggested') L.push('  - Suggested: ask dispatch to consider ' + f.routing.suggested.map(function (x) { return x.name; }).join(' or ') + ' (sales-capable, no overlapping job)');
       else if (f.routing.status === 'none_free') L.push('  - No sales-capable ' + f.businessUnit + ' tech is free in that window. Dispatcher decides.');
+      else if (f.routing.status === 'capability_unknown') L.push('  - Heads-up: sales capability is missing for an assigned or available tech. Dispatcher verifies availability and capability.');
       else L.push('  - Already assigned to a sales-capable tech.');
     }
   });
@@ -1331,13 +1513,13 @@ function normalizeServiceTitan(settings, raw) {
   const apptByJob = {};
   appts.forEach(function (a) { if (!apptByJob[a.jobId]) apptByJob[a.jobId] = a; });
   const technicians = rows(raw.technicians).map(function (t) {
-    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '', salesCapable: false, shiftHours: null };
+    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '', salesCapable: null, shiftHours: null };
   });
   const jobs = rows(raw.jobs).map(function (j) {
     const a = apptByJob[j.id] || {};
     const asg = assignByJob[j.id] || {};
     return {
-      id: String(j.jobNumber || j.id), bookedAt: j.createdOn, start: a.start, end: a.end, status: j.jobStatus || '',
+      id: String(j.jobNumber || j.id), bookedAt: j.createdOn, start: a.start, end: a.end, status: normalizeJobStatus(j.jobStatus || '').canonical || (j.jobStatus || ''),
       techId: asg.technicianId !== undefined ? String(asg.technicianId) : '', customerName: 'Customer #' + j.customerId, customerPhone: '',
       customerType: '', jobType: '', equipmentType: '', equipmentAgeYears: null, address: j.locationId ? 'Location #' + j.locationId : '',
       priority: j.priority || '', arrivedAt: '', actualMinutes: null, businessUnit: j.businessUnitId ? String(j.businessUnitId) : '', summary: j.summary || '',
@@ -1366,7 +1548,7 @@ function normalizeServiceTitan(settings, raw) {
     });
   });
   const memberships = rows(raw.memberships).map(function (m) {
-    return { id: String(m.id), customerName: 'Customer #' + (m.customerId || m.membershipId || m.id), customerPhone: '', businessUnit: '', plan: 'membership', status: 'active', nextServiceDue: m.date || m.nextServiceDate || '' };
+    return { id: String(m.id), customerName: 'Customer #' + (m.customerId || m.membershipId || m.id), customerPhone: '', businessUnit: '', plan: 'membership', status: 'active', nextServiceDue: (function () { const d = parseCalendarDate(m.date || m.nextServiceDate || '', settings.timezone); return d.date; })() };
   });
   const estimates = rows(raw.estimates).map(function (e) {
     return {
@@ -1396,8 +1578,8 @@ function loadTestData(settings, dataset) {
 
 // @@SECTION aging
 const AGING_DEFAULT_THRESHOLD_MINUTES = 20;
-const OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];
-const TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];
+const OPEN_JOB_STATUSES = OPEN_JOB_STATUS_KEYS;
+const TERMINAL_JOB_STATUSES = TERMINAL_JOB_STATUS_KEYS;
 
 function agingThresholdMinutes(s) {
   return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);
@@ -1417,19 +1599,18 @@ function jobTechIds(job) {
 }
 
 function isTerminalJob(job) {
-  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;
+  return TERMINAL_JOB_STATUS_KEYS.indexOf(normalizeJobStatus(job.status).key) !== -1;
 }
 
 function isOpenJob(job) {
   if (isTerminalJob(job)) return false;
-  const st = lc(job.status);
-  if (!st) return jobTechIds(job).length === 0;
-  return OPEN_JOB_STATUSES.indexOf(st) !== -1;
+  const n = normalizeJobStatus(job.status);
+  return OPEN_JOB_STATUS_KEYS.indexOf(n.key) !== -1;
 }
 
 function isUnassignedJob(job) {
   if (!isOpenJob(job)) return false;
-  if (lc(job.status) === 'unassigned') return true;
+  if (normalizeJobStatus(job.status).key === 'unassigned') return true;
   return jobTechIds(job).length === 0;
 }
 
@@ -1573,9 +1754,18 @@ function unassignedAgingWatch(data) {
   const missingZone = [];
   const autoModeExclusionRisk = [];
   (data.jobs || []).forEach(function (job) {
+    const stn = normalizeJobStatus(job.status);
+    if (stn.blank) {
+      hu.push('Job ' + job.id + ' has no status and was left out of the aging watch.');
+    } else if (!stn.known) {
+      hu.push('Job ' + job.id + ' has unrecognized status "' + stn.raw + '" and was left out of the aging watch.');
+    }
     if (!isOpenJob(job)) return;
     const flags = [];
     const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;
+    if (isUnassignedJob(job) && mins === null) {
+      hu.push('Job ' + job.id + ' is unassigned but has no usable Unassigned Since or Created On timestamp, so its age could not be computed.');
+    }
     if (isUnassignedJob(job) && mins !== null && mins >= threshold) {
       flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });
     }
@@ -1720,7 +1910,8 @@ function loadAgingTestData(settings, dataset) {
 // @@END
 module.exports = {
   DEFAULTS, AGING_DEFAULT_THRESHOLD_MINUTES, prepareSettings, prepareAgingSettings,
-  parseCsv, parseCsvTable, headerKey, canonicalizeRows, toIsoInZone, JOB_COLUMNS, TABLE_COLUMNS, mapAgingJob, mapCsvJob,
+  parseCsv, parseCsvTable, headerKey, canonicalizeRows, toIsoInZone, parseCalendarDate, normalizeJobStatus,
+  JOB_COLUMNS, TABLE_COLUMNS, JOB_STATUS_CANONICAL, mapAgingJob, mapCsvJob,
   normalizeJobsExport, datasetFromCsvFiles, datasetFromTables, datasetFromAgingTables, bookingQa, capacityFiller, kpiDigest,
   afterHoursHandoff, renderMessage, normalizeServiceTitan, normalizeAgingServiceTitan,
   loadTestData, loadAgingTestData, unassignedAgingWatch, renderAgingAlert,

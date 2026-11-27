@@ -906,9 +906,9 @@ check('templates.ts: the Jobber Morning Ops entry exists with version, category,
   assert.ok(!/\$799/.test(tsText) && !/\$149/.test(tsText));
 });
 check('templates.ts: related list matches the spec and the ServiceTitan pack links back', () => {
-  assert.ok(entry.includes('related: ["servicetitan-dispatch-copilot", "jobber-connector", "manager-digest"]'));
+  assert.ok(entry.includes('related: ["servicetitan-dispatch-copilot", "housecall-pro-morning-ops-copilot", "jobber-connector", "manager-digest"]'));
   const st = tsText.slice(tsText.indexOf('slug: "servicetitan-dispatch-copilot"'), tsText.indexOf('slug: "speed-to-lead"'));
-  assert.ok(/related: \["manager-digest", "jobber-connector", "jobber-morning-ops-copilot"\]/.test(st));
+  assert.ok(/related: \["manager-digest", "jobber-connector", "jobber-morning-ops-copilot", "housecall-pro-morning-ops-copilot"\]/.test(st));
 });
 check('templates.ts: node counts match the shipped workflow JSON', () => {
   assert.ok(entry.includes('nodes: ' + W.count.exec + ','), 'digest nodes');

@@ -160,10 +160,10 @@ export interface TemplatePack {
 export const templatesPage = {
   title: "Templates | Prewired AI automation packs for n8n",
   description:
-    "Draft catalog of 13 Prewired AI automation packs for n8n: lead response, booking reminders, invoice sync, CRM cleanup, Jobber follow-ups, ServiceTitan dispatch and Jobber morning-ops field-service reporting, and draft-first AI agents. Test mode on by default. Manager Digest is free. Not for sale yet.",
+    "Draft catalog of 14 Prewired AI automation packs for n8n: lead response, booking reminders, invoice sync, CRM cleanup, Jobber follow-ups, ServiceTitan dispatch plus Jobber and Housecall Pro morning-ops field-service reporting, and draft-first AI agents. Test mode on by default. Manager Digest is free. Not for sale yet.",
   heading: "Prewired AI automation packs",
   intro:
-    "Thirteen n8n automation packs and post-sales AI agents for small sales and service teams, including dispatch and morning-ops reporting for field-service shops. Each one imports inactive with test mode on, so nothing reaches a real customer until you test it and sign off.",
+    "Fourteen n8n automation packs and post-sales AI agents for small sales and service teams, including dispatch and morning-ops reporting for field-service shops. Each one imports inactive with test mode on, so nothing reaches a real customer until you test it and sign off.",
   notForSale:
     "Nothing on this page is for sale yet. Every pack is a draft, there is no checkout, and paid prices are coming soon. Manager Digest will be free. Join the waitlist by email and you will hear when a pack is ready.",
   sampleDataNote: "Every pack ships with fictional sample data only.",
@@ -172,7 +172,7 @@ export const templatesPage = {
 export const templatesTeaser = {
   heading: "Templates",
   summary:
-    "Thirteen draft n8n automation packs and post-sales AI agents, including ServiceTitan and Jobber reporting for field-service shops. Every pack imports inactive with test mode on and a hard stop before the first live action. Not for sale yet; Manager Digest will be free.",
+    "Fourteen draft n8n automation packs and post-sales AI agents, including ServiceTitan, Jobber, and Housecall Pro reporting for field-service shops. Every pack imports inactive with test mode on and a hard stop before the first live action. Not for sale yet; Manager Digest will be free.",
   linkLabel: "See the template packs",
 };
 
@@ -431,7 +431,7 @@ export const templatePacks: TemplatePack[] = [
     ],
     testingNote: draftNote("ServiceTitan, Gmail, Slack, or a CSV export"),
     diagram: true,
-    related: ["manager-digest", "jobber-connector", "jobber-morning-ops-copilot"],
+    related: ["manager-digest", "jobber-connector", "jobber-morning-ops-copilot", "housecall-pro-morning-ops-copilot"],
     callouts: [
       {
         title: "Why Read-Only (Zero Board Write-Back)",
@@ -556,7 +556,7 @@ export const templatePacks: TemplatePack[] = [
       },
     ],
     testingNote: draftNote("Jobber, Gmail, Slack, or a CSV export"),
-    related: ["servicetitan-dispatch-copilot", "jobber-connector", "manager-digest"],
+    related: ["servicetitan-dispatch-copilot", "housecall-pro-morning-ops-copilot", "jobber-connector", "manager-digest"],
     callouts: [
       {
         title: "Why Read-Only",
@@ -573,6 +573,125 @@ export const templatePacks: TemplatePack[] = [
           {
             heading: "CSV fallback (recommended start)",
             body: "Email, upload, or drop in a folder your Jobs, Invoices, and Quotes report exports and get the same digest. This path uses CSV exports without OAuth or App Review. Common Jobber column names are matched for you.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "housecall-pro-morning-ops-copilot",
+    name: "Housecall Pro CSV-First Morning Ops Copilot",
+    version: "v0.1.0",
+    category: "field-service",
+    filterTags: ["reporting"],
+    badge: "New",
+    headline:
+      "One read-only morning digest for HVAC, plumbing, electrical, and other home-service shops that run on Housecall Pro: which jobs are unscheduled, late, or waiting on an office action, which finished jobs still need an invoice, which invoices are past due, and which big estimates are still waiting on an answer past your configured follow-up cutoff. Works with the manual Jobs export and uses additional reports when your account can supply them. Sent to you, never to a customer. Zero write-back.",
+    summary:
+      "Unscheduled, late, and needs-office-action jobs, finished jobs with no invoice (or an invoice that was never sent), past-due invoices, and high-value estimates still awaiting a response, ranked by dollar value for a human call. A weekday-morning digest for the owner or office manager, fed by CSV exports by email attachment, watch folder, or upload.",
+    safety:
+      "Zero write-back: the workflow never connects to Housecall Pro and has no HTTP step at all. It only reads the CSV files you give it. Read-only and owner-only. The stalled-estimate list is for a person to call, and nothing is ever sent to a customer. Test mode and sample data are the default.",
+    whoFor:
+      "Owners and office managers of home-service shops that schedule and invoice in Housecall Pro and spend the first part of the day hunting through separate lists for what needs attention, including shops on plans without API access.",
+    whatItDoes: [
+      "Unscheduled, late, and needs-office-action jobs: one list built from your Jobs export. Late is worked out from the scheduled end date, so a job past its window shows how long ago it was due. Statuses that mean the office has to act are listed too. Nothing is rescheduled.",
+      "Ready to invoice and past-due invoices: finished jobs with no invoice, or an invoice that was created but never sent, oldest first, and invoices past their due date, largest balance first. You set how many days past due counts. An invoice due today is not past due.",
+      "Stalled high-value estimates: estimates that were actually sent and are still awaiting a response past the cutoff you set after your shop's own follow-up, ranked by dollar value. Drafts, accepted, and declined estimates are left out. It is a list for a human call or a personal note. It never sends another automated reminder.",
+      "CSV-first intake: email an attachment, drop files in a folder, or upload them to a webhook. The mapper tries unverified header aliases, dates are read in your shop's time zone, and anything an export cannot supply becomes a Heads-up line.",
+      "Heads-up lines instead of guesses: if a total, due date, or send date is missing, a report was not supplied, or an invoice link cannot be checked, the digest says so. It does not estimate.",
+    ],
+    workflows: [
+      {
+        name: "Housecall Pro CSV-First Morning Ops Copilot",
+        nodes: 18,
+        description:
+          "Takes your Jobs, Invoices, and Estimates CSV exports by email attachment, watch folder, or upload (or the built-in fictional sample), builds the three morning queues, and sends one message to the owner. No Housecall Pro connection.",
+      },
+    ],
+    totalNodes: 18,
+    totalNodesWithNotes: 24,
+    defaults: [
+      "testMode on: every message is labeled [TEST] and goes only to the owner email or Slack channel you set.",
+      "Source defaults to built-in fictional sample data, so nothing of yours is read on the first run.",
+      "Imported inactive, and every Schedule, webhook, and email trigger is switched off on import.",
+    ],
+    testModeWrites:
+      "Nothing is written to Housecall Pro in any mode, because the workflow never connects to it. In test mode the only output is a [TEST] message to the owner address or channel you set.",
+    included: [
+      "One importable n8n workflow (saved inactive): the CSV-first Morning Ops digest",
+      "Plain-English README with a field-by-field Config table and a list of which Housecall Pro headers and statuses are unverified",
+      "Fictional plumbing and HVAC sample data (Cedar Creek Plumbing & Air): sample Jobs, Invoices, and Estimates CSV exports with Housecall Pro-style headers and a sample [TEST] digest",
+      "A test script that checks the workflow's safety settings and runs its logic against the sample data",
+      "Changelog",
+    ],
+    guardrails: [
+      "Zero write-back: there is no Housecall Pro connection, no HTTP step, and nothing is created, changed, or deleted in Housecall Pro.",
+      "No customer messages: the workflow has no SMS, Twilio, or customer-email step. It does not send estimate reminders, invoice reminders, review requests, or On-My-Way texts.",
+      "The stalled-estimate list is for a human. A person decides who to call.",
+      "Owner-only: the email address and Slack channel come from the Config node, never from a row in a file you upload.",
+      "Never invents numbers. If something cannot be computed, the digest shows a \"Heads-up\" line instead.",
+      "Housecall Pro's export column names and status text have not been checked against a live account, so the pack matches common names loosely and lists the headers it saw when one is missing.",
+    ],
+    hardStop:
+      "Run the [TEST] digest on the sample data, then on your own CSV exports, and spot-check several numbers by hand against Housecall Pro. Going live is the owner's decision: turn test mode off, switch the Schedule on, and set the workflow Active, after a written sign-off.",
+    willNot: [
+      "Text, call, or email a customer.",
+      "Create, change, schedule, or delete anything in Housecall Pro.",
+      "Send estimate or invoice reminders, review requests, or On-My-Way texts.",
+      "Invent numbers.",
+    ],
+    faq: [
+      {
+        q: "Does it contact my customers?",
+        a: "No. It has no step that can message a customer. The estimate list is an internal list for you or your office manager to call from, and the only things it sends are one message to your own email and/or Slack.",
+      },
+      {
+        q: "Does it change anything in Housecall Pro?",
+        a: "No. The workflow never connects to Housecall Pro. It only reads the CSV files you give it.",
+      },
+      {
+        q: "Why CSV instead of the Housecall Pro API?",
+        a: "Housecall Pro's Open API and webhooks are officially available only on the MAX plan. Building on them would shut out shops on Basic and Essentials, so this version works from CSV exports and needs no plan upgrade. An optional read-only add-on for shops already on MAX is a possible later extension. It is not built, and it is not part of this pack.",
+      },
+      {
+        q: "Where do the CSV files come from?",
+        a: "Housecall Pro lets an admin export Jobs and Customers to CSV, emailed to the admin. That manual Jobs export is the part confirmed in Housecall Pro's help center. Whether your plan can export invoices and estimates, and the exact column names, still need checking against your own account. Any one report is enough, and a missing one becomes a Heads-up line.",
+      },
+      {
+        q: "How is this different from Housecall Pro's own estimate and invoice reminders?",
+        a: "Housecall Pro can send reminders to customers on its own. This pack sends nothing to customers. It gives the owner one ranked list of the estimates still unanswered past the cutoff you set, so a person can call.",
+      },
+      {
+        q: "Will I get a message just because I imported it?",
+        a: "No. The workflow is inactive and the Schedule, webhook, and email triggers are off until you switch them on.",
+      },
+      {
+        q: "Is there a pilot?",
+        a: "A pilot is planned for this pack. Use the Book a 15-min ops audit button on this page to talk it through. Pricing coming soon.",
+      },
+      {
+        q: "Has it been tested live?",
+        a: "Not yet. It has only been checked against fictional sample data. It has not been tested against a live Housecall Pro, Gmail, or Slack account.",
+      },
+    ],
+    testingNote: draftNote("Housecall Pro, Gmail, Slack, or a CSV export"),
+    related: ["servicetitan-dispatch-copilot", "jobber-morning-ops-copilot", "manager-digest"],
+    callouts: [
+      {
+        title: "Why Read-Only",
+        body: "Your office stays in control. This copilot only reads CSV exports and sends you a digest. It never schedules, reschedules, or deletes a job, and it never messages a customer. It ranks unanswered estimates past your configured cutoff so a person can call.",
+      },
+      {
+        title: "Why CSV First",
+        body: "Housecall Pro's Open API and webhooks are MAX-only, so this version does not use them.",
+        items: [
+          {
+            heading: "CSV exports (the product)",
+            body: "Email, upload, or drop in a folder your Jobs, Invoices, and Estimates exports and get the digest. The workflow needs no API key. Check which reports your plan can export and compare their headers with the pack’s unverified aliases.",
+          },
+          {
+            heading: "Optional MAX API extension (future note)",
+            body: "A read-only add-on for shops already on MAX is a possible later extension. It is not built and not part of v0.1.0.",
           },
         ],
       },

@@ -173,7 +173,7 @@ code('Load Built-in Test Data', [1320, 860], ['common', 'testdata'],
 // ---- the four workflows
 const X = 2100;
 code('1. Booking QA & Skill-Tier Routing', [X, 520], ['common', 'booking_qa'], passOn('bookingQa', 'bookingQa'));
-code('2. Open-Capacity & Unsold-Estimate Filler', [X + 280, 520], ['common', 'capacity_filler'], passOn('capacity', 'capacityFiller'));
+code('2. Open-Capacity & Unsold-Estimate Filler', [X + 280, 520], ['common', 'csv', 'capacity_filler'], passOn('capacity', 'capacityFiller'));
 code('3. Morning Dispatch KPI Digest', [X + 560, 520], ['common', 'kpi_digest'], passOn('kpis', 'kpiDigest'));
 code('4. After-Hours Handoff Summary', [X + 840, 520], ['common', 'handoff'], passOn('afterHours', 'afterHoursHandoff'));
 

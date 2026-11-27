@@ -1,0 +1,13 @@
+Estimate #,Customer name,Description,Estimate status,Created date,Sent date,Total
+8101,Sample Customer 6301,Full HVAC system replacement,Sent,5/19/2026,5/20/2026,"$14,800.00"
+8102,Sample Customer 6302,Sewer line replacement,Pending approval,5/25/2026,5/26/2026,"$9,500.00"
+8103,Sample Customer 6303,Backyard drainage and grading,Awaiting response,5/26/2026,5/27/2026,"$6,200.00"
+8104,Sample Customer 6304,Water softener install,Awaiting response,5/9/2026,5/10/2026,"$1,000.00"
+8105,Sample Customer 6305,Gas range hookup,Awaiting response,5/9/2026,5/10/2026,$950.00
+8106,Sample Customer 6306,Tankless water heater,Draft,6/8/2026,,"$7,500.00"
+8107,Sample Customer 6307,Ductless mini-split (2 zones),Approved,5/1/2026,5/2/2026,"$12,000.00"
+8108,Sample Customer 6308,Bathroom rough-in,Declined,5/1/2026,5/2/2026,"$5,400.00"
+8109,Sample Customer 6309,Panel and duct upgrade,Awaiting response,5/30/2026,,"$2,800.00"
+8110,Sample Customer 6310,Boiler replacement,Expired,3/31/2026,4/1/2026,"$3,300.00"
+8111,Sample Customer 6311,Commercial rooftop unit,Sent,5/31/2026,6/1/2026,"$21,000.00"
+8112,Sample Customer 6312,Furnace and coil replacement,Viewed,5/11/2026,5/12/2026,"$3,300.00"

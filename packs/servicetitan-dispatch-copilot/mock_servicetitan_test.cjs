@@ -18,7 +18,7 @@
  *   6. v0.3 CSV-Fallback Mode: tests the Jobs/Dispatch column mapper (human ServiceTitan headers,
  *      aliases, dates, malformed and empty input, missing required columns), checks
  *      servicetitan-csv-fallback-triage.json, runs its Code nodes on fixtures/sample-servicetitan-export.csv,
- *      and overwrites sample_csv_fallback_digest.md.
+ *      and checks the published sample_csv_fallback_digest.md.
  * Exit code 0 only if every assertion passes.
  */
 'use strict';
@@ -1128,6 +1128,134 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.ok(ds.settings.headsUp.some((h) => /"memberships.csv" was not found/.test(h)));
   });
 
+  // ---------------- 5c. medium #3 (status vocabulary / missing clocks) and #5 (sibling schema / due dates)
+  const jobsCsv = (rows) => ['Job #,Status,Scheduled Start,Created On,Unassigned Since,Technician', ...rows].join('\n');
+  const asOfSettings = (extra) => logic.prepareSettings(Object.assign({ source: 'csv', timezone: TZ, asOfOverride: '2026-03-10T15:00:00-05:00' }, extra || {}), 0);
+
+  check('medium #3: Working, Done, Closed, and Cancelled collapse to the canonical vocabulary', () => {
+    assert.deepStrictEqual(logic.normalizeJobStatus('Working'), { raw: 'Working', canonical: 'In Progress', key: 'in progress', known: true, blank: false });
+    assert.strictEqual(logic.normalizeJobStatus('Done').key, 'completed');
+    assert.strictEqual(logic.normalizeJobStatus('Closed').canonical, 'Completed');
+    assert.strictEqual(logic.normalizeJobStatus('Cancelled').canonical, 'Canceled');
+    assert.strictEqual(logic.normalizeJobStatus('Hold').canonical, 'On Hold');
+    const r = logic.normalizeJobsExport(jobsCsv([
+      'J1,Working,3/10/2026 9:00 AM,3/10/2026 8:00 AM,,Dana',
+      'J2,Done,3/9/2026 9:00 AM,3/9/2026 8:00 AM,,Dana',
+      'J3,Closed,3/9/2026 10:00 AM,3/9/2026 8:00 AM,,Dana',
+      'J4,Cancelled,3/9/2026 11:00 AM,3/9/2026 8:00 AM,,Dana',
+    ]), { timezone: TZ });
+    assert.deepStrictEqual(r.jobs.map((j) => j.status), ['In Progress', 'Completed', 'Completed', 'Canceled']);
+    assert.ok(!r.headsUp.some((h) => /unrecognized status/.test(h)));
+  });
+
+  check('medium #3: Done and Closed count in completed KPIs; Cancelled is excluded from response time', () => {
+    const jobsHeader = 'Job #,Status,Scheduled Start,Created On,Arrived At,Priority,Technician,Actual Minutes';
+    const txt = [
+      jobsHeader,
+      'C1,Done,3/9/2026 9:00 AM,3/9/2026 8:00 AM,3/9/2026 8:20 AM,same-day,Dana,40',
+      'C2,Closed,3/9/2026 10:00 AM,3/9/2026 8:30 AM,3/9/2026 9:00 AM,emergency,Dana,50',
+      'C3,Cancelled,3/9/2026 11:00 AM,3/9/2026 7:00 AM,3/9/2026 7:10 AM,emergency,Dana,10',
+      'C4,Completed,3/9/2026 1:00 PM,3/9/2026 8:00 AM,3/9/2026 8:40 AM,same-day,Dana,30',
+    ].join('\n');
+    const techs = 'Technician ID,Name,Trade,Shift Hours,Sales Capable\nDana,Dana,HVAC,8,Yes\n';
+    const ds = logic.datasetFromCsvFiles(asOfSettings({ businessName: 'Fixture Shop' }), [
+      { name: 'jobs.csv', text: txt },
+      { name: 'techs.csv', text: techs },
+    ]);
+    const kpis = logic.kpiDigest(Object.assign({}, ds, { capacity: null, bookingQa: null }));
+    const dana = kpis.utilization.perTech.find((t) => t.name === 'Dana' || t.id === 'Dana');
+    assert.ok(dana, 'technician row');
+    assert.strictEqual(dana.jobs, 3); // Done, Closed, Completed — not Cancelled
+    assert.ok(kpis.responseTime, 'response time computed');
+    assert.strictEqual(kpis.responseTime.count, 3); // Done, Closed, Completed — Cancelled excluded
+    assert.ok(!Number.isNaN(kpis.responseTime.avgMinutes));
+  });
+
+  check('medium #3: unknown statuses and missing aging clocks get a per-job Heads-up and do not silently age', () => {
+    const txt = jobsCsv([
+      'U1,Mystery,3/10/2026 9:00 AM,3/10/2026 8:00 AM,3/10/2026 8:05 AM,',
+      'U2,Unassigned,3/10/2026 9:00 AM,,,',
+      'U3,,3/10/2026 9:00 AM,3/10/2026 8:00 AM,,Dana',
+      'U4,Scheduled,,3/10/2026 8:00 AM,,Dana',
+      'U5,,,3/10/2026 8:00 AM,,',
+    ]);
+    const r = logic.normalizeJobsExport(txt, { timezone: TZ });
+    assert.deepStrictEqual(r.jobs.map((j) => j.id), ['U1', 'U2', 'U3', 'U4', 'U5']);
+    assert.ok(r.headsUp.some((h) => /job U1 has unrecognized status "Mystery"/.test(h)), r.headsUp.join('|'));
+    assert.ok(r.headsUp.some((h) => /Job U2 is unassigned but has no usable Unassigned Since or Created On/.test(h)), r.headsUp.join('|'));
+    assert.ok(r.headsUp.some((h) => /job U3 has no status/.test(h) && /partial coverage/.test(h)), r.headsUp.join('|'));
+    assert.ok(r.headsUp.some((h) => /job U4 has no scheduled start/.test(h) && /kept as unscheduled/.test(h)), r.headsUp.join('|'));
+    const ds = logic.datasetFromCsvFiles(asOfSettings(), [{ name: 'jobs.csv', text: txt }]);
+    const w = logic.unassignedAgingWatch(ds);
+    assert.ok(!w.agedUnassigned.some((row) => row.jobId === 'U1'), 'unknown status must not age silently');
+    assert.ok(w.headsUp.some((h) => /Job U1 has unrecognized status "Mystery"/.test(h)));
+    assert.ok(w.headsUp.some((h) => /Job U2 is unassigned but has no usable Unassigned Since or Created On/.test(h)));
+    assert.strictEqual(w.agedUnassigned.some((row) => row.jobId === 'U2' || row.jobId === 'U5'), false);
+    assert.ok(w.headsUp.some((h) => /Job U5 has no status/.test(h)));
+  });
+
+  check('medium #5: membership due dates accept US calendar dates and skip invalid ones without NaN', () => {
+    const jobs = jobsCsv(['J1,Scheduled,3/10/2026 9:00 AM,3/10/2026 8:00 AM,,Dana']);
+    const memberships = [
+      'Membership ID,Customer,Next Service Due,Status,Plan',
+      'M-US,Ada West,3/1/2026,Active,Comfort Club',
+      'M-ISO,Ben Cole,2026-02-01,Active,Comfort Club',
+      'M-BAD,Cara Diaz,2/30/2026,Active,Comfort Club',
+      'M-BLANK,Drew Ng,,Active,Comfort Club',
+      'M-BAD-ISO,Ed Ng,2026-02-30,Active,Comfort Club',
+    ].join('\n');
+    const ds = logic.datasetFromCsvFiles(asOfSettings({ membershipOverdueDays: 1 }), [
+      { name: 'jobs.csv', text: jobs },
+      { name: 'memberships.csv', text: memberships },
+    ]);
+    assert.strictEqual(ds.memberships.length, 2);
+    assert.deepStrictEqual(ds.memberships.map((m) => m.nextServiceDue).sort(), ['2026-02-01', '2026-03-01']);
+    assert.ok(ds.settings.headsUp.some((h) => /2\/30\/2026/.test(h) && /skipped/.test(h)), ds.settings.headsUp.join('|'));
+    assert.ok(ds.settings.headsUp.some((h) => /missing a membership id or a usable next service due date/.test(h)), ds.settings.headsUp.join('|'));
+    const cap = logic.capacityFiller(ds);
+    assert.ok(Number.isFinite(cap.overdueMembershipCount));
+    assert.strictEqual(cap.overdueMembershipCount, 2);
+    ds.memberships.push({ status: 'Active', nextServiceDue: '2026-02-30' });
+    assert.strictEqual(logic.capacityFiller(ds).overdueMembershipCount, 2);
+    assert.ok(!Number.isNaN(cap.overdueMembershipCount));
+  });
+
+  check('medium #5: sibling reports validate required columns and do not treat missing slot counts or sales capability as zero/false', () => {
+    const jobs = jobsCsv(['J1,Scheduled,3/10/2026 9:00 AM,3/10/2026 8:00 AM,,Dana']);
+    const badCapacity = 'Window ID,Business Unit,Window Start,Window End\nW1,HVAC,3/11/2026 9:00 AM,3/11/2026 11:00 AM\n';
+    const blankSlots = 'Window ID,Business Unit,Window Start,Window End,Open Slots\nW2,HVAC,3/11/2026 9:00 AM,3/11/2026 11:00 AM,\n';
+    const techs = 'Technician ID,Name,Trade,Shift Hours,Sales Capable\nT9,Riley Chen,HVAC,8,\n';
+    const dsMissing = logic.datasetFromCsvFiles(asOfSettings(), [
+      { name: 'jobs.csv', text: jobs },
+      { name: 'capacity.csv', text: badCapacity },
+    ]);
+    assert.deepStrictEqual(dsMissing.capacityWindows, []);
+    assert.ok(dsMissing.settings.headsUp.some((h) => /capacity.csv is missing required column/.test(h) && /Open Slots/.test(h)), dsMissing.settings.headsUp.join('|'));
+    const dsBlank = logic.datasetFromCsvFiles(asOfSettings(), [
+      { name: 'jobs.csv', text: jobs },
+      { name: 'windows.csv', text: blankSlots },
+      { name: 'staff.csv', text: techs },
+    ]);
+    assert.strictEqual(dsBlank.capacityWindows.length, 0);
+    assert.ok(dsBlank.settings.headsUp.some((h) => /open-slot count and was skipped/.test(h) && /not treated as zero/.test(h)), dsBlank.settings.headsUp.join('|'));
+    assert.strictEqual(dsBlank.technicians[0].salesCapable, null);
+    assert.ok(dsBlank.settings.headsUp.some((h) => /Riley Chen.*no usable sales-capability/.test(h)), dsBlank.settings.headsUp.join('|'));
+    const cap = logic.capacityFiller(dsBlank);
+    assert.strictEqual(cap.openSlots, 0);
+    assert.strictEqual(cap.openWindowCount, 0);
+  });
+
+  check('medium #5: a memberships file missing Next Service Due is rejected as a schema error, not silently computed', () => {
+    const jobs = jobsCsv(['J1,Scheduled,3/10/2026 9:00 AM,3/10/2026 8:00 AM,,Dana']);
+    const memberships = 'Membership ID,Customer,Status\nM1,Ada West,Active\n';
+    const ds = logic.datasetFromCsvFiles(asOfSettings(), [
+      { name: 'jobs.csv', text: jobs },
+      { name: 'agreements.csv', text: memberships },
+    ]);
+    assert.deepStrictEqual(ds.memberships, []);
+    assert.ok(ds.settings.headsUp.some((h) => /memberships.csv is missing required column/.test(h) && /Next Service Due/.test(h)), ds.settings.headsUp.join('|'));
+  });
+
   // ---------------- 5d. aging + digest from the sample export
   const sampleSettings = logic.prepareAgingSettings({ source: 'csv', businessName: 'Summit Mechanical (fictional sample)', asOfOverride: SAMPLE_REF }, 0);
   const sampleDs = logic.datasetFromCsvFiles(sampleSettings, [{ name: 'sample-servicetitan-export.csv', text: sampleCsvText }]);
@@ -1464,10 +1592,8 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.ok(ds.settings.headsUp.some((h) => /"calls.csv" was not found/.test(h)));
   });
 
-  // sample output for buyers (regenerated on every run)
-  const csvSampleHeader = '<!-- Generated by mock_servicetitan_test.cjs from fixtures/sample-servicetitan-export.csv. Do not hand-edit; re-run the test to regenerate. -->\n\n';
-  fs.writeFileSync(path.join(HERE, 'sample_csv_fallback_digest.md'), csvSampleHeader + cwInbound.msgs[0].text + '\n\n\n' + cwInbound.msgs[1].text + '\n');
-  check('sample_csv_fallback_digest.md was written with both [TEST] messages and no banned strings', () => {
+  check('CSV fallback renders unknown sales capability and the published sample stays labeled [TEST]', () => {
+    assert.match(cwInbound.msgs[0].text, /Heads-up: sales capability is missing for an assigned or available tech/);
     const t = fs.readFileSync(path.join(HERE, 'sample_csv_fallback_digest.md'), 'utf8');
     assert.ok(t.includes('# [TEST] Morning Dispatch KPI Digest') && t.includes('# [TEST] Unassigned Aging Alert') && t.includes('Summit Mechanical (fictional sample)'));
     assert.ok(!BANNED.test(t));
@@ -1535,9 +1661,9 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.ok(!BANNED.test(entry));
     assert.ok(entry.includes('draftNote("ServiceTitan, Gmail, Slack, or a CSV export")'));
   });
-  check('templates.ts: no stale 12-pack copy', () => {
-    assert.ok(!/Eleven|11 Prewired|11 packs|Twelve|12 Prewired|12 packs/.test(tsText));
-    assert.strictEqual((tsText.match(/^    slug: "/gm) || []).length, 13);
+  check('templates.ts: no stale 13-pack copy', () => {
+    assert.ok(!/Eleven|11 Prewired|11 packs|Twelve|12 Prewired|12 packs|Thirteen|13 Prewired|13 packs/.test(tsText));
+    assert.strictEqual((tsText.match(/^    slug: "/gm) || []).length, 14);
   });
   report();
 })();

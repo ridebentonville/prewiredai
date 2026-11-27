@@ -1,0 +1,12 @@
+Invoice #,Customer name,Invoice status,Invoice date,Due date,Total,Amount due,Job #
+7001,Sample Customer 6201,Past due,5/1/2026,5/16/2026,"$3,200.00","$3,200.00",4001
+7002,Sample Customer 6202,Past due,5/18/2026,6/2/2026,$480.00,$480.00,4002
+7003,Sample Customer 6111,Sent,5/28/2026,6/27/2026,$340.00,$340.00,4111
+7004,Sample Customer 6204,Open,5/25/2026,6/9/2026,$900.00,$900.00,4004
+7005,Sample Customer 6205,Open,5/24/2026,6/8/2026,$350.00,$350.00,4005
+7006,Sample Customer 6206,Paid,5/1/2026,5/16/2026,$600.00,$50.00,4006
+7007,Sample Customer 6110,Draft,6/8/2026,,"$1,480.00","$1,480.00",4110
+7008,Sample Customer 6208,Void,4/10/2026,4/25/2026,$750.00,$750.00,4008
+7009,Sample Customer 6209,Partially paid,5/10/2026,6/1/2026,"$1,250.00",$625.00,4009
+7010,Sample Customer 6112,Sent,6/8/2026,6/23/2026,$275.00,$275.00,4112
+7011,Sample Customer 6211,Draft,6/8/2026,,$300.00,$300.00,4999

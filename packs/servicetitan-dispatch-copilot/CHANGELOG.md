@@ -9,6 +9,7 @@
 - Added `fixtures/sample-servicetitan-export.csv` (fictional shop, 16 jobs), `fixtures/sample_export_reference_time.txt`, and a generated `sample_csv_fallback_digest.md`.
 - Expanded `mock_servicetitan_test.cjs` (header aliases, dates, malformed / empty / missing-column input, snake_case regression, aging thresholds from the sample, the new workflow's safety and end-to-end runs).
 - Review hardening: explicit job ID and status headers take priority, split schedule date and time fields are combined, and invalid calendar times and DST transitions produce diagnostics. Booking QA checks all assignees, and utilization omits job-level minutes shared by multiple technicians.
+- Residual medium #3 and #5: job statuses use a canonical vocabulary (Done/Closed count as Completed; Cancelled is Canceled), unknown or blank statuses and missing aging clocks get a per-job Heads-up, sibling reports validate required columns, membership due dates are normalized as calendar dates, and missing capacity counts or sales-capability values are not treated as zero or false.
 - The CSV companion requires one Jobs/Dispatch snapshot per batch. Malformed quoting and excess cells reject the report, and an empty watch folder still produces a Heads-up.
 - Still NOT tested against a live ServiceTitan, Gmail, or Slack account.
 

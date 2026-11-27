@@ -178,7 +178,7 @@ code('Load Built-in Sample Export', [1340, 760], ['common', 'csv', 'settings', '
 
 const X = 2120;
 code('Morning Triage Digest Logic', [X, 520],
-  ['common', 'booking_qa', 'capacity_filler', 'kpi_digest', 'handoff'], [
+  ['common', 'csv', 'booking_qa', 'capacity_filler', 'kpi_digest', 'handoff'], [
     'let d = $input.first().json;',
     'd = Object.assign({}, d, { bookingQa: bookingQa(d) });',
     'd = Object.assign({}, d, { capacity: capacityFiller(d) });',

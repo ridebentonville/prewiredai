@@ -1,0 +1,21 @@
+Job #,Customer name,Job description,Service address,Job status,Scheduled start,Scheduled end,Created date,Completed date,Job total,Assigned employees,Invoice #,Invoice status
+4101,Sample Customer 6101,Tankless water heater install,"101 Sample Creek Rd, Testville",Unscheduled,,,6/1/2026 10:00 AM,,"$4,850.00",,,
+4102,Sample Customer 6102,AC not cooling diagnostic,"102 Sample Creek Rd, Testville",Needs scheduling,,,6/8/2026 4:45 PM,,$189.00,,,
+4103,Sample Customer 6103,Furnace tune-up,"103 Sample Creek Rd, Testville",Scheduled,6/8/2026 1:00 PM,6/8/2026 3:00 PM,6/1/2026 9:15 AM,,$149.00,Tech Marisol,,
+4104,Sample Customer 6104,Slab leak repair,"104 Sample Creek Rd, Testville",In progress,6/5/2026 8:00 AM,6/5/2026 12:00 PM,6/4/2026 3:30 PM,,"$2,900.00",Tech Devon,,
+4105,Sample Customer 6105,Sewer camera inspection,"105 Sample Creek Rd, Testville",Needs attention,6/10/2026 9:00 AM,6/10/2026 11:00 AM,6/5/2026 11:20 AM,,$325.00,Tech Marisol,,
+4106,Sample Customer 6106,Ductless mini-split install,"106 Sample Creek Rd, Testville",On hold,6/12/2026 8:00 AM,6/12/2026 4:00 PM,5/29/2026 2:10 PM,,"$7,400.00",Tech Devon,,
+4107,Sample Customer 6107,Water softener service,"107 Sample Creek Rd, Testville",Scheduled,6/9/2026 10:00 AM,6/9/2026 12:00 PM,6/2/2026 8:00 AM,,$210.00,Tech Marisol,,
+4108,Sample Customer 6108,Garbage disposal replacement,"108 Sample Creek Rd, Testville",Scheduled,6/11/2026 1:00 PM,6/11/2026 3:00 PM,6/8/2026 9:00 AM,,$385.00,Tech Devon,,
+4109,Sample Customer 6109,Drain clearing,"109 Sample Creek Rd, Testville",Complete,6/4/2026 9:00 AM,6/4/2026 11:00 AM,6/2/2026 8:30 AM,6/4/2026 11:20 AM,$620.00,Tech Marisol,,Not invoiced
+4110,Sample Customer 6110,Heat pump repair,"110 Sample Creek Rd, Testville",Complete,6/8/2026 8:00 AM,6/8/2026 12:00 PM,6/5/2026 1:00 PM,6/8/2026 12:10 PM,"$1,480.00",Tech Devon,,Draft
+4111,Sample Customer 6111,Toilet and faucet repair,"111 Sample Creek Rd, Testville",Complete,5/28/2026 9:00 AM,5/28/2026 10:30 AM,5/26/2026 4:00 PM,5/28/2026 10:45 AM,$340.00,Tech Marisol,7003,Sent
+4112,Sample Customer 6112,Thermostat replacement,"112 Sample Creek Rd, Testville",Complete,6/8/2026 9:00 AM,6/8/2026 10:00 AM,6/6/2026 8:20 AM,6/8/2026 10:05 AM,$275.00,Tech Devon,,
+4113,Sample Customer 6113,Gas line leak check,"113 Sample Creek Rd, Testville",Complete,6/3/2026 1:00 PM,6/3/2026 3:00 PM,6/1/2026 3:15 PM,6/3/2026 3:30 PM,,Tech Marisol,,Not invoiced
+4114,Sample Customer 6114,Sump pump swap,"114 Sample Creek Rd, Testville",Canceled,6/2/2026 9:00 AM,6/2/2026 11:00 AM,5/30/2026 10:00 AM,,$560.00,Tech Devon,,
+4115,Sample Customer 6115,Hose bib replacement,"115 Sample Creek Rd, Testville",Scheduled,,,6/4/2026 12:00 PM,,$180.00,,,
+4116,Sample Customer 6116,Furnace inspection,"116 Sample Creek Rd, Testville",Archived,2/10/2026 9:00 AM,2/10/2026 11:00 AM,2/1/2026 9:00 AM,2/10/2026 11:30 AM,$129.00,Tech Marisol,6990,Paid
+4117,Sample Customer 6117,Pipe insulation,"117 Sample Creek Rd, Testville",Scheduled,6/8/2026 2:00 PM,,6/3/2026 10:00 AM,,$230.00,Tech Devon,,
+4118,Sample Customer 6118,Capacitor replacement,"118 Sample Creek Rd, Testville",In progress,6/9/2026 7:30 AM,6/9/2026 11:00 AM,6/8/2026 5:00 PM,,$365.00,Tech Marisol,,
+4119,Sample Customer 6119,Whole-home repipe,"119 Sample Creek Rd, Testville",Scheduled,6/12/2026 8:00 AM,6/12/2026 4:00 PM,6/3/2026 9:00 AM,,"$9,800.00",Tech Devon,,
+4119,Sample Customer 6119,Whole-home repipe,"119 Sample Creek Rd, Testville",Scheduled,,,6/3/2026 9:00 AM,,"$9,800.00",,,
