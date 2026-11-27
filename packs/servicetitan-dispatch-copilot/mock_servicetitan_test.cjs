@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Test harness for the ServiceTitan Dispatch & Capacity Copilot pack (DRAFT v0.1.0).
+ * Test harness for the ServiceTitan Dispatch & Capacity Copilot pack (DRAFT v0.2.0).
  *
  *   node packs/servicetitan-dispatch-copilot/mock_servicetitan_test.cjs
  *
@@ -13,6 +13,8 @@
  *      workflow's Code nodes (so the JSON is not just trusted), and asserts they agree.
  *   3. Asserts specific flags and KPI values derived from the fixtures.
  *   4. Overwrites sample_test_digest.md with the [TEST] digest produced by the workflow code.
+ *   5. Checks unassigned-aging-watch.json the same way, runs the aging Code nodes, and
+ *      overwrites sample_aging_alert.md.
  * Exit code 0 only if every assertion passes.
  */
 'use strict';
@@ -155,7 +157,7 @@ check('no secret-looking values in the workflow', () => {
 // Pattern is assembled from fragments so this file itself contains none of the banned strings.
 const BANNED = new RegExp([['viv', 'int'], ['bri', 'nks'], ['home\\s*sec', 'urity'], ['smart[-\\s]?', 'home'], ['alarm\\s+', 'company']].map((p) => p.join('')).join('|'), 'i');
 check('no banned brand or category strings in workflow, logic, fixtures, or this test', () => {
-  const files = ['workflow.n8n.json', 'dispatch_logic.cjs', 'build_workflow.cjs', 'README.md', 'CHANGELOG.md']
+  const files = ['workflow.n8n.json', 'unassigned-aging-watch.json', 'dispatch_logic.cjs', 'build_workflow.cjs', 'build_aging_workflow.cjs', 'README.md', 'CHANGELOG.md']
     .concat(fs.readdirSync(path.join(HERE, 'fixtures')).map((f) => path.join('fixtures', f)));
   files.forEach((f) => {
     const t = fs.readFileSync(path.join(HERE, f), 'utf8');
@@ -171,6 +173,8 @@ check('Code nodes are generated from dispatch_logic.cjs', () => {
   nodes.filter((n) => n.type === 'n8n-nodes-base.code').forEach((n) => assert.match(n.parameters.jsCode, /^\/\/ Generated from dispatch_logic\.cjs/));
 });
 const nodeCount = { exec: exec.length, sticky: nodes.length - exec.length, total: nodes.length };
+let aging = { nodeCount: null };
+
 
 // ---------------------------------------------------------------- 2. run the workflow's own code
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -426,7 +430,245 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.ok(!BANNED.test(t));
   });
 
-  // ---------------- 5. diagram + site entry stay in sync with the shipped pack
+  // ---------------- 5. Unassigned-Job Aging Watch companion workflow
+  const agingText = fs.readFileSync(path.join(HERE, 'unassigned-aging-watch.json'), 'utf8');
+  let agingWf;
+  check('unassigned-aging-watch.json is valid JSON', () => { agingWf = JSON.parse(agingText); return !!agingWf; });
+  aging = { wf: agingWf, nodes: agingWf ? agingWf.nodes : [], byName: {}, exec: [], nodeCount: { exec: 0, sticky: 0, total: 0 } };
+  if (agingWf) {
+    aging.nodes = agingWf.nodes;
+    aging.byName = Object.fromEntries(aging.nodes.map((n) => [n.name, n]));
+    aging.exec = aging.nodes.filter((n) => n.type !== 'n8n-nodes-base.stickyNote');
+    aging.nodeCount = { exec: aging.exec.length, sticky: aging.nodes.length - aging.exec.length, total: aging.nodes.length };
+  }
+  const agingCfgNode = aging.byName['Config'];
+  const agingCfgVals = agingCfgNode
+    ? Object.fromEntries(agingCfgNode.parameters.assignments.assignments.map((a) => [a.name, a.value]))
+    : {};
+
+  check('aging workflow is inactive (active === false)', () => assert.strictEqual(aging.wf.active, false));
+  check('aging workflow has a Manual Test Run trigger', () => assert.ok(aging.nodes.some((n) => n.type === 'n8n-nodes-base.manualTrigger')));
+  check('aging schedule is a disabled 15-minute interval', () => {
+    const s = aging.nodes.filter((n) => /scheduleTrigger|cron/i.test(n.type));
+    assert.strictEqual(s.length, 1);
+    assert.strictEqual(s[0].disabled, true);
+    assert.strictEqual(s[0].parameters.rule.interval[0].field, 'minutes');
+    assert.strictEqual(s[0].parameters.rule.interval[0].minutesInterval, 15);
+  });
+  check('aging Config defaults: testMode on, source test, 20-minute threshold, paste-here placeholders', () => {
+    assert.strictEqual(agingCfgVals.testMode, true);
+    assert.ok(['test', 'csv'].includes(agingCfgVals.source));
+    assert.strictEqual(agingCfgVals.agingThresholdMinutes, 20);
+    assert.strictEqual(agingCfgVals.timezone, 'America/Chicago');
+    assert.match(agingCfgVals.stTenantId, /^PASTE_.*_HERE$/);
+    assert.match(agingCfgVals.stAppKey, /^PASTE_.*_HERE$/);
+  });
+  check('aging settings.executionOrder is v1 and timezone is America/Chicago', () => {
+    assert.strictEqual(aging.wf.settings.executionOrder, 'v1');
+    assert.strictEqual(aging.wf.settings.timezone, 'America/Chicago');
+  });
+  check('aging node ids and names are unique', () => {
+    assert.strictEqual(new Set(aging.nodes.map((n) => n.id)).size, aging.nodes.length);
+    assert.strictEqual(new Set(aging.nodes.map((n) => n.name)).size, aging.nodes.length);
+  });
+  check('aging every connection source and target exists', () => {
+    Object.entries(aging.wf.connections).forEach(([from, v]) => {
+      assert.ok(aging.byName[from], 'missing source ' + from);
+      v.main.forEach((outs) => outs.forEach((o) => assert.ok(aging.byName[o.node], 'missing target ' + o.node)));
+    });
+  });
+  check('aging only real n8n node types from the allowed set', () => {
+    const allowed = new Set(['manualTrigger', 'scheduleTrigger', 'set', 'if', 'code', 'httpRequest', 'readWriteFile', 'gmail', 'slack', 'stickyNote'].map((t) => 'n8n-nodes-base.' + t));
+    aging.nodes.forEach((n) => assert.ok(allowed.has(n.type), 'unexpected type ' + n.type));
+  });
+  check('aging has no customer-facing send nodes (no Twilio, SMS, or similar)', () => {
+    aging.nodes.forEach((n) => {
+      assert.ok(!/twilio|sms|whatsapp|messagebird|vonage|sendgrid|mailgun|telegram/i.test(n.type + ' ' + n.name), n.name);
+    });
+    const senders = aging.exec.filter((n) => /gmail|slack|emailSend/.test(n.type));
+    assert.strictEqual(senders.length, 2);
+  });
+  check('aging email and Slack recipients come only from the owner Config fields', () => {
+    assert.strictEqual(aging.byName['Email owner (Gmail)'].parameters.sendTo, '={{ $json.emailTo }}');
+    assert.ok(aging.byName['Post to owner Slack'].parameters.channelId.value.includes('$json.slackChannel'));
+    const asm = aging.byName['Assemble Aging Alert'].parameters.jsCode;
+    assert.ok(asm.includes('renderAgingAlert'));
+  });
+  check('aging every HTTP Request node is a GET (read-only, zero board write-back)', () => {
+    const http = aging.nodes.filter((n) => n.type === 'n8n-nodes-base.httpRequest');
+    assert.ok(http.length >= 4);
+    http.forEach((n) => assert.strictEqual(n.parameters.method, 'GET', n.name));
+    assert.ok(!/"method":\s*"(POST|PUT|PATCH|DELETE)"/i.test(agingText));
+  });
+  check('aging Code nodes make no network or file calls', () => {
+    aging.nodes.filter((n) => n.type === 'n8n-nodes-base.code').forEach((n) => {
+      assert.ok(!/fetch\(|require\(|XMLHttpRequest|helpers\.(httpRequest|request)|\$http|child_process|\bfs\./.test(n.parameters.jsCode), n.name);
+    });
+  });
+  check('aging ServiceTitan HTTP branch is unreachable in the default config', () => {
+    const gate = aging.byName['Source is ServiceTitan?'].parameters.conditions.conditions[0];
+    assert.strictEqual(gate.rightValue, 'servicetitan');
+    assert.strictEqual(gate.operator.operation, 'equals');
+    const s = logic.prepareAgingSettings(agingCfgVals, Date.now());
+    assert.notStrictEqual(s.source, 'servicetitan');
+    const httpNames = new Set(aging.nodes.filter((n) => n.type === 'n8n-nodes-base.httpRequest').map((n) => n.name));
+    Object.entries(aging.wf.connections).forEach(([from, v]) => v.main.forEach((outs, idx) => outs.forEach((o) => {
+      if (httpNames.has(o.node) && !httpNames.has(from)) assert.ok(from === 'Source is ServiceTitan?' && idx === 0, from + ' -> ' + o.node);
+    })));
+  });
+  check('aging credentials are placeholders only; no pinData', () => {
+    aging.nodes.forEach((n) => Object.values(n.credentials || {}).forEach((c) => assert.match(c.id, /^PLACEHOLDER_[A-Z_]+$/)));
+    const ids = new Set(aging.nodes.flatMap((n) => Object.values(n.credentials || {}).map((c) => c.id)));
+    ['PLACEHOLDER_SERVICETITAN', 'PLACEHOLDER_GMAIL', 'PLACEHOLDER_SLACK'].forEach((id) => assert.ok(ids.has(id), id));
+    assert.ok(!('pinData' in aging.wf));
+  });
+  check('aging workflow has no secret-looking values', () => {
+    assert.ok(!/xox[bap]-|sk-[A-Za-z0-9]{16,}|Bearer\s+[A-Za-z0-9._-]{12,}|client_secret|-----BEGIN|AKIA[0-9A-Z]{12}|\b[0-9a-f]{32,}\b/i.test(agingText));
+  });
+  check('aging Code nodes are generated from dispatch_logic.cjs', () => {
+    aging.nodes.filter((n) => n.type === 'n8n-nodes-base.code').forEach((n) => assert.match(n.parameters.jsCode, /^\/\/ Generated from dispatch_logic\.cjs/));
+  });
+  check('aging sticky notes explain config, safety, CSV fallback, and zero write-back', () => {
+    const notes = aging.nodes.filter((n) => n.type === 'n8n-nodes-base.stickyNote').map((n) => n.parameters.content).join('\n');
+    assert.ok(/Config fields/.test(notes) && /Safety defaults/.test(notes) && /CSV export fallback/.test(notes) && /UNVERIFIED/.test(notes));
+    assert.ok(/zero board write-back/i.test(notes) && /agingThresholdMinutes/.test(notes));
+  });
+
+  async function runAgingNode(name, { input, named, buffers }) {
+    const fn = new AsyncFunction('$input', '$', aging.byName[name].parameters.jsCode);
+    const items = Array.isArray(input) ? input : [{ json: input }];
+    const $input = { first: () => items[0], all: () => items };
+    const $ = (n) => {
+      if (!(n in (named || {}))) throw new Error('node ' + n + ' not available');
+      return { first: () => ({ json: named[n] }), all: () => [{ json: named[n] }] };
+    };
+    const ctx = { helpers: { getBinaryDataBuffer: async (i) => buffers[i] } };
+    const out = await fn.call(ctx, $input, $);
+    return out[0].json;
+  }
+  const AGING_REF = fs.readFileSync(path.join(fixtureDir, 'aging_reference_time.txt'), 'utf8').trim();
+  const loadAgingBuiltin = (prep) => runAgingNode('Load Built-in Test Data', { input: prep, named: { 'Prepare Settings': prep } });
+  const loadAgingCsv = (prep) => runAgingNode('Parse CSV Exports', {
+    input: [
+      { json: {}, binary: { data: { fileName: 'technicians.csv' } } },
+      { json: {}, binary: { data: { fileName: 'aging_jobs.csv' } } },
+    ],
+    named: { 'Prepare Settings': prep },
+    buffers: [
+      fs.readFileSync(path.join(fixtureDir, 'technicians.csv')),
+      fs.readFileSync(path.join(fixtureDir, 'aging_jobs.csv')),
+    ],
+  });
+  async function runAgingChain(cfgOverrides, loader) {
+    const cfg = Object.assign({}, agingCfgVals, { businessName: 'Cedar Ridge Mechanical (fictional sample)' }, cfgOverrides);
+    const prep = await runAgingNode('Prepare Settings', { input: cfg });
+    let d = await loader(prep);
+    d = await runAgingNode('Unassigned Aging Watch', { input: d });
+    const msg = await runAgingNode('Assemble Aging Alert', { input: d });
+    return { data: d, msg };
+  }
+
+  let agingRun, agingCsvRun;
+  await checkAsync('aging Code nodes run end to end on the built-in test data', async () => {
+    agingRun = await runAgingChain({}, loadAgingBuiltin);
+    assert.ok(agingRun.msg.text.includes('[TEST] Unassigned Aging Alert'));
+  });
+  await checkAsync('aging Code nodes run end to end on the CSV fixtures (csv source)', async () => {
+    agingCsvRun = await runAgingChain({ source: 'csv', asOfOverride: AGING_REF }, loadAgingCsv);
+    assert.ok(agingCsvRun.msg.text.length > 400);
+  });
+  if (!agingRun || !agingCsvRun) { report(); return; }
+
+  check('aging built-in test data equals the CSV fixtures (embedded copy is in sync)', () => {
+    assert.deepStrictEqual(
+      { t: agingRun.data.technicians, j: agingRun.data.jobs },
+      { t: agingCsvRun.data.technicians, j: agingCsvRun.data.jobs });
+  });
+  check('aging csv source and test source produce the same alert, apart from the source label and sample-data banner', () => {
+    const norm = (t) => t.replace('source: csv', 'source: X').replace('source: test', 'source: X').replace(' Built from fictional sample data.', '');
+    assert.strictEqual(norm(agingCsvRun.msg.text), norm(agingRun.msg.text));
+    assert.deepStrictEqual(agingCsvRun.data.agingWatch.agedUnassigned, agingRun.data.agingWatch.agedUnassigned);
+  });
+  check('aging workflow code output matches the shared module output', () => {
+    assert.deepStrictEqual(agingRun.data.agingWatch, logic.unassignedAgingWatch(agingRun.data));
+  });
+
+  const aw = agingRun.data.agingWatch;
+  const agingIds = (rows) => rows.map((r) => r.jobId);
+  check('aging: default threshold is 20 minutes and 8 open jobs are reviewed (canceled and completed excluded)', () => {
+    assert.strictEqual(aw.thresholdMinutes, 20);
+    assert.strictEqual(aw.reviewedCount, 8);
+    assert.strictEqual(aw.flaggedJobCount, 7);
+  });
+  check('aging: jobs sitting in Unassigned for 20+ minutes are flagged, under-threshold and terminal jobs are not', () => {
+    assert.deepStrictEqual(agingIds(aw.agedUnassigned), ['J2008', 'J2001', 'J2002']);
+    assert.deepStrictEqual(aw.agedUnassigned.map((r) => r.unassignedMinutes), [41, 32, 25]);
+    assert.ok(!agingIds(aw.agedUnassigned).includes('J2003')); // 8 minutes, under threshold
+    assert.ok(!agingIds(aw.agedUnassigned).includes('J2009')); // canceled
+    assert.ok(!agingIds(aw.agedUnassigned).includes('J2010')); // completed
+  });
+  check('aging: raising the threshold to 30 minutes drops the 25-minute job and keeps the older two', () => {
+    const w = logic.unassignedAgingWatch(Object.assign({}, agingRun.data, {
+      settings: Object.assign({}, agingRun.data.settings, { agingThresholdMinutes: 30 }),
+    }));
+    assert.deepStrictEqual(agingIds(w.agedUnassigned), ['J2008', 'J2001']);
+    assert.ok(!agingIds(w.agedUnassigned).includes('J2002'));
+  });
+  check('aging: lowering the threshold to 5 minutes also flags the 8-minute unassigned job', () => {
+    const w = logic.unassignedAgingWatch(Object.assign({}, agingRun.data, {
+      settings: Object.assign({}, agingRun.data.settings, { agingThresholdMinutes: 5 }),
+    }));
+    assert.deepStrictEqual(agingIds(w.agedUnassigned), ['J2008', 'J2001', 'J2002', 'J2003']);
+  });
+  check('aging: blank skill tags are flagged on open jobs only', () => {
+    assert.deepStrictEqual(agingIds(aw.blankSkill), ['J2002', 'J2004', 'J2008']);
+    assert.ok(!agingIds(aw.blankSkill).includes('J2010')); // completed, even with a blank skill
+    assert.ok(aw.blankSkill.every((r) => r.flags.some((f) => f.code === 'blank_skill')));
+  });
+  check('aging: missing zone assignments are flagged on open jobs only', () => {
+    assert.deepStrictEqual(agingIds(aw.missingZone), ['J2005', 'J2008']);
+    assert.ok(aw.missingZone.every((r) => r.flags.some((f) => f.code === 'missing_zone')));
+  });
+  check('aging: multi-tech and multi-day jobs are flagged as Auto Mode exclusion risks', () => {
+    assert.deepStrictEqual(agingIds(aw.autoModeExclusionRisk), ['J2006', 'J2007']);
+    const kinds = Object.fromEntries(aw.autoModeExclusionRisk.map((r) => [r.jobId, r.flags.find((f) => f.code === 'automode_exclusion').kind]));
+    assert.strictEqual(kinds.J2006, 'multi-tech');
+    assert.strictEqual(kinds.J2007, 'multi-day');
+    assert.match(aw.autoModeExclusionRisk.find((r) => r.jobId === 'J2007').label, /Wed Mar 11/);
+  });
+  check('aging: a fully tagged, under-threshold unassigned job is not flagged', () => {
+    const flagged = new Set([].concat(agingIds(aw.agedUnassigned), agingIds(aw.blankSkill), agingIds(aw.missingZone), agingIds(aw.autoModeExclusionRisk)));
+    assert.ok(!flagged.has('J2003'));
+  });
+  check('aging: [TEST] mode tags the subject, body, and SMS-length text; placeholder owner email is not sent', () => {
+    assert.ok(agingRun.msg.subject.startsWith('[TEST] Unassigned Aging Alert:'));
+    assert.ok(agingRun.msg.text.includes('# [TEST] Unassigned Aging Alert:'));
+    assert.ok(agingRun.msg.smsText.startsWith('[TEST]'));
+    assert.ok(agingRun.msg.smsText.includes('Zero write-back'));
+    assert.strictEqual(agingRun.msg.testMode, true);
+    assert.strictEqual(agingRun.msg.sendEmail, false);
+    assert.ok(agingRun.msg.deliveryNotes.some((n) => /ownerEmail/.test(n)));
+  });
+  check('aging: testMode is forced on when source is test, even if Config tries to turn it off', () => {
+    const s = logic.prepareAgingSettings({ source: 'test', testMode: false, agingThresholdMinutes: 20 }, 0);
+    assert.strictEqual(s.testMode, true);
+    assert.strictEqual(s.agingThresholdMinutes, 20);
+  });
+  check('aging: read-only enforcement — no write methods and no board-mutating language in the shipped JSON', () => {
+    assert.ok(!/"method":\s*"(POST|PUT|PATCH|DELETE)"/i.test(agingText));
+    assert.ok(/Zero board write-back/i.test(agingRun.msg.text));
+    assert.ok(!/assign the job|reassign|write back to the board|PATCH the job/i.test(aging.byName['Unassigned Aging Watch'].parameters.jsCode));
+  });
+
+  const agingHeader = '<!-- Generated by mock_servicetitan_test.cjs from the fixtures in fixtures/. Do not hand-edit; re-run the test to regenerate. -->\n\n';
+  fs.writeFileSync(path.join(HERE, 'sample_aging_alert.md'), agingHeader + agingRun.msg.text + '\n');
+  check('sample_aging_alert.md was written and is labeled [TEST]', () => {
+    const t = fs.readFileSync(path.join(HERE, 'sample_aging_alert.md'), 'utf8');
+    assert.ok(t.includes('# [TEST] Unassigned Aging Alert') && t.includes('Aged Unassigned') && t.includes('Zero board write-back'));
+    assert.ok(!BANNED.test(t));
+  });
+
+  // ---------------- 6. diagram + site entry stay in sync with the shipped pack
   const repo = path.resolve(HERE, '..', '..');
   const diagram = fs.readFileSync(path.join(repo, 'public', 'diagrams', 'servicetitan-dispatch-copilot.html'), 'utf8');
   const sample = fs.readFileSync(path.join(HERE, 'sample_test_digest.md'), 'utf8');
@@ -457,10 +699,13 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
   });
   const tsText = fs.readFileSync(path.join(repo, 'src', 'templates.ts'), 'utf8');
   const entry = tsText.slice(tsText.indexOf('slug: "servicetitan-dispatch-copilot"'), tsText.indexOf('slug: "speed-to-lead"'));
-  check('templates.ts entry: node counts match the shipped workflow JSON', () => {
-    assert.ok(entry.includes('totalNodes: ' + nodeCount.exec + ','));
-    assert.ok(entry.includes('totalNodesWithNotes: ' + nodeCount.total + ','));
-    assert.ok(entry.includes('nodes: ' + nodeCount.exec + ','));
+  check('templates.ts entry: node counts match the shipped digest and aging workflow JSON', () => {
+    const agingExec = aging.nodeCount.exec;
+    const agingTotal = aging.nodeCount.total;
+    assert.ok(entry.includes('nodes: ' + nodeCount.exec + ','), 'digest workflow node count');
+    assert.ok(entry.includes('nodes: ' + agingExec + ','), 'aging workflow node count');
+    assert.ok(entry.includes('totalNodes: ' + (nodeCount.exec + agingExec) + ','), 'pack executable total');
+    assert.ok(entry.includes('totalNodesWithNotes: ' + (nodeCount.total + agingTotal) + ','), 'pack total with notes');
   });
   check('templates.ts entry: paid-pending, New badge, diagram on, no price, no banned strings', () => {
     assert.ok(!/free:\s*true/.test(entry));
@@ -479,7 +724,10 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
 function report() {
   const failed = failures.length;
   if (failed) { console.log('\nFAILURES:'); failures.forEach((f) => console.log('  FAIL ' + f)); }
-  console.log(`\nWorkflow nodes: ${nodeCount.exec} executable, ${nodeCount.sticky} sticky notes, ${nodeCount.total} total`);
+  console.log(`\nDigest workflow nodes: ${nodeCount.exec} executable, ${nodeCount.sticky} sticky notes, ${nodeCount.total} total`);
+  if (aging && aging.nodeCount) {
+    console.log(`Aging workflow nodes: ${aging.nodeCount.exec} executable, ${aging.nodeCount.sticky} sticky notes, ${aging.nodeCount.total} total`);
+  }
   console.log(`${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

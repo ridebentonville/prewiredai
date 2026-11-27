@@ -1,0 +1,949 @@
+{
+  "name": "ServiceTitan Unassigned-Job Aging Watch (DRAFT): Prewired AI",
+  "nodes": [
+    {
+      "id": "c257f726-a5b2-5dd5-a7c1-4fb7d0ebc040",
+      "name": "Manual Test Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "a3cf9c38-ea1d-50a0-a013-406da3e9cbe6",
+      "name": "Schedule every 15 minutes (disabled until you are ready)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        720
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "1ecbd991-f9b8-5ffb-a841-7bc1705a4690",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        280,
+        520
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "174c116a-1026-5383-a914-20abab23a6de",
+              "name": "businessName",
+              "value": "Your Business Name",
+              "type": "string"
+            },
+            {
+              "id": "d3799684-191b-570e-a035-d613f80d5525",
+              "name": "timezone",
+              "value": "America/Chicago",
+              "type": "string"
+            },
+            {
+              "id": "0e31b8f6-16ff-519e-a187-ea47012ed221",
+              "name": "source",
+              "value": "test",
+              "type": "string"
+            },
+            {
+              "id": "69e81cc2-9ec5-501d-a615-6104fd5684cb",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "93a8f903-122a-5f7a-a9cf-6a616b60eb06",
+              "name": "delivery",
+              "value": "email",
+              "type": "string"
+            },
+            {
+              "id": "5d1b29cc-8f49-5149-a1d9-99f1287f38e1",
+              "name": "ownerEmail",
+              "value": "owner@example.com",
+              "type": "string"
+            },
+            {
+              "id": "8e4dc5a8-0b20-58e8-a81d-f32d200f0f41",
+              "name": "ownerSlackChannel",
+              "value": "#dispatch-owner-only",
+              "type": "string"
+            },
+            {
+              "id": "09fb61e8-396f-5e64-acd6-56e5c02fdb04",
+              "name": "stApiBase",
+              "value": "https://api.servicetitan.io",
+              "type": "string"
+            },
+            {
+              "id": "f37744ff-e857-5e24-a587-2a59e193dabd",
+              "name": "stTenantId",
+              "value": "PASTE_TENANT_ID_HERE",
+              "type": "string"
+            },
+            {
+              "id": "316a911f-edd5-5a29-ab89-6f44430cbfa0",
+              "name": "stAppKey",
+              "value": "PASTE_APP_KEY_HERE",
+              "type": "string"
+            },
+            {
+              "id": "4f7b7f3f-7488-59c3-a253-3051adbfb170",
+              "name": "csvFolder",
+              "value": "/home/node/.n8n-files/dispatch-exports",
+              "type": "string"
+            },
+            {
+              "id": "5a7051d3-0f6c-5618-af42-ce99512f4da1",
+              "name": "asOfOverride",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "721d78b5-4b2f-5067-a324-b6fd185bd193",
+              "name": "agingThresholdMinutes",
+              "value": 20,
+              "type": "number"
+            },
+            {
+              "id": "656b5331-32ef-5a07-a643-008d8d1cdc09",
+              "name": "historyDays",
+              "value": 90,
+              "type": "number"
+            },
+            {
+              "id": "0cc3d91b-f4e2-5588-adc7-24afc3f18122",
+              "name": "capacityLookaheadDays",
+              "value": 2,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "149ef6c6-d02c-5478-a433-3d97527860b7",
+      "name": "Prepare Settings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_aging_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.2.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'servicetitan'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or servicetitan. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  const override = parseTime(cfg.asOfOverride);\n  const asOfMs = override !== null ? override : nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    stApiBase: isBlank(cfg.stApiBase) ? 'https://api.servicetitan.io' : String(cfg.stApiBase).replace(/\\/+$/, ''),\n    stTenantId: isBlank(cfg.stTenantId) ? '' : String(cfg.stTenantId).trim(),\n    stAppKey: isBlank(cfg.stAppKey) ? '' : String(cfg.stAppKey).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).forEach(function (k) {\n    s[k] = toNum(cfg[k], DEFAULTS[k]);\n  });\n  s.historyStart = new Date(asOfMs - s.historyDays * DAY).toISOString();\n  s.lookaheadEnd = new Date(asOfMs + s.capacityLookaheadDays * DAY).toISOString();\n  s.callsSince = new Date(asOfMs - 36 * HOUR).toISOString();\n  return s;\n}\n\nconst AGING_DEFAULT_THRESHOLD_MINUTES = 20;\nconst OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];\nconst TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];\n\nfunction agingThresholdMinutes(s) {\n  return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n}\n\nfunction prepareAgingSettings(cfg, nowMs) {\n  const s = prepareSettings(cfg, nowMs);\n  const n = toNum(cfg && cfg.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n  s.agingThresholdMinutes = n > 0 ? n : AGING_DEFAULT_THRESHOLD_MINUTES;\n  return s;\n}\n\nfunction splitIds(v) {\n  if (isBlank(v)) return [];\n  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);\n  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);\n}\n\nfunction uniqueIds(list) {\n  const out = [];\n  const seen = {};\n  (list || []).forEach(function (id) {\n    const s = String(id || '').trim();\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\n\nfunction jobTechIds(job) {\n  const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));\n  if (fromList.length) return fromList;\n  return uniqueIds(splitIds(job.techId || job.tech_id));\n}\n\nfunction isTerminalJob(job) {\n  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;\n}\n\nfunction isOpenJob(job) {\n  if (isTerminalJob(job)) return false;\n  const st = lc(job.status);\n  if (!st) return jobTechIds(job).length === 0;\n  return OPEN_JOB_STATUSES.indexOf(st) !== -1;\n}\n\nfunction isUnassignedJob(job) {\n  if (!isOpenJob(job)) return false;\n  if (lc(job.status) === 'unassigned') return true;\n  return jobTechIds(job).length === 0;\n}\n\nfunction jobSpansMultipleLocalDays(job, tz) {\n  if (toBool(job.multiDay, false)) return true;\n  const start = parseTime(job.start);\n  const end = parseTime(job.end);\n  if (start === null || end === null) return false;\n  return localDate(start, tz) !== localDate(end, tz);\n}\n\nfunction unassignedClock(job) {\n  const t = parseTime(job.unassignedSince);\n  if (t !== null) return t;\n  return parseTime(job.bookedAt);\n}\n\nfunction agingMinutes(job, asOfMs) {\n  const clock = unassignedClock(job);\n  if (clock === null || asOfMs === null) return null;\n  return Math.floor((asOfMs - clock) / 60000);\n}\n\nfunction mapAgingJob(r) {\n  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));\n  return {\n    id: String(r.job_id || r.id || ''),\n    bookedAt: r.booked_at || r.bookedAt || '',\n    unassignedSince: r.unassigned_since || r.unassignedSince || '',\n    start: r.scheduled_start || r.start || '',\n    end: r.scheduled_end || r.end || '',\n    status: r.status || '',\n    techId: techIds[0] || '',\n    techIds: techIds,\n    skill: r.skill || '',\n    zone: r.zone || '',\n    customerName: r.customer_name || r.customerName || '',\n    customerPhone: r.customer_phone || r.customerPhone || '',\n    customerType: r.customer_type || r.customerType || '',\n    jobType: r.job_type || r.jobType || '',\n    equipmentType: r.equipment_type || r.equipmentType || '',\n    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),\n    address: r.address || '',\n    priority: r.priority || '',\n    businessUnit: r.business_unit || r.businessUnit || '',\n    summary: r.summary || '',\n    multiDay: toBool(r.multi_day || r.multiDay, false),\n  };\n}\n\nfunction datasetFromAgingTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);\n  if (!jobsTable) headsUp.push('CSV export \"aging_jobs.csv\" or \"jobs.csv\" was not found. The aging watch is skipped.');\n  const technicians = (t.technicians || []).map(function (r) {\n    return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };\n  });\n  const techName = {};\n  technicians.forEach(function (tech) { techName[tech.id] = tech.name; });\n  const jobs = (jobsTable || []).map(function (r) {\n    const job = mapAgingJob(r);\n    job.assignedTechNames = job.techIds.map(function (id) { return techName[id] || id; });\n    return job;\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction normalizeAgingServiceTitan(settings, raw) {\n  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []); };\n  const headsUp = (settings.headsUp || []).concat([\n    'ServiceTitan live mapping for the Unassigned Aging Watch is an unverified first draft. Skill tags and zone assignments are not always present on the job record, so a missing field is flagged rather than guessed. The CSV export path is the recommended way to start.',\n  ]);\n  Object.keys(raw || {}).forEach(function (name) {\n    const r = raw[name];\n    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan \"' + name + '\" read returned no usable data.');\n    else if (r.hasMore === true) headsUp.push('ServiceTitan \"' + name + '\" has more pages than this draft reads. Totals may be incomplete.');\n  });\n  const techName = {};\n  rows(raw.technicians).forEach(function (t) { techName[String(t.id)] = t.name || ('Technician ' + t.id); });\n  const assignByJob = {};\n  rows(raw.assignments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!assignByJob[jobId]) assignByJob[jobId] = [];\n    if (a.technicianId !== undefined && a.technicianId !== null && String(a.technicianId).trim() !== '') {\n      assignByJob[jobId].push(String(a.technicianId));\n    }\n  });\n  const apptByJob = {};\n  rows(raw.appointments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!apptByJob[jobId]) apptByJob[jobId] = a;\n  });\n  const jobs = rows(raw.jobs).map(function (j) {\n    const id = String(j.jobNumber || j.id);\n    const a = apptByJob[j.id] || apptByJob[id] || {};\n    const techIds = uniqueIds(assignByJob[j.id] || assignByJob[id] || []);\n    const skill = j.skill || (j.skills && j.skills[0] && (j.skills[0].name || j.skills[0])) || (j.jobType && j.jobType.name) || '';\n    const zone = j.zone || j.zoneName || (j.territory && (j.territory.name || j.territory)) || j.businessUnitLocation || '';\n    return {\n      id: id,\n      bookedAt: j.createdOn || j.bookedOn || '',\n      unassignedSince: j.unassignedOn || j.unassignedSince || '',\n      start: a.start || j.scheduledStart || '',\n      end: a.end || j.scheduledEnd || '',\n      status: j.jobStatus || j.status || '',\n      techId: techIds[0] || '',\n      techIds: techIds,\n      skill: skill ? String(skill) : '',\n      zone: zone ? String(zone) : '',\n      customerName: j.customerId ? 'Customer #' + j.customerId : '',\n      customerPhone: '',\n      customerType: '',\n      jobType: (j.jobType && j.jobType.name) ? j.jobType.name : String(j.type || ''),\n      equipmentType: '',\n      equipmentAgeYears: null,\n      address: j.locationId ? 'Location #' + j.locationId : '',\n      priority: j.priority || '',\n      businessUnit: j.businessUnitId ? String(j.businessUnitId) : (j.businessUnit && j.businessUnit.name ? j.businessUnit.name : ''),\n      summary: j.summary || '',\n      multiDay: false,\n      assignedTechNames: techIds.map(function (tid) { return techName[tid] || tid; }),\n    };\n  });\n  const technicians = rows(raw.technicians).map(function (t) {\n    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '' };\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: headsUp }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction fmtAgingWindow(startMs, endMs, tz) {\n  if (startMs === null || endMs === null) return 'no window';\n  if (localDate(startMs, tz) === localDate(endMs, tz)) return fmtWindow(startMs, endMs, tz);\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtDay(endMs, tz) + ' ' + fmtTime(endMs, tz);\n}\n\nfunction agingJobLabel(job, tz) {\n  const techs = (job.assignedTechNames && job.assignedTechNames.length)\n    ? job.assignedTechNames.join(', ')\n    : (jobTechIds(job).length ? jobTechIds(job).join(', ') : 'no tech');\n  const bu = isBlank(job.businessUnit) ? 'trade n/a' : job.businessUnit;\n  const who = isBlank(job.customerName) ? 'customer n/a' : job.customerName;\n  const window = fmtAgingWindow(parseTime(job.start), parseTime(job.end), tz);\n  return 'Job ' + job.id + ' | ' + window + ' | ' + bu + ' | ' + who + ' | tech: ' + techs;\n}\n\nfunction unassignedAgingWatch(data) {\n  const s = data.settings || {};\n  const tz = s.timezone || 'America/Chicago';\n  const asOfMs = parseTime(s.asOf);\n  const threshold = agingThresholdMinutes(s);\n  const hu = (s.headsUp || []).slice();\n  if (asOfMs === null) hu.push('asOf time is missing, so unassigned age could not be computed.');\n  const agedUnassigned = [];\n  const blankSkill = [];\n  const missingZone = [];\n  const autoModeExclusionRisk = [];\n  (data.jobs || []).forEach(function (job) {\n    if (!isOpenJob(job)) return;\n    const flags = [];\n    const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;\n    if (isUnassignedJob(job) && mins !== null && mins >= threshold) {\n      flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });\n    }\n    if (isBlank(job.skill)) {\n      flags.push({ code: 'blank_skill', text: 'Blank skill tag. Dispatch Pro Auto Mode can silently drop or ping-pong this job when it reshuffles.' });\n    }\n    if (isBlank(job.zone)) {\n      flags.push({ code: 'missing_zone', text: 'Missing zone assignment. Auto Mode can exclude this job when it reshuffles.' });\n    }\n    const techs = jobTechIds(job);\n    const multiTech = techs.length > 1;\n    const multiDay = jobSpansMultipleLocalDays(job, tz);\n    if (multiTech || multiDay) {\n      const why = [];\n      if (multiTech) why.push('multi-tech (' + techs.length + ' technicians)');\n      if (multiDay) why.push('multi-day');\n      flags.push({ code: 'automode_exclusion', kind: multiTech && multiDay ? 'multi-tech-multi-day' : (multiTech ? 'multi-tech' : 'multi-day'), text: 'Auto Mode exclusion risk: ' + why.join(' and ') + '. Dispatch Pro can silently leave this in Unassigned or ping-pong it on each 10-minute reshuffle.' });\n    }\n    if (flags.length === 0) return;\n    const row = {\n      jobId: job.id,\n      status: job.status || '',\n      businessUnit: job.businessUnit || '',\n      customerName: job.customerName || '',\n      customerPhone: job.customerPhone || '',\n      address: job.address || '',\n      skill: job.skill || '',\n      zone: job.zone || '',\n      assignedTech: techs.length ? techs.join(', ') : '',\n      unassignedMinutes: mins,\n      label: agingJobLabel(job, tz),\n      flags: flags,\n    };\n    if (flags.some(function (f) { return f.code === 'aged_unassigned'; })) agedUnassigned.push(row);\n    if (flags.some(function (f) { return f.code === 'blank_skill'; })) blankSkill.push(row);\n    if (flags.some(function (f) { return f.code === 'missing_zone'; })) missingZone.push(row);\n    if (flags.some(function (f) { return f.code === 'automode_exclusion'; })) autoModeExclusionRisk.push(row);\n  });\n  const sortAged = function (a, b) { return (b.unassignedMinutes || 0) - (a.unassignedMinutes || 0); };\n  const sortId = function (a, b) { return String(a.jobId).localeCompare(String(b.jobId)); };\n  agedUnassigned.sort(sortAged);\n  blankSkill.sort(sortId);\n  missingZone.sort(sortId);\n  autoModeExclusionRisk.sort(sortId);\n  const flaggedIds = {};\n  agedUnassigned.concat(blankSkill, missingZone, autoModeExclusionRisk).forEach(function (r) { flaggedIds[r.jobId] = true; });\n  return {\n    computed: asOfMs !== null,\n    thresholdMinutes: threshold,\n    reviewedCount: (data.jobs || []).filter(isOpenJob).length,\n    agedCount: agedUnassigned.length,\n    blankSkillCount: blankSkill.length,\n    missingZoneCount: missingZone.length,\n    autoModeExclusionCount: autoModeExclusionRisk.length,\n    flaggedJobCount: Object.keys(flaggedIds).length,\n    agedUnassigned: agedUnassigned,\n    blankSkill: blankSkill,\n    missingZone: missingZone,\n    autoModeExclusionRisk: autoModeExclusionRisk,\n    headsUp: hu,\n  };\n}\n\nfunction renderAgingAlert(data) {\n  const s = data.settings;\n  const watch = data.agingWatch || unassignedAgingWatch(data);\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  L.push('# ' + tag + 'Unassigned Aging Alert: ' + s.businessName);\n  L.push('');\n  L.push((asOf !== null ? fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) : 'time n/a') + ' ' + tz + '. source: ' + s.source + '.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  L.push('Read-only. Zero board write-back. Owner-only delivery. Nothing is assigned, moved, or deleted in ServiceTitan.');\n  L.push('');\n  L.push('Threshold: jobs sitting in Unassigned for ' + watch.thresholdMinutes + '+ minutes. Open jobs reviewed: ' + watch.reviewedCount + '. Flagged jobs: ' + watch.flaggedJobCount + '.');\n  L.push('- Aged Unassigned: ' + watch.agedCount);\n  L.push('- Blank skill tags: ' + watch.blankSkillCount);\n  L.push('- Missing zone assignments: ' + watch.missingZoneCount);\n  L.push('- Auto Mode exclusion risk (multi-tech / multi-day): ' + watch.autoModeExclusionCount);\n  if (watch.headsUp && watch.headsUp.length) {\n    L.push('');\n    watch.headsUp.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n  const section = function (title, rows, empty) {\n    L.push('');\n    L.push('## ' + title);\n    L.push('');\n    if (!rows.length) {\n      L.push('- ' + empty);\n      return;\n    }\n    rows.forEach(function (r) {\n      L.push('- ' + r.label);\n      r.flags.forEach(function (f) { L.push('  - ' + f.text); });\n    });\n  };\n  section('Aged Unassigned', watch.agedUnassigned, 'No jobs have been sitting in Unassigned past the threshold.');\n  section('Blank skill tags', watch.blankSkill, 'No open jobs are missing a skill tag.');\n  section('Missing zone assignments', watch.missingZone, 'No open jobs are missing a zone assignment.');\n  section('Auto Mode exclusion risk (multi-tech / multi-day)', watch.autoModeExclusionRisk, 'No open multi-tech or multi-day jobs were found.');\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Zero board write-back. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const smsParts = [\n    tag.trim() + (s.testMode ? ' ' : '') + 'Aging alert: ' + watch.agedCount + ' unassigned ' + plural(watch.agedCount, 'job', 'jobs') + ' past ' + watch.thresholdMinutes + ' min',\n    watch.blankSkillCount + ' blank skill, ' + watch.missingZoneCount + ' missing zone, ' + watch.autoModeExclusionCount + ' Auto Mode exclusion ' + plural(watch.autoModeExclusionCount, 'risk', 'risks'),\n  ];\n  if (watch.agedUnassigned.length) {\n    smsParts.push(watch.agedUnassigned.slice(0, 2).map(function (r) { return r.jobId + ' (' + r.unassignedMinutes + 'm)'; }).join(', '));\n  }\n  const smsText = smsParts.join('. ') + '. Zero write-back.';\n  const out = {\n    subject: tag + 'Unassigned Aging Alert: ' + s.businessName + (asOf !== null ? ' (' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ')' : ''),\n    text: text,\n    smsText: smsText,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');\n  return out;\n}\n\nfunction loadAgingTestData(settings, dataset) {\n  return Object.assign({}, dataset, {\n    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),\n  });\n}\n\nconst cfg = $input.first().json;\nreturn [{ json: { settings: prepareAgingSettings(cfg, Date.now()) } }];\n"
+      }
+    },
+    {
+      "id": "22773104-a079-5904-a000-666529ad520a",
+      "name": "Source is ServiceTitan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "d7f116bc-8302-56ca-a0fe-8356b6d99b64",
+              "leftValue": "={{ $json.settings.source }}",
+              "rightValue": "servicetitan",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8ae0dd78-9e67-5c6c-ad6b-37619f16abf4",
+      "name": "Source is CSV?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1060,
+        760
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a0b62e7d-3c3d-5022-a3d7-b04e7fdbe00e",
+              "leftValue": "={{ $json.settings.source }}",
+              "rightValue": "csv",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "391d6762-d776-5717-a8da-91e2101e31dd",
+      "name": "ServiceTitan: Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/jpm/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/jobs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "createdOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.historyStart }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "85110907-9f4c-54b8-a9a3-81f26d25cf41",
+      "name": "ServiceTitan: Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/jpm/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startsOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.historyStart }}"
+            },
+            {
+              "name": "startsBefore",
+              "value": "={{ $('Prepare Settings').first().json.settings.lookaheadEnd }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "371c1f52-677a-5987-a539-6dd972c36880",
+      "name": "ServiceTitan: Appointment Assignments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/dispatch/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/appointment-assignments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "createdOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.historyStart }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "f993be0a-2239-5f0c-a83b-2c836f27a8ca",
+      "name": "ServiceTitan: Technicians",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/settings/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/technicians",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "active",
+              "value": "True"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "7a27afc9-a64e-5d20-a56b-5ab46172668e",
+      "name": "Normalize ServiceTitan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        280
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_aging_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.2.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'servicetitan'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or servicetitan. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  const override = parseTime(cfg.asOfOverride);\n  const asOfMs = override !== null ? override : nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    stApiBase: isBlank(cfg.stApiBase) ? 'https://api.servicetitan.io' : String(cfg.stApiBase).replace(/\\/+$/, ''),\n    stTenantId: isBlank(cfg.stTenantId) ? '' : String(cfg.stTenantId).trim(),\n    stAppKey: isBlank(cfg.stAppKey) ? '' : String(cfg.stAppKey).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).forEach(function (k) {\n    s[k] = toNum(cfg[k], DEFAULTS[k]);\n  });\n  s.historyStart = new Date(asOfMs - s.historyDays * DAY).toISOString();\n  s.lookaheadEnd = new Date(asOfMs + s.capacityLookaheadDays * DAY).toISOString();\n  s.callsSince = new Date(asOfMs - 36 * HOUR).toISOString();\n  return s;\n}\n\nconst AGING_DEFAULT_THRESHOLD_MINUTES = 20;\nconst OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];\nconst TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];\n\nfunction agingThresholdMinutes(s) {\n  return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n}\n\nfunction prepareAgingSettings(cfg, nowMs) {\n  const s = prepareSettings(cfg, nowMs);\n  const n = toNum(cfg && cfg.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n  s.agingThresholdMinutes = n > 0 ? n : AGING_DEFAULT_THRESHOLD_MINUTES;\n  return s;\n}\n\nfunction splitIds(v) {\n  if (isBlank(v)) return [];\n  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);\n  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);\n}\n\nfunction uniqueIds(list) {\n  const out = [];\n  const seen = {};\n  (list || []).forEach(function (id) {\n    const s = String(id || '').trim();\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\n\nfunction jobTechIds(job) {\n  const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));\n  if (fromList.length) return fromList;\n  return uniqueIds(splitIds(job.techId || job.tech_id));\n}\n\nfunction isTerminalJob(job) {\n  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;\n}\n\nfunction isOpenJob(job) {\n  if (isTerminalJob(job)) return false;\n  const st = lc(job.status);\n  if (!st) return jobTechIds(job).length === 0;\n  return OPEN_JOB_STATUSES.indexOf(st) !== -1;\n}\n\nfunction isUnassignedJob(job) {\n  if (!isOpenJob(job)) return false;\n  if (lc(job.status) === 'unassigned') return true;\n  return jobTechIds(job).length === 0;\n}\n\nfunction jobSpansMultipleLocalDays(job, tz) {\n  if (toBool(job.multiDay, false)) return true;\n  const start = parseTime(job.start);\n  const end = parseTime(job.end);\n  if (start === null || end === null) return false;\n  return localDate(start, tz) !== localDate(end, tz);\n}\n\nfunction unassignedClock(job) {\n  const t = parseTime(job.unassignedSince);\n  if (t !== null) return t;\n  return parseTime(job.bookedAt);\n}\n\nfunction agingMinutes(job, asOfMs) {\n  const clock = unassignedClock(job);\n  if (clock === null || asOfMs === null) return null;\n  return Math.floor((asOfMs - clock) / 60000);\n}\n\nfunction mapAgingJob(r) {\n  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));\n  return {\n    id: String(r.job_id || r.id || ''),\n    bookedAt: r.booked_at || r.bookedAt || '',\n    unassignedSince: r.unassigned_since || r.unassignedSince || '',\n    start: r.scheduled_start || r.start || '',\n    end: r.scheduled_end || r.end || '',\n    status: r.status || '',\n    techId: techIds[0] || '',\n    techIds: techIds,\n    skill: r.skill || '',\n    zone: r.zone || '',\n    customerName: r.customer_name || r.customerName || '',\n    customerPhone: r.customer_phone || r.customerPhone || '',\n    customerType: r.customer_type || r.customerType || '',\n    jobType: r.job_type || r.jobType || '',\n    equipmentType: r.equipment_type || r.equipmentType || '',\n    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),\n    address: r.address || '',\n    priority: r.priority || '',\n    businessUnit: r.business_unit || r.businessUnit || '',\n    summary: r.summary || '',\n    multiDay: toBool(r.multi_day || r.multiDay, false),\n  };\n}\n\nfunction datasetFromAgingTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);\n  if (!jobsTable) headsUp.push('CSV export \"aging_jobs.csv\" or \"jobs.csv\" was not found. The aging watch is skipped.');\n  const technicians = (t.technicians || []).map(function (r) {\n    return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };\n  });\n  const techName = {};\n  technicians.forEach(function (tech) { techName[tech.id] = tech.name; });\n  const jobs = (jobsTable || []).map(function (r) {\n    const job = mapAgingJob(r);\n    job.assignedTechNames = job.techIds.map(function (id) { return techName[id] || id; });\n    return job;\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction normalizeAgingServiceTitan(settings, raw) {\n  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []); };\n  const headsUp = (settings.headsUp || []).concat([\n    'ServiceTitan live mapping for the Unassigned Aging Watch is an unverified first draft. Skill tags and zone assignments are not always present on the job record, so a missing field is flagged rather than guessed. The CSV export path is the recommended way to start.',\n  ]);\n  Object.keys(raw || {}).forEach(function (name) {\n    const r = raw[name];\n    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan \"' + name + '\" read returned no usable data.');\n    else if (r.hasMore === true) headsUp.push('ServiceTitan \"' + name + '\" has more pages than this draft reads. Totals may be incomplete.');\n  });\n  const techName = {};\n  rows(raw.technicians).forEach(function (t) { techName[String(t.id)] = t.name || ('Technician ' + t.id); });\n  const assignByJob = {};\n  rows(raw.assignments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!assignByJob[jobId]) assignByJob[jobId] = [];\n    if (a.technicianId !== undefined && a.technicianId !== null && String(a.technicianId).trim() !== '') {\n      assignByJob[jobId].push(String(a.technicianId));\n    }\n  });\n  const apptByJob = {};\n  rows(raw.appointments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!apptByJob[jobId]) apptByJob[jobId] = a;\n  });\n  const jobs = rows(raw.jobs).map(function (j) {\n    const id = String(j.jobNumber || j.id);\n    const a = apptByJob[j.id] || apptByJob[id] || {};\n    const techIds = uniqueIds(assignByJob[j.id] || assignByJob[id] || []);\n    const skill = j.skill || (j.skills && j.skills[0] && (j.skills[0].name || j.skills[0])) || (j.jobType && j.jobType.name) || '';\n    const zone = j.zone || j.zoneName || (j.territory && (j.territory.name || j.territory)) || j.businessUnitLocation || '';\n    return {\n      id: id,\n      bookedAt: j.createdOn || j.bookedOn || '',\n      unassignedSince: j.unassignedOn || j.unassignedSince || '',\n      start: a.start || j.scheduledStart || '',\n      end: a.end || j.scheduledEnd || '',\n      status: j.jobStatus || j.status || '',\n      techId: techIds[0] || '',\n      techIds: techIds,\n      skill: skill ? String(skill) : '',\n      zone: zone ? String(zone) : '',\n      customerName: j.customerId ? 'Customer #' + j.customerId : '',\n      customerPhone: '',\n      customerType: '',\n      jobType: (j.jobType && j.jobType.name) ? j.jobType.name : String(j.type || ''),\n      equipmentType: '',\n      equipmentAgeYears: null,\n      address: j.locationId ? 'Location #' + j.locationId : '',\n      priority: j.priority || '',\n      businessUnit: j.businessUnitId ? String(j.businessUnitId) : (j.businessUnit && j.businessUnit.name ? j.businessUnit.name : ''),\n      summary: j.summary || '',\n      multiDay: false,\n      assignedTechNames: techIds.map(function (tid) { return techName[tid] || tid; }),\n    };\n  });\n  const technicians = rows(raw.technicians).map(function (t) {\n    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '' };\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: headsUp }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction fmtAgingWindow(startMs, endMs, tz) {\n  if (startMs === null || endMs === null) return 'no window';\n  if (localDate(startMs, tz) === localDate(endMs, tz)) return fmtWindow(startMs, endMs, tz);\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtDay(endMs, tz) + ' ' + fmtTime(endMs, tz);\n}\n\nfunction agingJobLabel(job, tz) {\n  const techs = (job.assignedTechNames && job.assignedTechNames.length)\n    ? job.assignedTechNames.join(', ')\n    : (jobTechIds(job).length ? jobTechIds(job).join(', ') : 'no tech');\n  const bu = isBlank(job.businessUnit) ? 'trade n/a' : job.businessUnit;\n  const who = isBlank(job.customerName) ? 'customer n/a' : job.customerName;\n  const window = fmtAgingWindow(parseTime(job.start), parseTime(job.end), tz);\n  return 'Job ' + job.id + ' | ' + window + ' | ' + bu + ' | ' + who + ' | tech: ' + techs;\n}\n\nfunction unassignedAgingWatch(data) {\n  const s = data.settings || {};\n  const tz = s.timezone || 'America/Chicago';\n  const asOfMs = parseTime(s.asOf);\n  const threshold = agingThresholdMinutes(s);\n  const hu = (s.headsUp || []).slice();\n  if (asOfMs === null) hu.push('asOf time is missing, so unassigned age could not be computed.');\n  const agedUnassigned = [];\n  const blankSkill = [];\n  const missingZone = [];\n  const autoModeExclusionRisk = [];\n  (data.jobs || []).forEach(function (job) {\n    if (!isOpenJob(job)) return;\n    const flags = [];\n    const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;\n    if (isUnassignedJob(job) && mins !== null && mins >= threshold) {\n      flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });\n    }\n    if (isBlank(job.skill)) {\n      flags.push({ code: 'blank_skill', text: 'Blank skill tag. Dispatch Pro Auto Mode can silently drop or ping-pong this job when it reshuffles.' });\n    }\n    if (isBlank(job.zone)) {\n      flags.push({ code: 'missing_zone', text: 'Missing zone assignment. Auto Mode can exclude this job when it reshuffles.' });\n    }\n    const techs = jobTechIds(job);\n    const multiTech = techs.length > 1;\n    const multiDay = jobSpansMultipleLocalDays(job, tz);\n    if (multiTech || multiDay) {\n      const why = [];\n      if (multiTech) why.push('multi-tech (' + techs.length + ' technicians)');\n      if (multiDay) why.push('multi-day');\n      flags.push({ code: 'automode_exclusion', kind: multiTech && multiDay ? 'multi-tech-multi-day' : (multiTech ? 'multi-tech' : 'multi-day'), text: 'Auto Mode exclusion risk: ' + why.join(' and ') + '. Dispatch Pro can silently leave this in Unassigned or ping-pong it on each 10-minute reshuffle.' });\n    }\n    if (flags.length === 0) return;\n    const row = {\n      jobId: job.id,\n      status: job.status || '',\n      businessUnit: job.businessUnit || '',\n      customerName: job.customerName || '',\n      customerPhone: job.customerPhone || '',\n      address: job.address || '',\n      skill: job.skill || '',\n      zone: job.zone || '',\n      assignedTech: techs.length ? techs.join(', ') : '',\n      unassignedMinutes: mins,\n      label: agingJobLabel(job, tz),\n      flags: flags,\n    };\n    if (flags.some(function (f) { return f.code === 'aged_unassigned'; })) agedUnassigned.push(row);\n    if (flags.some(function (f) { return f.code === 'blank_skill'; })) blankSkill.push(row);\n    if (flags.some(function (f) { return f.code === 'missing_zone'; })) missingZone.push(row);\n    if (flags.some(function (f) { return f.code === 'automode_exclusion'; })) autoModeExclusionRisk.push(row);\n  });\n  const sortAged = function (a, b) { return (b.unassignedMinutes || 0) - (a.unassignedMinutes || 0); };\n  const sortId = function (a, b) { return String(a.jobId).localeCompare(String(b.jobId)); };\n  agedUnassigned.sort(sortAged);\n  blankSkill.sort(sortId);\n  missingZone.sort(sortId);\n  autoModeExclusionRisk.sort(sortId);\n  const flaggedIds = {};\n  agedUnassigned.concat(blankSkill, missingZone, autoModeExclusionRisk).forEach(function (r) { flaggedIds[r.jobId] = true; });\n  return {\n    computed: asOfMs !== null,\n    thresholdMinutes: threshold,\n    reviewedCount: (data.jobs || []).filter(isOpenJob).length,\n    agedCount: agedUnassigned.length,\n    blankSkillCount: blankSkill.length,\n    missingZoneCount: missingZone.length,\n    autoModeExclusionCount: autoModeExclusionRisk.length,\n    flaggedJobCount: Object.keys(flaggedIds).length,\n    agedUnassigned: agedUnassigned,\n    blankSkill: blankSkill,\n    missingZone: missingZone,\n    autoModeExclusionRisk: autoModeExclusionRisk,\n    headsUp: hu,\n  };\n}\n\nfunction renderAgingAlert(data) {\n  const s = data.settings;\n  const watch = data.agingWatch || unassignedAgingWatch(data);\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  L.push('# ' + tag + 'Unassigned Aging Alert: ' + s.businessName);\n  L.push('');\n  L.push((asOf !== null ? fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) : 'time n/a') + ' ' + tz + '. source: ' + s.source + '.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  L.push('Read-only. Zero board write-back. Owner-only delivery. Nothing is assigned, moved, or deleted in ServiceTitan.');\n  L.push('');\n  L.push('Threshold: jobs sitting in Unassigned for ' + watch.thresholdMinutes + '+ minutes. Open jobs reviewed: ' + watch.reviewedCount + '. Flagged jobs: ' + watch.flaggedJobCount + '.');\n  L.push('- Aged Unassigned: ' + watch.agedCount);\n  L.push('- Blank skill tags: ' + watch.blankSkillCount);\n  L.push('- Missing zone assignments: ' + watch.missingZoneCount);\n  L.push('- Auto Mode exclusion risk (multi-tech / multi-day): ' + watch.autoModeExclusionCount);\n  if (watch.headsUp && watch.headsUp.length) {\n    L.push('');\n    watch.headsUp.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n  const section = function (title, rows, empty) {\n    L.push('');\n    L.push('## ' + title);\n    L.push('');\n    if (!rows.length) {\n      L.push('- ' + empty);\n      return;\n    }\n    rows.forEach(function (r) {\n      L.push('- ' + r.label);\n      r.flags.forEach(function (f) { L.push('  - ' + f.text); });\n    });\n  };\n  section('Aged Unassigned', watch.agedUnassigned, 'No jobs have been sitting in Unassigned past the threshold.');\n  section('Blank skill tags', watch.blankSkill, 'No open jobs are missing a skill tag.');\n  section('Missing zone assignments', watch.missingZone, 'No open jobs are missing a zone assignment.');\n  section('Auto Mode exclusion risk (multi-tech / multi-day)', watch.autoModeExclusionRisk, 'No open multi-tech or multi-day jobs were found.');\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Zero board write-back. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const smsParts = [\n    tag.trim() + (s.testMode ? ' ' : '') + 'Aging alert: ' + watch.agedCount + ' unassigned ' + plural(watch.agedCount, 'job', 'jobs') + ' past ' + watch.thresholdMinutes + ' min',\n    watch.blankSkillCount + ' blank skill, ' + watch.missingZoneCount + ' missing zone, ' + watch.autoModeExclusionCount + ' Auto Mode exclusion ' + plural(watch.autoModeExclusionCount, 'risk', 'risks'),\n  ];\n  if (watch.agedUnassigned.length) {\n    smsParts.push(watch.agedUnassigned.slice(0, 2).map(function (r) { return r.jobId + ' (' + r.unassignedMinutes + 'm)'; }).join(', '));\n  }\n  const smsText = smsParts.join('. ') + '. Zero write-back.';\n  const out = {\n    subject: tag + 'Unassigned Aging Alert: ' + s.businessName + (asOf !== null ? ' (' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ')' : ''),\n    text: text,\n    smsText: smsText,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');\n  return out;\n}\n\nfunction loadAgingTestData(settings, dataset) {\n  return Object.assign({}, dataset, {\n    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),\n  });\n}\n\nconst settings = $('Prepare Settings').first().json.settings;\nconst raw = {\n    jobs: $('ServiceTitan: Jobs').first().json,\n    appointments: $('ServiceTitan: Appointments').first().json,\n    assignments: $('ServiceTitan: Appointment Assignments').first().json,\n    technicians: $('ServiceTitan: Technicians').first().json,\n};\nreturn [{ json: normalizeAgingServiceTitan(settings, raw) }];\n"
+      }
+    },
+    {
+      "id": "b8449d59-b65b-59c8-a05b-6709fcd2591b",
+      "name": "Read CSV Exports",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        680
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "={{ $('Prepare Settings').first().json.settings.csvFolder }}/*.csv",
+        "options": {}
+      }
+    },
+    {
+      "id": "bf4c0899-99a8-575e-a708-444c5f23fc6d",
+      "name": "Parse CSV Exports",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        680
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_aging_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.2.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction parseCsv(text) {\n  const rows = [];\n  let row = [];\n  let field = '';\n  let inQuotes = false;\n  const src = String(text).replace(/^﻿/, '');\n  for (let i = 0; i < src.length; i++) {\n    const c = src[i];\n    if (inQuotes) {\n      if (c === '\"') {\n        if (src[i + 1] === '\"') { field += '\"'; i++; } else { inQuotes = false; }\n      } else { field += c; }\n    } else if (c === '\"') {\n      inQuotes = true;\n    } else if (c === ',') {\n      row.push(field); field = '';\n    } else if (c === '\\n' || c === '\\r') {\n      if (c === '\\r' && src[i + 1] === '\\n') i++;\n      row.push(field); field = '';\n      if (row.some(function (x) { return x !== ''; })) rows.push(row);\n      row = [];\n    } else { field += c; }\n  }\n  row.push(field);\n  if (row.some(function (x) { return x !== ''; })) rows.push(row);\n  if (rows.length === 0) return [];\n  const header = rows[0].map(function (h) { return h.trim(); });\n  return rows.slice(1).map(function (r) {\n    const o = {};\n    header.forEach(function (h, i) { o[h] = r[i] === undefined ? '' : r[i].trim(); });\n    return o;\n  });\n}\n\nfunction datasetFromTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  ['technicians', 'jobs', 'capacity', 'memberships', 'estimates', 'calls'].forEach(function (name) {\n    if (!Array.isArray(t[name])) headsUp.push('CSV export \"' + name + '.csv\" was not found. Anything that needs it is skipped.');\n  });\n  const numOrNull = function (v) { return toNum(v, null); };\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: (t.technicians || []).map(function (r) {\n      return { id: r.tech_id, name: r.name, trade: r.trade, salesCapable: toBool(r.sales_capable, false), shiftHours: numOrNull(r.shift_hours) };\n    }),\n    jobs: (t.jobs || []).map(function (r) {\n      return {\n        id: r.job_id, bookedAt: r.booked_at, start: r.scheduled_start, end: r.scheduled_end, status: r.status,\n        techId: r.tech_id, customerName: r.customer_name, customerPhone: r.customer_phone, customerType: r.customer_type,\n        jobType: r.job_type, equipmentType: r.equipment_type, equipmentAgeYears: numOrNull(r.equipment_age_years),\n        address: r.address, priority: r.priority, arrivedAt: r.arrived_at, actualMinutes: numOrNull(r.actual_minutes),\n        businessUnit: r.business_unit, summary: r.summary || '',\n      };\n    }),\n    capacityWindows: (t.capacity || []).map(function (r) {\n      return { id: r.window_id, businessUnit: r.business_unit, start: r.window_start, end: r.window_end, openSlots: toNum(r.open_slots, 0) };\n    }),\n    memberships: (t.memberships || []).map(function (r) {\n      return {\n        id: r.membership_id, customerName: r.customer_name, customerPhone: r.customer_phone, businessUnit: r.business_unit,\n        plan: r.plan, status: r.status, nextServiceDue: r.next_service_due,\n      };\n    }),\n    estimates: (t.estimates || []).map(function (r) {\n      return {\n        id: r.estimate_id, customerName: r.customer_name, customerPhone: r.customer_phone, businessUnit: r.business_unit,\n        status: r.status, amount: numOrNull(r.amount), createdAt: r.created_at, lastFollowupAt: r.last_followup_at,\n      };\n    }),\n    calls: Array.isArray(t.calls) ? t.calls.map(function (r) {\n      return {\n        id: r.call_id, receivedAt: r.received_at, callerName: r.caller_name, callerPhone: r.caller_phone, address: r.address,\n        summary: r.summary, urgency: r.urgency, status: r.status, handledBy: r.handled_by,\n        followUpNeeded: toBool(r.follow_up_needed, false), notes: r.notes || '',\n      };\n    }) : null,\n  };\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'servicetitan'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or servicetitan. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  const override = parseTime(cfg.asOfOverride);\n  const asOfMs = override !== null ? override : nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    stApiBase: isBlank(cfg.stApiBase) ? 'https://api.servicetitan.io' : String(cfg.stApiBase).replace(/\\/+$/, ''),\n    stTenantId: isBlank(cfg.stTenantId) ? '' : String(cfg.stTenantId).trim(),\n    stAppKey: isBlank(cfg.stAppKey) ? '' : String(cfg.stAppKey).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).forEach(function (k) {\n    s[k] = toNum(cfg[k], DEFAULTS[k]);\n  });\n  s.historyStart = new Date(asOfMs - s.historyDays * DAY).toISOString();\n  s.lookaheadEnd = new Date(asOfMs + s.capacityLookaheadDays * DAY).toISOString();\n  s.callsSince = new Date(asOfMs - 36 * HOUR).toISOString();\n  return s;\n}\n\nconst AGING_DEFAULT_THRESHOLD_MINUTES = 20;\nconst OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];\nconst TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];\n\nfunction agingThresholdMinutes(s) {\n  return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n}\n\nfunction prepareAgingSettings(cfg, nowMs) {\n  const s = prepareSettings(cfg, nowMs);\n  const n = toNum(cfg && cfg.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n  s.agingThresholdMinutes = n > 0 ? n : AGING_DEFAULT_THRESHOLD_MINUTES;\n  return s;\n}\n\nfunction splitIds(v) {\n  if (isBlank(v)) return [];\n  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);\n  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);\n}\n\nfunction uniqueIds(list) {\n  const out = [];\n  const seen = {};\n  (list || []).forEach(function (id) {\n    const s = String(id || '').trim();\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\n\nfunction jobTechIds(job) {\n  const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));\n  if (fromList.length) return fromList;\n  return uniqueIds(splitIds(job.techId || job.tech_id));\n}\n\nfunction isTerminalJob(job) {\n  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;\n}\n\nfunction isOpenJob(job) {\n  if (isTerminalJob(job)) return false;\n  const st = lc(job.status);\n  if (!st) return jobTechIds(job).length === 0;\n  return OPEN_JOB_STATUSES.indexOf(st) !== -1;\n}\n\nfunction isUnassignedJob(job) {\n  if (!isOpenJob(job)) return false;\n  if (lc(job.status) === 'unassigned') return true;\n  return jobTechIds(job).length === 0;\n}\n\nfunction jobSpansMultipleLocalDays(job, tz) {\n  if (toBool(job.multiDay, false)) return true;\n  const start = parseTime(job.start);\n  const end = parseTime(job.end);\n  if (start === null || end === null) return false;\n  return localDate(start, tz) !== localDate(end, tz);\n}\n\nfunction unassignedClock(job) {\n  const t = parseTime(job.unassignedSince);\n  if (t !== null) return t;\n  return parseTime(job.bookedAt);\n}\n\nfunction agingMinutes(job, asOfMs) {\n  const clock = unassignedClock(job);\n  if (clock === null || asOfMs === null) return null;\n  return Math.floor((asOfMs - clock) / 60000);\n}\n\nfunction mapAgingJob(r) {\n  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));\n  return {\n    id: String(r.job_id || r.id || ''),\n    bookedAt: r.booked_at || r.bookedAt || '',\n    unassignedSince: r.unassigned_since || r.unassignedSince || '',\n    start: r.scheduled_start || r.start || '',\n    end: r.scheduled_end || r.end || '',\n    status: r.status || '',\n    techId: techIds[0] || '',\n    techIds: techIds,\n    skill: r.skill || '',\n    zone: r.zone || '',\n    customerName: r.customer_name || r.customerName || '',\n    customerPhone: r.customer_phone || r.customerPhone || '',\n    customerType: r.customer_type || r.customerType || '',\n    jobType: r.job_type || r.jobType || '',\n    equipmentType: r.equipment_type || r.equipmentType || '',\n    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),\n    address: r.address || '',\n    priority: r.priority || '',\n    businessUnit: r.business_unit || r.businessUnit || '',\n    summary: r.summary || '',\n    multiDay: toBool(r.multi_day || r.multiDay, false),\n  };\n}\n\nfunction datasetFromAgingTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);\n  if (!jobsTable) headsUp.push('CSV export \"aging_jobs.csv\" or \"jobs.csv\" was not found. The aging watch is skipped.');\n  const technicians = (t.technicians || []).map(function (r) {\n    return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };\n  });\n  const techName = {};\n  technicians.forEach(function (tech) { techName[tech.id] = tech.name; });\n  const jobs = (jobsTable || []).map(function (r) {\n    const job = mapAgingJob(r);\n    job.assignedTechNames = job.techIds.map(function (id) { return techName[id] || id; });\n    return job;\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction normalizeAgingServiceTitan(settings, raw) {\n  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []); };\n  const headsUp = (settings.headsUp || []).concat([\n    'ServiceTitan live mapping for the Unassigned Aging Watch is an unverified first draft. Skill tags and zone assignments are not always present on the job record, so a missing field is flagged rather than guessed. The CSV export path is the recommended way to start.',\n  ]);\n  Object.keys(raw || {}).forEach(function (name) {\n    const r = raw[name];\n    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan \"' + name + '\" read returned no usable data.');\n    else if (r.hasMore === true) headsUp.push('ServiceTitan \"' + name + '\" has more pages than this draft reads. Totals may be incomplete.');\n  });\n  const techName = {};\n  rows(raw.technicians).forEach(function (t) { techName[String(t.id)] = t.name || ('Technician ' + t.id); });\n  const assignByJob = {};\n  rows(raw.assignments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!assignByJob[jobId]) assignByJob[jobId] = [];\n    if (a.technicianId !== undefined && a.technicianId !== null && String(a.technicianId).trim() !== '') {\n      assignByJob[jobId].push(String(a.technicianId));\n    }\n  });\n  const apptByJob = {};\n  rows(raw.appointments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!apptByJob[jobId]) apptByJob[jobId] = a;\n  });\n  const jobs = rows(raw.jobs).map(function (j) {\n    const id = String(j.jobNumber || j.id);\n    const a = apptByJob[j.id] || apptByJob[id] || {};\n    const techIds = uniqueIds(assignByJob[j.id] || assignByJob[id] || []);\n    const skill = j.skill || (j.skills && j.skills[0] && (j.skills[0].name || j.skills[0])) || (j.jobType && j.jobType.name) || '';\n    const zone = j.zone || j.zoneName || (j.territory && (j.territory.name || j.territory)) || j.businessUnitLocation || '';\n    return {\n      id: id,\n      bookedAt: j.createdOn || j.bookedOn || '',\n      unassignedSince: j.unassignedOn || j.unassignedSince || '',\n      start: a.start || j.scheduledStart || '',\n      end: a.end || j.scheduledEnd || '',\n      status: j.jobStatus || j.status || '',\n      techId: techIds[0] || '',\n      techIds: techIds,\n      skill: skill ? String(skill) : '',\n      zone: zone ? String(zone) : '',\n      customerName: j.customerId ? 'Customer #' + j.customerId : '',\n      customerPhone: '',\n      customerType: '',\n      jobType: (j.jobType && j.jobType.name) ? j.jobType.name : String(j.type || ''),\n      equipmentType: '',\n      equipmentAgeYears: null,\n      address: j.locationId ? 'Location #' + j.locationId : '',\n      priority: j.priority || '',\n      businessUnit: j.businessUnitId ? String(j.businessUnitId) : (j.businessUnit && j.businessUnit.name ? j.businessUnit.name : ''),\n      summary: j.summary || '',\n      multiDay: false,\n      assignedTechNames: techIds.map(function (tid) { return techName[tid] || tid; }),\n    };\n  });\n  const technicians = rows(raw.technicians).map(function (t) {\n    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '' };\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: headsUp }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction fmtAgingWindow(startMs, endMs, tz) {\n  if (startMs === null || endMs === null) return 'no window';\n  if (localDate(startMs, tz) === localDate(endMs, tz)) return fmtWindow(startMs, endMs, tz);\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtDay(endMs, tz) + ' ' + fmtTime(endMs, tz);\n}\n\nfunction agingJobLabel(job, tz) {\n  const techs = (job.assignedTechNames && job.assignedTechNames.length)\n    ? job.assignedTechNames.join(', ')\n    : (jobTechIds(job).length ? jobTechIds(job).join(', ') : 'no tech');\n  const bu = isBlank(job.businessUnit) ? 'trade n/a' : job.businessUnit;\n  const who = isBlank(job.customerName) ? 'customer n/a' : job.customerName;\n  const window = fmtAgingWindow(parseTime(job.start), parseTime(job.end), tz);\n  return 'Job ' + job.id + ' | ' + window + ' | ' + bu + ' | ' + who + ' | tech: ' + techs;\n}\n\nfunction unassignedAgingWatch(data) {\n  const s = data.settings || {};\n  const tz = s.timezone || 'America/Chicago';\n  const asOfMs = parseTime(s.asOf);\n  const threshold = agingThresholdMinutes(s);\n  const hu = (s.headsUp || []).slice();\n  if (asOfMs === null) hu.push('asOf time is missing, so unassigned age could not be computed.');\n  const agedUnassigned = [];\n  const blankSkill = [];\n  const missingZone = [];\n  const autoModeExclusionRisk = [];\n  (data.jobs || []).forEach(function (job) {\n    if (!isOpenJob(job)) return;\n    const flags = [];\n    const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;\n    if (isUnassignedJob(job) && mins !== null && mins >= threshold) {\n      flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });\n    }\n    if (isBlank(job.skill)) {\n      flags.push({ code: 'blank_skill', text: 'Blank skill tag. Dispatch Pro Auto Mode can silently drop or ping-pong this job when it reshuffles.' });\n    }\n    if (isBlank(job.zone)) {\n      flags.push({ code: 'missing_zone', text: 'Missing zone assignment. Auto Mode can exclude this job when it reshuffles.' });\n    }\n    const techs = jobTechIds(job);\n    const multiTech = techs.length > 1;\n    const multiDay = jobSpansMultipleLocalDays(job, tz);\n    if (multiTech || multiDay) {\n      const why = [];\n      if (multiTech) why.push('multi-tech (' + techs.length + ' technicians)');\n      if (multiDay) why.push('multi-day');\n      flags.push({ code: 'automode_exclusion', kind: multiTech && multiDay ? 'multi-tech-multi-day' : (multiTech ? 'multi-tech' : 'multi-day'), text: 'Auto Mode exclusion risk: ' + why.join(' and ') + '. Dispatch Pro can silently leave this in Unassigned or ping-pong it on each 10-minute reshuffle.' });\n    }\n    if (flags.length === 0) return;\n    const row = {\n      jobId: job.id,\n      status: job.status || '',\n      businessUnit: job.businessUnit || '',\n      customerName: job.customerName || '',\n      customerPhone: job.customerPhone || '',\n      address: job.address || '',\n      skill: job.skill || '',\n      zone: job.zone || '',\n      assignedTech: techs.length ? techs.join(', ') : '',\n      unassignedMinutes: mins,\n      label: agingJobLabel(job, tz),\n      flags: flags,\n    };\n    if (flags.some(function (f) { return f.code === 'aged_unassigned'; })) agedUnassigned.push(row);\n    if (flags.some(function (f) { return f.code === 'blank_skill'; })) blankSkill.push(row);\n    if (flags.some(function (f) { return f.code === 'missing_zone'; })) missingZone.push(row);\n    if (flags.some(function (f) { return f.code === 'automode_exclusion'; })) autoModeExclusionRisk.push(row);\n  });\n  const sortAged = function (a, b) { return (b.unassignedMinutes || 0) - (a.unassignedMinutes || 0); };\n  const sortId = function (a, b) { return String(a.jobId).localeCompare(String(b.jobId)); };\n  agedUnassigned.sort(sortAged);\n  blankSkill.sort(sortId);\n  missingZone.sort(sortId);\n  autoModeExclusionRisk.sort(sortId);\n  const flaggedIds = {};\n  agedUnassigned.concat(blankSkill, missingZone, autoModeExclusionRisk).forEach(function (r) { flaggedIds[r.jobId] = true; });\n  return {\n    computed: asOfMs !== null,\n    thresholdMinutes: threshold,\n    reviewedCount: (data.jobs || []).filter(isOpenJob).length,\n    agedCount: agedUnassigned.length,\n    blankSkillCount: blankSkill.length,\n    missingZoneCount: missingZone.length,\n    autoModeExclusionCount: autoModeExclusionRisk.length,\n    flaggedJobCount: Object.keys(flaggedIds).length,\n    agedUnassigned: agedUnassigned,\n    blankSkill: blankSkill,\n    missingZone: missingZone,\n    autoModeExclusionRisk: autoModeExclusionRisk,\n    headsUp: hu,\n  };\n}\n\nfunction renderAgingAlert(data) {\n  const s = data.settings;\n  const watch = data.agingWatch || unassignedAgingWatch(data);\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  L.push('# ' + tag + 'Unassigned Aging Alert: ' + s.businessName);\n  L.push('');\n  L.push((asOf !== null ? fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) : 'time n/a') + ' ' + tz + '. source: ' + s.source + '.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  L.push('Read-only. Zero board write-back. Owner-only delivery. Nothing is assigned, moved, or deleted in ServiceTitan.');\n  L.push('');\n  L.push('Threshold: jobs sitting in Unassigned for ' + watch.thresholdMinutes + '+ minutes. Open jobs reviewed: ' + watch.reviewedCount + '. Flagged jobs: ' + watch.flaggedJobCount + '.');\n  L.push('- Aged Unassigned: ' + watch.agedCount);\n  L.push('- Blank skill tags: ' + watch.blankSkillCount);\n  L.push('- Missing zone assignments: ' + watch.missingZoneCount);\n  L.push('- Auto Mode exclusion risk (multi-tech / multi-day): ' + watch.autoModeExclusionCount);\n  if (watch.headsUp && watch.headsUp.length) {\n    L.push('');\n    watch.headsUp.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n  const section = function (title, rows, empty) {\n    L.push('');\n    L.push('## ' + title);\n    L.push('');\n    if (!rows.length) {\n      L.push('- ' + empty);\n      return;\n    }\n    rows.forEach(function (r) {\n      L.push('- ' + r.label);\n      r.flags.forEach(function (f) { L.push('  - ' + f.text); });\n    });\n  };\n  section('Aged Unassigned', watch.agedUnassigned, 'No jobs have been sitting in Unassigned past the threshold.');\n  section('Blank skill tags', watch.blankSkill, 'No open jobs are missing a skill tag.');\n  section('Missing zone assignments', watch.missingZone, 'No open jobs are missing a zone assignment.');\n  section('Auto Mode exclusion risk (multi-tech / multi-day)', watch.autoModeExclusionRisk, 'No open multi-tech or multi-day jobs were found.');\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Zero board write-back. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const smsParts = [\n    tag.trim() + (s.testMode ? ' ' : '') + 'Aging alert: ' + watch.agedCount + ' unassigned ' + plural(watch.agedCount, 'job', 'jobs') + ' past ' + watch.thresholdMinutes + ' min',\n    watch.blankSkillCount + ' blank skill, ' + watch.missingZoneCount + ' missing zone, ' + watch.autoModeExclusionCount + ' Auto Mode exclusion ' + plural(watch.autoModeExclusionCount, 'risk', 'risks'),\n  ];\n  if (watch.agedUnassigned.length) {\n    smsParts.push(watch.agedUnassigned.slice(0, 2).map(function (r) { return r.jobId + ' (' + r.unassignedMinutes + 'm)'; }).join(', '));\n  }\n  const smsText = smsParts.join('. ') + '. Zero write-back.';\n  const out = {\n    subject: tag + 'Unassigned Aging Alert: ' + s.businessName + (asOf !== null ? ' (' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ')' : ''),\n    text: text,\n    smsText: smsText,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');\n  return out;\n}\n\nfunction loadAgingTestData(settings, dataset) {\n  return Object.assign({}, dataset, {\n    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),\n  });\n}\n\nconst settings = $('Prepare Settings').first().json.settings;\nconst tables = {};\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const bin = items[i].binary && items[i].binary.data;\n  if (!bin) continue;\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const name = String(bin.fileName || '').toLowerCase().replace(/\\.csv$/, '');\n  tables[name] = parseCsv(buf.toString('utf8'));\n}\nreturn [{ json: datasetFromAgingTables(settings, tables) }];\n"
+      }
+    },
+    {
+      "id": "cd387385-5442-5675-af2b-7810a9ff2b05",
+      "name": "Load Built-in Test Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        860
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_aging_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.2.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'servicetitan'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or servicetitan. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  const override = parseTime(cfg.asOfOverride);\n  const asOfMs = override !== null ? override : nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    stApiBase: isBlank(cfg.stApiBase) ? 'https://api.servicetitan.io' : String(cfg.stApiBase).replace(/\\/+$/, ''),\n    stTenantId: isBlank(cfg.stTenantId) ? '' : String(cfg.stTenantId).trim(),\n    stAppKey: isBlank(cfg.stAppKey) ? '' : String(cfg.stAppKey).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).forEach(function (k) {\n    s[k] = toNum(cfg[k], DEFAULTS[k]);\n  });\n  s.historyStart = new Date(asOfMs - s.historyDays * DAY).toISOString();\n  s.lookaheadEnd = new Date(asOfMs + s.capacityLookaheadDays * DAY).toISOString();\n  s.callsSince = new Date(asOfMs - 36 * HOUR).toISOString();\n  return s;\n}\n\nconst AGING_DEFAULT_THRESHOLD_MINUTES = 20;\nconst OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];\nconst TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];\n\nfunction agingThresholdMinutes(s) {\n  return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n}\n\nfunction prepareAgingSettings(cfg, nowMs) {\n  const s = prepareSettings(cfg, nowMs);\n  const n = toNum(cfg && cfg.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n  s.agingThresholdMinutes = n > 0 ? n : AGING_DEFAULT_THRESHOLD_MINUTES;\n  return s;\n}\n\nfunction splitIds(v) {\n  if (isBlank(v)) return [];\n  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);\n  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);\n}\n\nfunction uniqueIds(list) {\n  const out = [];\n  const seen = {};\n  (list || []).forEach(function (id) {\n    const s = String(id || '').trim();\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\n\nfunction jobTechIds(job) {\n  const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));\n  if (fromList.length) return fromList;\n  return uniqueIds(splitIds(job.techId || job.tech_id));\n}\n\nfunction isTerminalJob(job) {\n  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;\n}\n\nfunction isOpenJob(job) {\n  if (isTerminalJob(job)) return false;\n  const st = lc(job.status);\n  if (!st) return jobTechIds(job).length === 0;\n  return OPEN_JOB_STATUSES.indexOf(st) !== -1;\n}\n\nfunction isUnassignedJob(job) {\n  if (!isOpenJob(job)) return false;\n  if (lc(job.status) === 'unassigned') return true;\n  return jobTechIds(job).length === 0;\n}\n\nfunction jobSpansMultipleLocalDays(job, tz) {\n  if (toBool(job.multiDay, false)) return true;\n  const start = parseTime(job.start);\n  const end = parseTime(job.end);\n  if (start === null || end === null) return false;\n  return localDate(start, tz) !== localDate(end, tz);\n}\n\nfunction unassignedClock(job) {\n  const t = parseTime(job.unassignedSince);\n  if (t !== null) return t;\n  return parseTime(job.bookedAt);\n}\n\nfunction agingMinutes(job, asOfMs) {\n  const clock = unassignedClock(job);\n  if (clock === null || asOfMs === null) return null;\n  return Math.floor((asOfMs - clock) / 60000);\n}\n\nfunction mapAgingJob(r) {\n  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));\n  return {\n    id: String(r.job_id || r.id || ''),\n    bookedAt: r.booked_at || r.bookedAt || '',\n    unassignedSince: r.unassigned_since || r.unassignedSince || '',\n    start: r.scheduled_start || r.start || '',\n    end: r.scheduled_end || r.end || '',\n    status: r.status || '',\n    techId: techIds[0] || '',\n    techIds: techIds,\n    skill: r.skill || '',\n    zone: r.zone || '',\n    customerName: r.customer_name || r.customerName || '',\n    customerPhone: r.customer_phone || r.customerPhone || '',\n    customerType: r.customer_type || r.customerType || '',\n    jobType: r.job_type || r.jobType || '',\n    equipmentType: r.equipment_type || r.equipmentType || '',\n    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),\n    address: r.address || '',\n    priority: r.priority || '',\n    businessUnit: r.business_unit || r.businessUnit || '',\n    summary: r.summary || '',\n    multiDay: toBool(r.multi_day || r.multiDay, false),\n  };\n}\n\nfunction datasetFromAgingTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);\n  if (!jobsTable) headsUp.push('CSV export \"aging_jobs.csv\" or \"jobs.csv\" was not found. The aging watch is skipped.');\n  const technicians = (t.technicians || []).map(function (r) {\n    return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };\n  });\n  const techName = {};\n  technicians.forEach(function (tech) { techName[tech.id] = tech.name; });\n  const jobs = (jobsTable || []).map(function (r) {\n    const job = mapAgingJob(r);\n    job.assignedTechNames = job.techIds.map(function (id) { return techName[id] || id; });\n    return job;\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction normalizeAgingServiceTitan(settings, raw) {\n  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []); };\n  const headsUp = (settings.headsUp || []).concat([\n    'ServiceTitan live mapping for the Unassigned Aging Watch is an unverified first draft. Skill tags and zone assignments are not always present on the job record, so a missing field is flagged rather than guessed. The CSV export path is the recommended way to start.',\n  ]);\n  Object.keys(raw || {}).forEach(function (name) {\n    const r = raw[name];\n    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan \"' + name + '\" read returned no usable data.');\n    else if (r.hasMore === true) headsUp.push('ServiceTitan \"' + name + '\" has more pages than this draft reads. Totals may be incomplete.');\n  });\n  const techName = {};\n  rows(raw.technicians).forEach(function (t) { techName[String(t.id)] = t.name || ('Technician ' + t.id); });\n  const assignByJob = {};\n  rows(raw.assignments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!assignByJob[jobId]) assignByJob[jobId] = [];\n    if (a.technicianId !== undefined && a.technicianId !== null && String(a.technicianId).trim() !== '') {\n      assignByJob[jobId].push(String(a.technicianId));\n    }\n  });\n  const apptByJob = {};\n  rows(raw.appointments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!apptByJob[jobId]) apptByJob[jobId] = a;\n  });\n  const jobs = rows(raw.jobs).map(function (j) {\n    const id = String(j.jobNumber || j.id);\n    const a = apptByJob[j.id] || apptByJob[id] || {};\n    const techIds = uniqueIds(assignByJob[j.id] || assignByJob[id] || []);\n    const skill = j.skill || (j.skills && j.skills[0] && (j.skills[0].name || j.skills[0])) || (j.jobType && j.jobType.name) || '';\n    const zone = j.zone || j.zoneName || (j.territory && (j.territory.name || j.territory)) || j.businessUnitLocation || '';\n    return {\n      id: id,\n      bookedAt: j.createdOn || j.bookedOn || '',\n      unassignedSince: j.unassignedOn || j.unassignedSince || '',\n      start: a.start || j.scheduledStart || '',\n      end: a.end || j.scheduledEnd || '',\n      status: j.jobStatus || j.status || '',\n      techId: techIds[0] || '',\n      techIds: techIds,\n      skill: skill ? String(skill) : '',\n      zone: zone ? String(zone) : '',\n      customerName: j.customerId ? 'Customer #' + j.customerId : '',\n      customerPhone: '',\n      customerType: '',\n      jobType: (j.jobType && j.jobType.name) ? j.jobType.name : String(j.type || ''),\n      equipmentType: '',\n      equipmentAgeYears: null,\n      address: j.locationId ? 'Location #' + j.locationId : '',\n      priority: j.priority || '',\n      businessUnit: j.businessUnitId ? String(j.businessUnitId) : (j.businessUnit && j.businessUnit.name ? j.businessUnit.name : ''),\n      summary: j.summary || '',\n      multiDay: false,\n      assignedTechNames: techIds.map(function (tid) { return techName[tid] || tid; }),\n    };\n  });\n  const technicians = rows(raw.technicians).map(function (t) {\n    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '' };\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: headsUp }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction fmtAgingWindow(startMs, endMs, tz) {\n  if (startMs === null || endMs === null) return 'no window';\n  if (localDate(startMs, tz) === localDate(endMs, tz)) return fmtWindow(startMs, endMs, tz);\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtDay(endMs, tz) + ' ' + fmtTime(endMs, tz);\n}\n\nfunction agingJobLabel(job, tz) {\n  const techs = (job.assignedTechNames && job.assignedTechNames.length)\n    ? job.assignedTechNames.join(', ')\n    : (jobTechIds(job).length ? jobTechIds(job).join(', ') : 'no tech');\n  const bu = isBlank(job.businessUnit) ? 'trade n/a' : job.businessUnit;\n  const who = isBlank(job.customerName) ? 'customer n/a' : job.customerName;\n  const window = fmtAgingWindow(parseTime(job.start), parseTime(job.end), tz);\n  return 'Job ' + job.id + ' | ' + window + ' | ' + bu + ' | ' + who + ' | tech: ' + techs;\n}\n\nfunction unassignedAgingWatch(data) {\n  const s = data.settings || {};\n  const tz = s.timezone || 'America/Chicago';\n  const asOfMs = parseTime(s.asOf);\n  const threshold = agingThresholdMinutes(s);\n  const hu = (s.headsUp || []).slice();\n  if (asOfMs === null) hu.push('asOf time is missing, so unassigned age could not be computed.');\n  const agedUnassigned = [];\n  const blankSkill = [];\n  const missingZone = [];\n  const autoModeExclusionRisk = [];\n  (data.jobs || []).forEach(function (job) {\n    if (!isOpenJob(job)) return;\n    const flags = [];\n    const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;\n    if (isUnassignedJob(job) && mins !== null && mins >= threshold) {\n      flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });\n    }\n    if (isBlank(job.skill)) {\n      flags.push({ code: 'blank_skill', text: 'Blank skill tag. Dispatch Pro Auto Mode can silently drop or ping-pong this job when it reshuffles.' });\n    }\n    if (isBlank(job.zone)) {\n      flags.push({ code: 'missing_zone', text: 'Missing zone assignment. Auto Mode can exclude this job when it reshuffles.' });\n    }\n    const techs = jobTechIds(job);\n    const multiTech = techs.length > 1;\n    const multiDay = jobSpansMultipleLocalDays(job, tz);\n    if (multiTech || multiDay) {\n      const why = [];\n      if (multiTech) why.push('multi-tech (' + techs.length + ' technicians)');\n      if (multiDay) why.push('multi-day');\n      flags.push({ code: 'automode_exclusion', kind: multiTech && multiDay ? 'multi-tech-multi-day' : (multiTech ? 'multi-tech' : 'multi-day'), text: 'Auto Mode exclusion risk: ' + why.join(' and ') + '. Dispatch Pro can silently leave this in Unassigned or ping-pong it on each 10-minute reshuffle.' });\n    }\n    if (flags.length === 0) return;\n    const row = {\n      jobId: job.id,\n      status: job.status || '',\n      businessUnit: job.businessUnit || '',\n      customerName: job.customerName || '',\n      customerPhone: job.customerPhone || '',\n      address: job.address || '',\n      skill: job.skill || '',\n      zone: job.zone || '',\n      assignedTech: techs.length ? techs.join(', ') : '',\n      unassignedMinutes: mins,\n      label: agingJobLabel(job, tz),\n      flags: flags,\n    };\n    if (flags.some(function (f) { return f.code === 'aged_unassigned'; })) agedUnassigned.push(row);\n    if (flags.some(function (f) { return f.code === 'blank_skill'; })) blankSkill.push(row);\n    if (flags.some(function (f) { return f.code === 'missing_zone'; })) missingZone.push(row);\n    if (flags.some(function (f) { return f.code === 'automode_exclusion'; })) autoModeExclusionRisk.push(row);\n  });\n  const sortAged = function (a, b) { return (b.unassignedMinutes || 0) - (a.unassignedMinutes || 0); };\n  const sortId = function (a, b) { return String(a.jobId).localeCompare(String(b.jobId)); };\n  agedUnassigned.sort(sortAged);\n  blankSkill.sort(sortId);\n  missingZone.sort(sortId);\n  autoModeExclusionRisk.sort(sortId);\n  const flaggedIds = {};\n  agedUnassigned.concat(blankSkill, missingZone, autoModeExclusionRisk).forEach(function (r) { flaggedIds[r.jobId] = true; });\n  return {\n    computed: asOfMs !== null,\n    thresholdMinutes: threshold,\n    reviewedCount: (data.jobs || []).filter(isOpenJob).length,\n    agedCount: agedUnassigned.length,\n    blankSkillCount: blankSkill.length,\n    missingZoneCount: missingZone.length,\n    autoModeExclusionCount: autoModeExclusionRisk.length,\n    flaggedJobCount: Object.keys(flaggedIds).length,\n    agedUnassigned: agedUnassigned,\n    blankSkill: blankSkill,\n    missingZone: missingZone,\n    autoModeExclusionRisk: autoModeExclusionRisk,\n    headsUp: hu,\n  };\n}\n\nfunction renderAgingAlert(data) {\n  const s = data.settings;\n  const watch = data.agingWatch || unassignedAgingWatch(data);\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  L.push('# ' + tag + 'Unassigned Aging Alert: ' + s.businessName);\n  L.push('');\n  L.push((asOf !== null ? fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) : 'time n/a') + ' ' + tz + '. source: ' + s.source + '.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  L.push('Read-only. Zero board write-back. Owner-only delivery. Nothing is assigned, moved, or deleted in ServiceTitan.');\n  L.push('');\n  L.push('Threshold: jobs sitting in Unassigned for ' + watch.thresholdMinutes + '+ minutes. Open jobs reviewed: ' + watch.reviewedCount + '. Flagged jobs: ' + watch.flaggedJobCount + '.');\n  L.push('- Aged Unassigned: ' + watch.agedCount);\n  L.push('- Blank skill tags: ' + watch.blankSkillCount);\n  L.push('- Missing zone assignments: ' + watch.missingZoneCount);\n  L.push('- Auto Mode exclusion risk (multi-tech / multi-day): ' + watch.autoModeExclusionCount);\n  if (watch.headsUp && watch.headsUp.length) {\n    L.push('');\n    watch.headsUp.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n  const section = function (title, rows, empty) {\n    L.push('');\n    L.push('## ' + title);\n    L.push('');\n    if (!rows.length) {\n      L.push('- ' + empty);\n      return;\n    }\n    rows.forEach(function (r) {\n      L.push('- ' + r.label);\n      r.flags.forEach(function (f) { L.push('  - ' + f.text); });\n    });\n  };\n  section('Aged Unassigned', watch.agedUnassigned, 'No jobs have been sitting in Unassigned past the threshold.');\n  section('Blank skill tags', watch.blankSkill, 'No open jobs are missing a skill tag.');\n  section('Missing zone assignments', watch.missingZone, 'No open jobs are missing a zone assignment.');\n  section('Auto Mode exclusion risk (multi-tech / multi-day)', watch.autoModeExclusionRisk, 'No open multi-tech or multi-day jobs were found.');\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Zero board write-back. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const smsParts = [\n    tag.trim() + (s.testMode ? ' ' : '') + 'Aging alert: ' + watch.agedCount + ' unassigned ' + plural(watch.agedCount, 'job', 'jobs') + ' past ' + watch.thresholdMinutes + ' min',\n    watch.blankSkillCount + ' blank skill, ' + watch.missingZoneCount + ' missing zone, ' + watch.autoModeExclusionCount + ' Auto Mode exclusion ' + plural(watch.autoModeExclusionCount, 'risk', 'risks'),\n  ];\n  if (watch.agedUnassigned.length) {\n    smsParts.push(watch.agedUnassigned.slice(0, 2).map(function (r) { return r.jobId + ' (' + r.unassignedMinutes + 'm)'; }).join(', '));\n  }\n  const smsText = smsParts.join('. ') + '. Zero write-back.';\n  const out = {\n    subject: tag + 'Unassigned Aging Alert: ' + s.businessName + (asOf !== null ? ' (' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ')' : ''),\n    text: text,\n    smsText: smsText,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');\n  return out;\n}\n\nfunction loadAgingTestData(settings, dataset) {\n  return Object.assign({}, dataset, {\n    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),\n  });\n}\n\nconst DATASET = {\"technicians\":[{\"id\":\"T01\",\"name\":\"Dana Whitfield\",\"trade\":\"HVAC\"},{\"id\":\"T02\",\"name\":\"Marcus Hale\",\"trade\":\"HVAC\"},{\"id\":\"T03\",\"name\":\"Priya Voss\",\"trade\":\"Plumbing\"},{\"id\":\"T04\",\"name\":\"Luis Brandt\",\"trade\":\"Plumbing\"},{\"id\":\"T05\",\"name\":\"Tessa Okafor\",\"trade\":\"Electrical\"},{\"id\":\"T06\",\"name\":\"Gil Ramsey\",\"trade\":\"HVAC\"}],\"jobs\":[{\"id\":\"J2001\",\"bookedAt\":\"2026-03-10T09:50:00-05:00\",\"unassignedSince\":\"2026-03-10T09:58:00-05:00\",\"start\":\"2026-03-10T13:00:00-05:00\",\"end\":\"2026-03-10T15:00:00-05:00\",\"status\":\"Unassigned\",\"techId\":\"\",\"techIds\":[],\"skill\":\"residential-hvac\",\"zone\":\"North\",\"customerName\":\"Sample Household 2001\",\"customerPhone\":\"(555) 010-2001\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":8,\"address\":\"201 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"same-day\",\"businessUnit\":\"HVAC\",\"summary\":\"No heat this afternoon\",\"multiDay\":false,\"assignedTechNames\":[]},{\"id\":\"J2002\",\"bookedAt\":\"2026-03-10T10:00:00-05:00\",\"unassignedSince\":\"2026-03-10T10:05:00-05:00\",\"start\":\"2026-03-10T14:00:00-05:00\",\"end\":\"2026-03-10T16:00:00-05:00\",\"status\":\"Unassigned\",\"techId\":\"\",\"techIds\":[],\"skill\":\"\",\"zone\":\"South\",\"customerName\":\"Sample Household 2002\",\"customerPhone\":\"(555) 010-2002\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"water heater\",\"equipmentAgeYears\":11,\"address\":\"202 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"businessUnit\":\"Plumbing\",\"summary\":\"Pilot will not stay lit\",\"multiDay\":false,\"assignedTechNames\":[]},{\"id\":\"J2003\",\"bookedAt\":\"2026-03-10T10:20:00-05:00\",\"unassignedSince\":\"2026-03-10T10:22:00-05:00\",\"start\":\"2026-03-10T15:00:00-05:00\",\"end\":\"2026-03-10T17:00:00-05:00\",\"status\":\"Unassigned\",\"techId\":\"\",\"techIds\":[],\"skill\":\"drain\",\"zone\":\"West\",\"customerName\":\"Sample Household 2003\",\"customerPhone\":\"(555) 010-2003\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"drain line\",\"equipmentAgeYears\":4,\"address\":\"203 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"same-day\",\"businessUnit\":\"Plumbing\",\"summary\":\"Slow kitchen drain\",\"multiDay\":false,\"assignedTechNames\":[]},{\"id\":\"J2004\",\"bookedAt\":\"2026-03-10T08:15:00-05:00\",\"unassignedSince\":\"\",\"start\":\"2026-03-10T11:00:00-05:00\",\"end\":\"2026-03-10T13:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T01\",\"techIds\":[\"T01\"],\"skill\":\"\",\"zone\":\"North\",\"customerName\":\"Sample Household 2004\",\"customerPhone\":\"(555) 010-2004\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"air handler\",\"equipmentAgeYears\":6,\"address\":\"204 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"businessUnit\":\"HVAC\",\"summary\":\"Weak airflow\",\"multiDay\":false,\"assignedTechNames\":[\"Dana Whitfield\"]},{\"id\":\"J2005\",\"bookedAt\":\"2026-03-10T08:40:00-05:00\",\"unassignedSince\":\"\",\"start\":\"2026-03-10T12:00:00-05:00\",\"end\":\"2026-03-10T14:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T03\",\"techIds\":[\"T03\"],\"skill\":\"water-heater\",\"zone\":\"\",\"customerName\":\"Sample Household 2005\",\"customerPhone\":\"(555) 010-2005\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"water heater\",\"equipmentAgeYears\":9,\"address\":\"205 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"businessUnit\":\"Plumbing\",\"summary\":\"Tank leaking at fitting\",\"multiDay\":false,\"assignedTechNames\":[\"Priya Voss\"]},{\"id\":\"J2006\",\"bookedAt\":\"2026-03-09T16:00:00-05:00\",\"unassignedSince\":\"\",\"start\":\"2026-03-10T10:00:00-05:00\",\"end\":\"2026-03-10T14:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T01\",\"techIds\":[\"T01\",\"T02\"],\"skill\":\"rooftop\",\"zone\":\"Commercial\",\"customerName\":\"Sample Office 2006\",\"customerPhone\":\"(555) 010-2006\",\"customerType\":\"commercial\",\"jobType\":\"Maintenance\",\"equipmentType\":\"rooftop unit\",\"equipmentAgeYears\":10,\"address\":\"600 Fixture Industrial Dr, Testville, TX 00000\",\"priority\":\"standard\",\"businessUnit\":\"HVAC\",\"summary\":\"Two-tech rooftop maintenance\",\"multiDay\":false,\"assignedTechNames\":[\"Dana Whitfield\",\"Marcus Hale\"]},{\"id\":\"J2007\",\"bookedAt\":\"2026-03-09T15:00:00-05:00\",\"unassignedSince\":\"\",\"start\":\"2026-03-10T08:00:00-05:00\",\"end\":\"2026-03-11T17:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T04\",\"techIds\":[\"T04\"],\"skill\":\"backflow\",\"zone\":\"East\",\"customerName\":\"Sample Office 2007\",\"customerPhone\":\"(555) 010-2007\",\"customerType\":\"commercial\",\"jobType\":\"Repair\",\"equipmentType\":\"backflow assembly\",\"equipmentAgeYears\":7,\"address\":\"800 Fixture Commerce Pkwy, Testville, TX 00000\",\"priority\":\"standard\",\"businessUnit\":\"Plumbing\",\"summary\":\"Multi-day backflow rebuild\",\"multiDay\":true,\"assignedTechNames\":[\"Luis Brandt\"]},{\"id\":\"J2008\",\"bookedAt\":\"2026-03-10T09:40:00-05:00\",\"unassignedSince\":\"2026-03-10T09:49:00-05:00\",\"start\":\"2026-03-10T16:00:00-05:00\",\"end\":\"2026-03-10T18:00:00-05:00\",\"status\":\"Unassigned\",\"techId\":\"\",\"techIds\":[],\"skill\":\"\",\"zone\":\"\",\"customerName\":\"Sample Household 2008\",\"customerPhone\":\"(555) 010-2008\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":12,\"address\":\"208 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"emergency\",\"businessUnit\":\"HVAC\",\"summary\":\"No heat\",\"multiDay\":false,\"assignedTechNames\":[]},{\"id\":\"J2009\",\"bookedAt\":\"2026-03-10T09:00:00-05:00\",\"unassignedSince\":\"2026-03-10T09:50:00-05:00\",\"start\":\"2026-03-10T13:00:00-05:00\",\"end\":\"2026-03-10T15:00:00-05:00\",\"status\":\"Canceled\",\"techId\":\"\",\"techIds\":[],\"skill\":\"residential-hvac\",\"zone\":\"North\",\"customerName\":\"Sample Household 2009\",\"customerPhone\":\"(555) 010-2009\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":5,\"address\":\"209 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"businessUnit\":\"HVAC\",\"summary\":\"Canceled by customer\",\"multiDay\":false,\"assignedTechNames\":[]},{\"id\":\"J2010\",\"bookedAt\":\"2026-03-09T11:00:00-05:00\",\"unassignedSince\":\"\",\"start\":\"2026-03-09T13:00:00-05:00\",\"end\":\"2026-03-09T15:00:00-05:00\",\"status\":\"Completed\",\"techId\":\"T02\",\"techIds\":[\"T02\"],\"skill\":\"\",\"zone\":\"South\",\"customerName\":\"Sample Household 2010\",\"customerPhone\":\"(555) 010-2010\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"condenser\",\"equipmentAgeYears\":8,\"address\":\"210 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"businessUnit\":\"HVAC\",\"summary\":\"Completed yesterday\",\"multiDay\":false,\"assignedTechNames\":[\"Marcus Hale\"]}],\"referenceTime\":\"2026-03-10T10:30:00-05:00\"};\nconst settings = $('Prepare Settings').first().json.settings;\nreturn [{ json: loadAgingTestData(settings, DATASET) }];\n"
+      }
+    },
+    {
+      "id": "0c3440f8-8199-51d5-a3b4-471523b77c4a",
+      "name": "Unassigned Aging Watch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_aging_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.2.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'servicetitan'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or servicetitan. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  const override = parseTime(cfg.asOfOverride);\n  const asOfMs = override !== null ? override : nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    stApiBase: isBlank(cfg.stApiBase) ? 'https://api.servicetitan.io' : String(cfg.stApiBase).replace(/\\/+$/, ''),\n    stTenantId: isBlank(cfg.stTenantId) ? '' : String(cfg.stTenantId).trim(),\n    stAppKey: isBlank(cfg.stAppKey) ? '' : String(cfg.stAppKey).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).forEach(function (k) {\n    s[k] = toNum(cfg[k], DEFAULTS[k]);\n  });\n  s.historyStart = new Date(asOfMs - s.historyDays * DAY).toISOString();\n  s.lookaheadEnd = new Date(asOfMs + s.capacityLookaheadDays * DAY).toISOString();\n  s.callsSince = new Date(asOfMs - 36 * HOUR).toISOString();\n  return s;\n}\n\nconst AGING_DEFAULT_THRESHOLD_MINUTES = 20;\nconst OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];\nconst TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];\n\nfunction agingThresholdMinutes(s) {\n  return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n}\n\nfunction prepareAgingSettings(cfg, nowMs) {\n  const s = prepareSettings(cfg, nowMs);\n  const n = toNum(cfg && cfg.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n  s.agingThresholdMinutes = n > 0 ? n : AGING_DEFAULT_THRESHOLD_MINUTES;\n  return s;\n}\n\nfunction splitIds(v) {\n  if (isBlank(v)) return [];\n  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);\n  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);\n}\n\nfunction uniqueIds(list) {\n  const out = [];\n  const seen = {};\n  (list || []).forEach(function (id) {\n    const s = String(id || '').trim();\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\n\nfunction jobTechIds(job) {\n  const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));\n  if (fromList.length) return fromList;\n  return uniqueIds(splitIds(job.techId || job.tech_id));\n}\n\nfunction isTerminalJob(job) {\n  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;\n}\n\nfunction isOpenJob(job) {\n  if (isTerminalJob(job)) return false;\n  const st = lc(job.status);\n  if (!st) return jobTechIds(job).length === 0;\n  return OPEN_JOB_STATUSES.indexOf(st) !== -1;\n}\n\nfunction isUnassignedJob(job) {\n  if (!isOpenJob(job)) return false;\n  if (lc(job.status) === 'unassigned') return true;\n  return jobTechIds(job).length === 0;\n}\n\nfunction jobSpansMultipleLocalDays(job, tz) {\n  if (toBool(job.multiDay, false)) return true;\n  const start = parseTime(job.start);\n  const end = parseTime(job.end);\n  if (start === null || end === null) return false;\n  return localDate(start, tz) !== localDate(end, tz);\n}\n\nfunction unassignedClock(job) {\n  const t = parseTime(job.unassignedSince);\n  if (t !== null) return t;\n  return parseTime(job.bookedAt);\n}\n\nfunction agingMinutes(job, asOfMs) {\n  const clock = unassignedClock(job);\n  if (clock === null || asOfMs === null) return null;\n  return Math.floor((asOfMs - clock) / 60000);\n}\n\nfunction mapAgingJob(r) {\n  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));\n  return {\n    id: String(r.job_id || r.id || ''),\n    bookedAt: r.booked_at || r.bookedAt || '',\n    unassignedSince: r.unassigned_since || r.unassignedSince || '',\n    start: r.scheduled_start || r.start || '',\n    end: r.scheduled_end || r.end || '',\n    status: r.status || '',\n    techId: techIds[0] || '',\n    techIds: techIds,\n    skill: r.skill || '',\n    zone: r.zone || '',\n    customerName: r.customer_name || r.customerName || '',\n    customerPhone: r.customer_phone || r.customerPhone || '',\n    customerType: r.customer_type || r.customerType || '',\n    jobType: r.job_type || r.jobType || '',\n    equipmentType: r.equipment_type || r.equipmentType || '',\n    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),\n    address: r.address || '',\n    priority: r.priority || '',\n    businessUnit: r.business_unit || r.businessUnit || '',\n    summary: r.summary || '',\n    multiDay: toBool(r.multi_day || r.multiDay, false),\n  };\n}\n\nfunction datasetFromAgingTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);\n  if (!jobsTable) headsUp.push('CSV export \"aging_jobs.csv\" or \"jobs.csv\" was not found. The aging watch is skipped.');\n  const technicians = (t.technicians || []).map(function (r) {\n    return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };\n  });\n  const techName = {};\n  technicians.forEach(function (tech) { techName[tech.id] = tech.name; });\n  const jobs = (jobsTable || []).map(function (r) {\n    const job = mapAgingJob(r);\n    job.assignedTechNames = job.techIds.map(function (id) { return techName[id] || id; });\n    return job;\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction normalizeAgingServiceTitan(settings, raw) {\n  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []); };\n  const headsUp = (settings.headsUp || []).concat([\n    'ServiceTitan live mapping for the Unassigned Aging Watch is an unverified first draft. Skill tags and zone assignments are not always present on the job record, so a missing field is flagged rather than guessed. The CSV export path is the recommended way to start.',\n  ]);\n  Object.keys(raw || {}).forEach(function (name) {\n    const r = raw[name];\n    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan \"' + name + '\" read returned no usable data.');\n    else if (r.hasMore === true) headsUp.push('ServiceTitan \"' + name + '\" has more pages than this draft reads. Totals may be incomplete.');\n  });\n  const techName = {};\n  rows(raw.technicians).forEach(function (t) { techName[String(t.id)] = t.name || ('Technician ' + t.id); });\n  const assignByJob = {};\n  rows(raw.assignments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!assignByJob[jobId]) assignByJob[jobId] = [];\n    if (a.technicianId !== undefined && a.technicianId !== null && String(a.technicianId).trim() !== '') {\n      assignByJob[jobId].push(String(a.technicianId));\n    }\n  });\n  const apptByJob = {};\n  rows(raw.appointments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!apptByJob[jobId]) apptByJob[jobId] = a;\n  });\n  const jobs = rows(raw.jobs).map(function (j) {\n    const id = String(j.jobNumber || j.id);\n    const a = apptByJob[j.id] || apptByJob[id] || {};\n    const techIds = uniqueIds(assignByJob[j.id] || assignByJob[id] || []);\n    const skill = j.skill || (j.skills && j.skills[0] && (j.skills[0].name || j.skills[0])) || (j.jobType && j.jobType.name) || '';\n    const zone = j.zone || j.zoneName || (j.territory && (j.territory.name || j.territory)) || j.businessUnitLocation || '';\n    return {\n      id: id,\n      bookedAt: j.createdOn || j.bookedOn || '',\n      unassignedSince: j.unassignedOn || j.unassignedSince || '',\n      start: a.start || j.scheduledStart || '',\n      end: a.end || j.scheduledEnd || '',\n      status: j.jobStatus || j.status || '',\n      techId: techIds[0] || '',\n      techIds: techIds,\n      skill: skill ? String(skill) : '',\n      zone: zone ? String(zone) : '',\n      customerName: j.customerId ? 'Customer #' + j.customerId : '',\n      customerPhone: '',\n      customerType: '',\n      jobType: (j.jobType && j.jobType.name) ? j.jobType.name : String(j.type || ''),\n      equipmentType: '',\n      equipmentAgeYears: null,\n      address: j.locationId ? 'Location #' + j.locationId : '',\n      priority: j.priority || '',\n      businessUnit: j.businessUnitId ? String(j.businessUnitId) : (j.businessUnit && j.businessUnit.name ? j.businessUnit.name : ''),\n      summary: j.summary || '',\n      multiDay: false,\n      assignedTechNames: techIds.map(function (tid) { return techName[tid] || tid; }),\n    };\n  });\n  const technicians = rows(raw.technicians).map(function (t) {\n    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '' };\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: headsUp }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction fmtAgingWindow(startMs, endMs, tz) {\n  if (startMs === null || endMs === null) return 'no window';\n  if (localDate(startMs, tz) === localDate(endMs, tz)) return fmtWindow(startMs, endMs, tz);\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtDay(endMs, tz) + ' ' + fmtTime(endMs, tz);\n}\n\nfunction agingJobLabel(job, tz) {\n  const techs = (job.assignedTechNames && job.assignedTechNames.length)\n    ? job.assignedTechNames.join(', ')\n    : (jobTechIds(job).length ? jobTechIds(job).join(', ') : 'no tech');\n  const bu = isBlank(job.businessUnit) ? 'trade n/a' : job.businessUnit;\n  const who = isBlank(job.customerName) ? 'customer n/a' : job.customerName;\n  const window = fmtAgingWindow(parseTime(job.start), parseTime(job.end), tz);\n  return 'Job ' + job.id + ' | ' + window + ' | ' + bu + ' | ' + who + ' | tech: ' + techs;\n}\n\nfunction unassignedAgingWatch(data) {\n  const s = data.settings || {};\n  const tz = s.timezone || 'America/Chicago';\n  const asOfMs = parseTime(s.asOf);\n  const threshold = agingThresholdMinutes(s);\n  const hu = (s.headsUp || []).slice();\n  if (asOfMs === null) hu.push('asOf time is missing, so unassigned age could not be computed.');\n  const agedUnassigned = [];\n  const blankSkill = [];\n  const missingZone = [];\n  const autoModeExclusionRisk = [];\n  (data.jobs || []).forEach(function (job) {\n    if (!isOpenJob(job)) return;\n    const flags = [];\n    const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;\n    if (isUnassignedJob(job) && mins !== null && mins >= threshold) {\n      flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });\n    }\n    if (isBlank(job.skill)) {\n      flags.push({ code: 'blank_skill', text: 'Blank skill tag. Dispatch Pro Auto Mode can silently drop or ping-pong this job when it reshuffles.' });\n    }\n    if (isBlank(job.zone)) {\n      flags.push({ code: 'missing_zone', text: 'Missing zone assignment. Auto Mode can exclude this job when it reshuffles.' });\n    }\n    const techs = jobTechIds(job);\n    const multiTech = techs.length > 1;\n    const multiDay = jobSpansMultipleLocalDays(job, tz);\n    if (multiTech || multiDay) {\n      const why = [];\n      if (multiTech) why.push('multi-tech (' + techs.length + ' technicians)');\n      if (multiDay) why.push('multi-day');\n      flags.push({ code: 'automode_exclusion', kind: multiTech && multiDay ? 'multi-tech-multi-day' : (multiTech ? 'multi-tech' : 'multi-day'), text: 'Auto Mode exclusion risk: ' + why.join(' and ') + '. Dispatch Pro can silently leave this in Unassigned or ping-pong it on each 10-minute reshuffle.' });\n    }\n    if (flags.length === 0) return;\n    const row = {\n      jobId: job.id,\n      status: job.status || '',\n      businessUnit: job.businessUnit || '',\n      customerName: job.customerName || '',\n      customerPhone: job.customerPhone || '',\n      address: job.address || '',\n      skill: job.skill || '',\n      zone: job.zone || '',\n      assignedTech: techs.length ? techs.join(', ') : '',\n      unassignedMinutes: mins,\n      label: agingJobLabel(job, tz),\n      flags: flags,\n    };\n    if (flags.some(function (f) { return f.code === 'aged_unassigned'; })) agedUnassigned.push(row);\n    if (flags.some(function (f) { return f.code === 'blank_skill'; })) blankSkill.push(row);\n    if (flags.some(function (f) { return f.code === 'missing_zone'; })) missingZone.push(row);\n    if (flags.some(function (f) { return f.code === 'automode_exclusion'; })) autoModeExclusionRisk.push(row);\n  });\n  const sortAged = function (a, b) { return (b.unassignedMinutes || 0) - (a.unassignedMinutes || 0); };\n  const sortId = function (a, b) { return String(a.jobId).localeCompare(String(b.jobId)); };\n  agedUnassigned.sort(sortAged);\n  blankSkill.sort(sortId);\n  missingZone.sort(sortId);\n  autoModeExclusionRisk.sort(sortId);\n  const flaggedIds = {};\n  agedUnassigned.concat(blankSkill, missingZone, autoModeExclusionRisk).forEach(function (r) { flaggedIds[r.jobId] = true; });\n  return {\n    computed: asOfMs !== null,\n    thresholdMinutes: threshold,\n    reviewedCount: (data.jobs || []).filter(isOpenJob).length,\n    agedCount: agedUnassigned.length,\n    blankSkillCount: blankSkill.length,\n    missingZoneCount: missingZone.length,\n    autoModeExclusionCount: autoModeExclusionRisk.length,\n    flaggedJobCount: Object.keys(flaggedIds).length,\n    agedUnassigned: agedUnassigned,\n    blankSkill: blankSkill,\n    missingZone: missingZone,\n    autoModeExclusionRisk: autoModeExclusionRisk,\n    headsUp: hu,\n  };\n}\n\nfunction renderAgingAlert(data) {\n  const s = data.settings;\n  const watch = data.agingWatch || unassignedAgingWatch(data);\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  L.push('# ' + tag + 'Unassigned Aging Alert: ' + s.businessName);\n  L.push('');\n  L.push((asOf !== null ? fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) : 'time n/a') + ' ' + tz + '. source: ' + s.source + '.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  L.push('Read-only. Zero board write-back. Owner-only delivery. Nothing is assigned, moved, or deleted in ServiceTitan.');\n  L.push('');\n  L.push('Threshold: jobs sitting in Unassigned for ' + watch.thresholdMinutes + '+ minutes. Open jobs reviewed: ' + watch.reviewedCount + '. Flagged jobs: ' + watch.flaggedJobCount + '.');\n  L.push('- Aged Unassigned: ' + watch.agedCount);\n  L.push('- Blank skill tags: ' + watch.blankSkillCount);\n  L.push('- Missing zone assignments: ' + watch.missingZoneCount);\n  L.push('- Auto Mode exclusion risk (multi-tech / multi-day): ' + watch.autoModeExclusionCount);\n  if (watch.headsUp && watch.headsUp.length) {\n    L.push('');\n    watch.headsUp.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n  const section = function (title, rows, empty) {\n    L.push('');\n    L.push('## ' + title);\n    L.push('');\n    if (!rows.length) {\n      L.push('- ' + empty);\n      return;\n    }\n    rows.forEach(function (r) {\n      L.push('- ' + r.label);\n      r.flags.forEach(function (f) { L.push('  - ' + f.text); });\n    });\n  };\n  section('Aged Unassigned', watch.agedUnassigned, 'No jobs have been sitting in Unassigned past the threshold.');\n  section('Blank skill tags', watch.blankSkill, 'No open jobs are missing a skill tag.');\n  section('Missing zone assignments', watch.missingZone, 'No open jobs are missing a zone assignment.');\n  section('Auto Mode exclusion risk (multi-tech / multi-day)', watch.autoModeExclusionRisk, 'No open multi-tech or multi-day jobs were found.');\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Zero board write-back. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const smsParts = [\n    tag.trim() + (s.testMode ? ' ' : '') + 'Aging alert: ' + watch.agedCount + ' unassigned ' + plural(watch.agedCount, 'job', 'jobs') + ' past ' + watch.thresholdMinutes + ' min',\n    watch.blankSkillCount + ' blank skill, ' + watch.missingZoneCount + ' missing zone, ' + watch.autoModeExclusionCount + ' Auto Mode exclusion ' + plural(watch.autoModeExclusionCount, 'risk', 'risks'),\n  ];\n  if (watch.agedUnassigned.length) {\n    smsParts.push(watch.agedUnassigned.slice(0, 2).map(function (r) { return r.jobId + ' (' + r.unassignedMinutes + 'm)'; }).join(', '));\n  }\n  const smsText = smsParts.join('. ') + '. Zero write-back.';\n  const out = {\n    subject: tag + 'Unassigned Aging Alert: ' + s.businessName + (asOf !== null ? ' (' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ')' : ''),\n    text: text,\n    smsText: smsText,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');\n  return out;\n}\n\nfunction loadAgingTestData(settings, dataset) {\n  return Object.assign({}, dataset, {\n    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),\n  });\n}\n\nconst d = $input.first().json;\nreturn [{ json: Object.assign({}, d, { agingWatch: unassignedAgingWatch(d) }) }];\n"
+      }
+    },
+    {
+      "id": "1af62f29-1e69-59f6-a174-75693ec79df2",
+      "name": "Assemble Aging Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2380,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_aging_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.2.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'servicetitan'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or servicetitan. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  const override = parseTime(cfg.asOfOverride);\n  const asOfMs = override !== null ? override : nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    stApiBase: isBlank(cfg.stApiBase) ? 'https://api.servicetitan.io' : String(cfg.stApiBase).replace(/\\/+$/, ''),\n    stTenantId: isBlank(cfg.stTenantId) ? '' : String(cfg.stTenantId).trim(),\n    stAppKey: isBlank(cfg.stAppKey) ? '' : String(cfg.stAppKey).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).forEach(function (k) {\n    s[k] = toNum(cfg[k], DEFAULTS[k]);\n  });\n  s.historyStart = new Date(asOfMs - s.historyDays * DAY).toISOString();\n  s.lookaheadEnd = new Date(asOfMs + s.capacityLookaheadDays * DAY).toISOString();\n  s.callsSince = new Date(asOfMs - 36 * HOUR).toISOString();\n  return s;\n}\n\nconst AGING_DEFAULT_THRESHOLD_MINUTES = 20;\nconst OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];\nconst TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];\n\nfunction agingThresholdMinutes(s) {\n  return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n}\n\nfunction prepareAgingSettings(cfg, nowMs) {\n  const s = prepareSettings(cfg, nowMs);\n  const n = toNum(cfg && cfg.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);\n  s.agingThresholdMinutes = n > 0 ? n : AGING_DEFAULT_THRESHOLD_MINUTES;\n  return s;\n}\n\nfunction splitIds(v) {\n  if (isBlank(v)) return [];\n  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);\n  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);\n}\n\nfunction uniqueIds(list) {\n  const out = [];\n  const seen = {};\n  (list || []).forEach(function (id) {\n    const s = String(id || '').trim();\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\n\nfunction jobTechIds(job) {\n  const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));\n  if (fromList.length) return fromList;\n  return uniqueIds(splitIds(job.techId || job.tech_id));\n}\n\nfunction isTerminalJob(job) {\n  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;\n}\n\nfunction isOpenJob(job) {\n  if (isTerminalJob(job)) return false;\n  const st = lc(job.status);\n  if (!st) return jobTechIds(job).length === 0;\n  return OPEN_JOB_STATUSES.indexOf(st) !== -1;\n}\n\nfunction isUnassignedJob(job) {\n  if (!isOpenJob(job)) return false;\n  if (lc(job.status) === 'unassigned') return true;\n  return jobTechIds(job).length === 0;\n}\n\nfunction jobSpansMultipleLocalDays(job, tz) {\n  if (toBool(job.multiDay, false)) return true;\n  const start = parseTime(job.start);\n  const end = parseTime(job.end);\n  if (start === null || end === null) return false;\n  return localDate(start, tz) !== localDate(end, tz);\n}\n\nfunction unassignedClock(job) {\n  const t = parseTime(job.unassignedSince);\n  if (t !== null) return t;\n  return parseTime(job.bookedAt);\n}\n\nfunction agingMinutes(job, asOfMs) {\n  const clock = unassignedClock(job);\n  if (clock === null || asOfMs === null) return null;\n  return Math.floor((asOfMs - clock) / 60000);\n}\n\nfunction mapAgingJob(r) {\n  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));\n  return {\n    id: String(r.job_id || r.id || ''),\n    bookedAt: r.booked_at || r.bookedAt || '',\n    unassignedSince: r.unassigned_since || r.unassignedSince || '',\n    start: r.scheduled_start || r.start || '',\n    end: r.scheduled_end || r.end || '',\n    status: r.status || '',\n    techId: techIds[0] || '',\n    techIds: techIds,\n    skill: r.skill || '',\n    zone: r.zone || '',\n    customerName: r.customer_name || r.customerName || '',\n    customerPhone: r.customer_phone || r.customerPhone || '',\n    customerType: r.customer_type || r.customerType || '',\n    jobType: r.job_type || r.jobType || '',\n    equipmentType: r.equipment_type || r.equipmentType || '',\n    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),\n    address: r.address || '',\n    priority: r.priority || '',\n    businessUnit: r.business_unit || r.businessUnit || '',\n    summary: r.summary || '',\n    multiDay: toBool(r.multi_day || r.multiDay, false),\n  };\n}\n\nfunction datasetFromAgingTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);\n  if (!jobsTable) headsUp.push('CSV export \"aging_jobs.csv\" or \"jobs.csv\" was not found. The aging watch is skipped.');\n  const technicians = (t.technicians || []).map(function (r) {\n    return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };\n  });\n  const techName = {};\n  technicians.forEach(function (tech) { techName[tech.id] = tech.name; });\n  const jobs = (jobsTable || []).map(function (r) {\n    const job = mapAgingJob(r);\n    job.assignedTechNames = job.techIds.map(function (id) { return techName[id] || id; });\n    return job;\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction normalizeAgingServiceTitan(settings, raw) {\n  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []); };\n  const headsUp = (settings.headsUp || []).concat([\n    'ServiceTitan live mapping for the Unassigned Aging Watch is an unverified first draft. Skill tags and zone assignments are not always present on the job record, so a missing field is flagged rather than guessed. The CSV export path is the recommended way to start.',\n  ]);\n  Object.keys(raw || {}).forEach(function (name) {\n    const r = raw[name];\n    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan \"' + name + '\" read returned no usable data.');\n    else if (r.hasMore === true) headsUp.push('ServiceTitan \"' + name + '\" has more pages than this draft reads. Totals may be incomplete.');\n  });\n  const techName = {};\n  rows(raw.technicians).forEach(function (t) { techName[String(t.id)] = t.name || ('Technician ' + t.id); });\n  const assignByJob = {};\n  rows(raw.assignments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!assignByJob[jobId]) assignByJob[jobId] = [];\n    if (a.technicianId !== undefined && a.technicianId !== null && String(a.technicianId).trim() !== '') {\n      assignByJob[jobId].push(String(a.technicianId));\n    }\n  });\n  const apptByJob = {};\n  rows(raw.appointments).forEach(function (a) {\n    const jobId = String(a.jobId || a.jobID || '');\n    if (!jobId) return;\n    if (!apptByJob[jobId]) apptByJob[jobId] = a;\n  });\n  const jobs = rows(raw.jobs).map(function (j) {\n    const id = String(j.jobNumber || j.id);\n    const a = apptByJob[j.id] || apptByJob[id] || {};\n    const techIds = uniqueIds(assignByJob[j.id] || assignByJob[id] || []);\n    const skill = j.skill || (j.skills && j.skills[0] && (j.skills[0].name || j.skills[0])) || (j.jobType && j.jobType.name) || '';\n    const zone = j.zone || j.zoneName || (j.territory && (j.territory.name || j.territory)) || j.businessUnitLocation || '';\n    return {\n      id: id,\n      bookedAt: j.createdOn || j.bookedOn || '',\n      unassignedSince: j.unassignedOn || j.unassignedSince || '',\n      start: a.start || j.scheduledStart || '',\n      end: a.end || j.scheduledEnd || '',\n      status: j.jobStatus || j.status || '',\n      techId: techIds[0] || '',\n      techIds: techIds,\n      skill: skill ? String(skill) : '',\n      zone: zone ? String(zone) : '',\n      customerName: j.customerId ? 'Customer #' + j.customerId : '',\n      customerPhone: '',\n      customerType: '',\n      jobType: (j.jobType && j.jobType.name) ? j.jobType.name : String(j.type || ''),\n      equipmentType: '',\n      equipmentAgeYears: null,\n      address: j.locationId ? 'Location #' + j.locationId : '',\n      priority: j.priority || '',\n      businessUnit: j.businessUnitId ? String(j.businessUnitId) : (j.businessUnit && j.businessUnit.name ? j.businessUnit.name : ''),\n      summary: j.summary || '',\n      multiDay: false,\n      assignedTechNames: techIds.map(function (tid) { return techName[tid] || tid; }),\n    };\n  });\n  const technicians = rows(raw.technicians).map(function (t) {\n    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '' };\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: headsUp }),\n    technicians: technicians,\n    jobs: jobs,\n  };\n}\n\nfunction fmtAgingWindow(startMs, endMs, tz) {\n  if (startMs === null || endMs === null) return 'no window';\n  if (localDate(startMs, tz) === localDate(endMs, tz)) return fmtWindow(startMs, endMs, tz);\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtDay(endMs, tz) + ' ' + fmtTime(endMs, tz);\n}\n\nfunction agingJobLabel(job, tz) {\n  const techs = (job.assignedTechNames && job.assignedTechNames.length)\n    ? job.assignedTechNames.join(', ')\n    : (jobTechIds(job).length ? jobTechIds(job).join(', ') : 'no tech');\n  const bu = isBlank(job.businessUnit) ? 'trade n/a' : job.businessUnit;\n  const who = isBlank(job.customerName) ? 'customer n/a' : job.customerName;\n  const window = fmtAgingWindow(parseTime(job.start), parseTime(job.end), tz);\n  return 'Job ' + job.id + ' | ' + window + ' | ' + bu + ' | ' + who + ' | tech: ' + techs;\n}\n\nfunction unassignedAgingWatch(data) {\n  const s = data.settings || {};\n  const tz = s.timezone || 'America/Chicago';\n  const asOfMs = parseTime(s.asOf);\n  const threshold = agingThresholdMinutes(s);\n  const hu = (s.headsUp || []).slice();\n  if (asOfMs === null) hu.push('asOf time is missing, so unassigned age could not be computed.');\n  const agedUnassigned = [];\n  const blankSkill = [];\n  const missingZone = [];\n  const autoModeExclusionRisk = [];\n  (data.jobs || []).forEach(function (job) {\n    if (!isOpenJob(job)) return;\n    const flags = [];\n    const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;\n    if (isUnassignedJob(job) && mins !== null && mins >= threshold) {\n      flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });\n    }\n    if (isBlank(job.skill)) {\n      flags.push({ code: 'blank_skill', text: 'Blank skill tag. Dispatch Pro Auto Mode can silently drop or ping-pong this job when it reshuffles.' });\n    }\n    if (isBlank(job.zone)) {\n      flags.push({ code: 'missing_zone', text: 'Missing zone assignment. Auto Mode can exclude this job when it reshuffles.' });\n    }\n    const techs = jobTechIds(job);\n    const multiTech = techs.length > 1;\n    const multiDay = jobSpansMultipleLocalDays(job, tz);\n    if (multiTech || multiDay) {\n      const why = [];\n      if (multiTech) why.push('multi-tech (' + techs.length + ' technicians)');\n      if (multiDay) why.push('multi-day');\n      flags.push({ code: 'automode_exclusion', kind: multiTech && multiDay ? 'multi-tech-multi-day' : (multiTech ? 'multi-tech' : 'multi-day'), text: 'Auto Mode exclusion risk: ' + why.join(' and ') + '. Dispatch Pro can silently leave this in Unassigned or ping-pong it on each 10-minute reshuffle.' });\n    }\n    if (flags.length === 0) return;\n    const row = {\n      jobId: job.id,\n      status: job.status || '',\n      businessUnit: job.businessUnit || '',\n      customerName: job.customerName || '',\n      customerPhone: job.customerPhone || '',\n      address: job.address || '',\n      skill: job.skill || '',\n      zone: job.zone || '',\n      assignedTech: techs.length ? techs.join(', ') : '',\n      unassignedMinutes: mins,\n      label: agingJobLabel(job, tz),\n      flags: flags,\n    };\n    if (flags.some(function (f) { return f.code === 'aged_unassigned'; })) agedUnassigned.push(row);\n    if (flags.some(function (f) { return f.code === 'blank_skill'; })) blankSkill.push(row);\n    if (flags.some(function (f) { return f.code === 'missing_zone'; })) missingZone.push(row);\n    if (flags.some(function (f) { return f.code === 'automode_exclusion'; })) autoModeExclusionRisk.push(row);\n  });\n  const sortAged = function (a, b) { return (b.unassignedMinutes || 0) - (a.unassignedMinutes || 0); };\n  const sortId = function (a, b) { return String(a.jobId).localeCompare(String(b.jobId)); };\n  agedUnassigned.sort(sortAged);\n  blankSkill.sort(sortId);\n  missingZone.sort(sortId);\n  autoModeExclusionRisk.sort(sortId);\n  const flaggedIds = {};\n  agedUnassigned.concat(blankSkill, missingZone, autoModeExclusionRisk).forEach(function (r) { flaggedIds[r.jobId] = true; });\n  return {\n    computed: asOfMs !== null,\n    thresholdMinutes: threshold,\n    reviewedCount: (data.jobs || []).filter(isOpenJob).length,\n    agedCount: agedUnassigned.length,\n    blankSkillCount: blankSkill.length,\n    missingZoneCount: missingZone.length,\n    autoModeExclusionCount: autoModeExclusionRisk.length,\n    flaggedJobCount: Object.keys(flaggedIds).length,\n    agedUnassigned: agedUnassigned,\n    blankSkill: blankSkill,\n    missingZone: missingZone,\n    autoModeExclusionRisk: autoModeExclusionRisk,\n    headsUp: hu,\n  };\n}\n\nfunction renderAgingAlert(data) {\n  const s = data.settings;\n  const watch = data.agingWatch || unassignedAgingWatch(data);\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  L.push('# ' + tag + 'Unassigned Aging Alert: ' + s.businessName);\n  L.push('');\n  L.push((asOf !== null ? fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) : 'time n/a') + ' ' + tz + '. source: ' + s.source + '.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  L.push('Read-only. Zero board write-back. Owner-only delivery. Nothing is assigned, moved, or deleted in ServiceTitan.');\n  L.push('');\n  L.push('Threshold: jobs sitting in Unassigned for ' + watch.thresholdMinutes + '+ minutes. Open jobs reviewed: ' + watch.reviewedCount + '. Flagged jobs: ' + watch.flaggedJobCount + '.');\n  L.push('- Aged Unassigned: ' + watch.agedCount);\n  L.push('- Blank skill tags: ' + watch.blankSkillCount);\n  L.push('- Missing zone assignments: ' + watch.missingZoneCount);\n  L.push('- Auto Mode exclusion risk (multi-tech / multi-day): ' + watch.autoModeExclusionCount);\n  if (watch.headsUp && watch.headsUp.length) {\n    L.push('');\n    watch.headsUp.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n  const section = function (title, rows, empty) {\n    L.push('');\n    L.push('## ' + title);\n    L.push('');\n    if (!rows.length) {\n      L.push('- ' + empty);\n      return;\n    }\n    rows.forEach(function (r) {\n      L.push('- ' + r.label);\n      r.flags.forEach(function (f) { L.push('  - ' + f.text); });\n    });\n  };\n  section('Aged Unassigned', watch.agedUnassigned, 'No jobs have been sitting in Unassigned past the threshold.');\n  section('Blank skill tags', watch.blankSkill, 'No open jobs are missing a skill tag.');\n  section('Missing zone assignments', watch.missingZone, 'No open jobs are missing a zone assignment.');\n  section('Auto Mode exclusion risk (multi-tech / multi-day)', watch.autoModeExclusionRisk, 'No open multi-tech or multi-day jobs were found.');\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Zero board write-back. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const smsParts = [\n    tag.trim() + (s.testMode ? ' ' : '') + 'Aging alert: ' + watch.agedCount + ' unassigned ' + plural(watch.agedCount, 'job', 'jobs') + ' past ' + watch.thresholdMinutes + ' min',\n    watch.blankSkillCount + ' blank skill, ' + watch.missingZoneCount + ' missing zone, ' + watch.autoModeExclusionCount + ' Auto Mode exclusion ' + plural(watch.autoModeExclusionCount, 'risk', 'risks'),\n  ];\n  if (watch.agedUnassigned.length) {\n    smsParts.push(watch.agedUnassigned.slice(0, 2).map(function (r) { return r.jobId + ' (' + r.unassignedMinutes + 'm)'; }).join(', '));\n  }\n  const smsText = smsParts.join('. ') + '. Zero write-back.';\n  const out = {\n    subject: tag + 'Unassigned Aging Alert: ' + s.businessName + (asOf !== null ? ' (' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ')' : ''),\n    text: text,\n    smsText: smsText,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');\n  return out;\n}\n\nfunction loadAgingTestData(settings, dataset) {\n  return Object.assign({}, dataset, {\n    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),\n  });\n}\n\nconst d = $input.first().json;\nreturn [{ json: renderAgingAlert(d) }];\n"
+      }
+    },
+    {
+      "id": "391847fe-4a9c-5184-ad77-5bcd4fdfd1fa",
+      "name": "Send email to owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2660,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "eb5b5411-f0e3-53fa-a6cf-9b084aa19fa8",
+              "leftValue": "={{ $json.sendEmail }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f6315c51-fbec-52ad-a3c9-d69399548716",
+      "name": "Send Slack to owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2660,
+        640
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "6eaccaa5-4a1e-585d-a593-b33be97a477f",
+              "leftValue": "={{ $json.sendSlack }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d1833f82-5949-5d32-af55-e89fb293cb37",
+      "name": "Email owner (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2940,
+        420
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.emailTo }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PLACEHOLDER_GMAIL",
+          "name": "Gmail account (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "a16b168b-5e74-5f03-a301-ff5ef66bad11",
+      "name": "Post to owner Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2940,
+        640
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.slackChannel.replace(/^#/, '') }}",
+          "mode": "name"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "PLACEHOLDER_SLACK",
+          "name": "Slack account (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "4d01d080-768d-5cbf-a3cb-9f86150eaa7a",
+      "name": "Note: Start here",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        80
+      ],
+      "parameters": {
+        "content": "## START HERE: Unassigned-Job Aging Watch (DRAFT v0.2.0)\nA read-only 15-minute poll for HVAC, plumbing, and electrical shops. It flags jobs sitting in Unassigned past a configurable threshold (default 20 minutes), blank skill tags, missing zone assignments, and multi-tech / multi-day jobs that Dispatch Pro Auto Mode can silently drop or ping-pong. The alert goes to the OWNER only (email and/or Slack). An SMS-length summary is included in the payload for the same owner channels. Nothing is written back to the board.\n\n**Do these in order:**\n1. Import this file (done). It is inactive, and the 15-minute Schedule node is switched off.\n2. Leave **source** = test and click **Execute workflow** on Manual Test Run. The result is a [TEST] alert built from fictional sample data.\n3. Compare it with sample_aging_alert.md.\n4. Switch to **csv** (your own ServiceTitan job export) and re-run. Still [TEST].\n5. Only then think about go-live. See the Go live note.\n\nStatus: DRAFT. Designed from public ServiceTitan docs and checked as importable JSON. NOT tested against a live ServiceTitan, Gmail, or Slack account.",
+        "height": 330,
+        "width": 620,
+        "color": 4
+      }
+    },
+    {
+      "id": "93d69776-2148-5b4d-a553-0f446ca96a20",
+      "name": "Note: Config guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        280,
+        80
+      ],
+      "parameters": {
+        "content": "## Config fields\n- **source**: test (built-in fictional data, default) | csv (read exports from csvFolder) | servicetitan (live read-only GETs). Anything else falls back to test.\n- **testMode**: ON by default. Messages are labeled [TEST]. source = test always forces it on.\n- **delivery**: email | slack | both | none. Owner only. The alert text is also short enough to paste into an owner SMS, but this draft does not include a Twilio or customer-SMS node.\n- **ownerEmail / ownerSlackChannel**: YOUR address and a private channel. Never a customer.\n- **stApiBase / stTenantId / stAppKey**: paste-here placeholders for the live path. Unused unless source = servicetitan.\n- **csvFolder**: folder with aging_jobs.csv (or jobs.csv with the same columns) and optional technicians.csv. n8n only reads files inside its allowed folder.\n- **asOfOverride**: optional ISO time to pretend it is a different moment. Blank = now.\n- **agingThresholdMinutes**: how long a job may sit in Unassigned before it is flagged. Default 20 (use 15–20 to match how your shop works).",
+        "height": 330,
+        "width": 560,
+        "color": 5
+      }
+    },
+    {
+      "id": "868518e1-a0cc-5e33-a63b-2d4e98fdaf9a",
+      "name": "Note: Safety defaults",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        80
+      ],
+      "parameters": {
+        "content": "## Safety defaults\n- Imported **inactive**; 15-minute Schedule **disabled**.\n- **testMode** ON; source = **test**.\n- **Read-only / zero board write-back**: ServiceTitan nodes are GET only. No POST, PUT, PATCH, or DELETE. The dispatcher stays 100% in control.\n- **No customer messages**: there is no SMS, no Twilio, and no customer email node anywhere in this file.\n- It never assigns, reassigns, or moves a job. It only flags.\n- Never invents numbers. A metric that cannot be computed becomes a \"Heads-up\" line.",
+        "height": 330,
+        "width": 520,
+        "color": 6
+      }
+    },
+    {
+      "id": "7a249f69-38e7-5bd5-a8b8-31abae5fdb62",
+      "name": "Note: ServiceTitan v2 endpoints (UNVERIFIED)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        20
+      ],
+      "parameters": {
+        "content": "## Live path: ServiceTitan v2 REST reads (all GET). UNVERIFIED against a real tenant.\nBase: {stApiBase}/{module}/v2/tenant/{tenantId}/... plus header ST-App-Key. Auth is an n8n OAuth2 credential (client credentials) named PLACEHOLDER_SERVICETITAN; n8n fetches the token, so this workflow never POSTs to ServiceTitan.\nJobs: jpm/v2/.../jobs | Appointments: jpm/v2/.../appointments | Appointment assignments: dispatch/v2/.../appointment-assignments | Technicians: settings/v2/.../technicians\nExact paths, query names, response fields, and skill/zone field names are from public docs and memory and must be confirmed before use. First page only (pageSize 200). If a skill or zone field is not present on the job record, it is flagged as missing rather than guessed.",
+        "height": 230,
+        "width": 1400,
+        "color": 3
+      }
+    },
+    {
+      "id": "da9c446a-126f-58f0-a3bb-17f5d6c669b1",
+      "name": "Note: CSV fallback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        940
+      ],
+      "parameters": {
+        "content": "## CSV export fallback (recommended first step, and the path for Starter / Essentials)\nExport your own job report to aging_jobs.csv or jobs.csv (see fixtures/aging_jobs.csv for columns, including skill, zone, tech_ids, unassigned_since, and multi_day), drop it in csvFolder, set source = csv, and set asOfOverride if the export is not from this moment. This path only READS files. Source = test uses the same fictional file, built in.",
+        "height": 200,
+        "width": 640,
+        "color": 4
+      }
+    },
+    {
+      "id": "81676442-fead-5b85-a565-8e71579524d9",
+      "name": "Note: Credentials",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2620,
+        220
+      ],
+      "parameters": {
+        "content": "## Credentials (placeholders only)\nPLACEHOLDER_SERVICETITAN (OAuth2, live path only), PLACEHOLDER_GMAIL, PLACEHOLDER_SLACK. Attach your own. No secrets, client IDs, or tenant IDs are stored in this file. Do not paste real ones into Config and then share the workflow.",
+        "height": 160,
+        "width": 520,
+        "color": 2
+      }
+    },
+    {
+      "id": "5eb79caa-b5ee-5701-a82b-4225b5533b4b",
+      "name": "Note: Go live",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2620,
+        800
+      ],
+      "parameters": {
+        "content": "## Hard stop before go-live\nDo not turn testMode off or switch the 15-minute Schedule on until: (1) a clean [TEST] run from sample data, (2) a clean [TEST] run from YOUR csv export, spot-checked by hand against ServiceTitan, (3) ownerEmail / ownerSlackChannel confirmed as owner-only, (4) an owner has signed off in writing. Even live, this workflow only reports to the owner. It will not contact customers or change ServiceTitan.",
+        "height": 250,
+        "width": 520,
+        "color": 6
+      }
+    }
+  ],
+  "connections": {
+    "Manual Test Run": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule every 15 minutes (disabled until you are ready)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Prepare Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Settings": {
+      "main": [
+        [
+          {
+            "node": "Source is ServiceTitan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source is ServiceTitan?": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Source is CSV?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Jobs": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Appointments": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Appointment Assignments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Appointment Assignments": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Technicians",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Technicians": {
+      "main": [
+        [
+          {
+            "node": "Normalize ServiceTitan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize ServiceTitan": {
+      "main": [
+        [
+          {
+            "node": "Unassigned Aging Watch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source is CSV?": {
+      "main": [
+        [
+          {
+            "node": "Read CSV Exports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load Built-in Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV Exports": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV Exports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV Exports": {
+      "main": [
+        [
+          {
+            "node": "Unassigned Aging Watch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Built-in Test Data": {
+      "main": [
+        [
+          {
+            "node": "Unassigned Aging Watch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unassigned Aging Watch": {
+      "main": [
+        [
+          {
+            "node": "Assemble Aging Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Aging Alert": {
+      "main": [
+        [
+          {
+            "node": "Send email to owner?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Slack to owner?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email to owner?": {
+      "main": [
+        [
+          {
+            "node": "Email owner (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack to owner?": {
+      "main": [
+        [
+          {
+            "node": "Post to owner Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Chicago"
+  }
+}

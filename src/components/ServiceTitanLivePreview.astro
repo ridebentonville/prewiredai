@@ -1,0 +1,477 @@
+---
+/**
+ * Interactive sample preview for the ServiceTitan Dispatch & Capacity Copilot page.
+ * Fictional sample only. Lightweight vanilla JS/CSS, no extra dependencies.
+ */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
+const accent = "#1f4d3a";
+const demoSrc = "/videos/servicetitan-dispatch-copilot-demo.mp4";
+const demoExists = existsSync(
+  join(process.cwd(), "public", "videos", "servicetitan-dispatch-copilot-demo.mp4"),
+);
+---
+
+<section class="border-b border-stone-200" aria-labelledby="preview-heading">
+  <div class="mx-auto max-w-6xl px-6 py-12 sm:px-10">
+    <h2 id="preview-heading" class="text-xl font-medium tracking-tight text-stone-950">
+      Live Preview: What Your Dispatcher Sees
+    </h2>
+    <div class="mt-3 h-1 w-10 rounded-full" style={`background-color: ${accent}`}></div>
+    <p class="mt-4 max-w-3xl text-sm leading-relaxed text-stone-600">
+      A fictional sample for a 14-truck HVAC and plumbing shop (&ldquo;Cedar Ridge Mechanical&rdquo;).
+      Not live ServiceTitan data, and not a measured customer result. Click a tab to see the 7:00 AM
+      digest, the 15-minute aging alert, and the read-only path from the board to your phone.
+    </p>
+
+    {
+      demoExists && (
+        <div class="mt-8">
+          <h3 class="text-sm font-medium text-stone-950">60-second walkthrough</h3>
+          <p class="mt-1 text-sm leading-relaxed text-stone-600">
+            A faceless preview of the digest, the aging alert, and zero board write-back. No camera, no live account.
+          </p>
+          <div class="mt-4 overflow-hidden rounded-2xl border border-stone-200 bg-black">
+            <video
+              class="block aspect-video w-full"
+              controls
+              playsinline
+              preload="metadata"
+              title="ServiceTitan Dispatch & Capacity Copilot walkthrough (sample)"
+            >
+              <source src={demoSrc} type="video/mp4" />
+              Your browser does not support the video tag.{" "}
+              <a href={demoSrc} class="underline">Download the walkthrough</a>.
+            </video>
+          </div>
+        </div>
+      )
+    }
+
+    <div class="st-preview mt-8" data-st-preview>
+      <div class="st-preview__tabs" role="tablist" aria-label="Sample dispatcher preview">
+        <button type="button" role="tab" id="st-tab-digest" aria-controls="st-panel-digest" aria-selected="true" data-tab="digest" class="st-preview__tab is-active">
+          7:00 AM Morning Digest (Slack / Email)
+        </button>
+        <button type="button" role="tab" id="st-tab-aging" aria-controls="st-panel-aging" aria-selected="false" data-tab="aging" class="st-preview__tab" tabindex="-1">
+          15-Min Unassigned Aging Alert (Slack / SMS)
+        </button>
+        <button type="button" role="tab" id="st-tab-arch" aria-controls="st-panel-arch" aria-selected="false" data-tab="arch" class="st-preview__tab" tabindex="-1">
+          Zero Write-Back Architecture
+        </button>
+      </div>
+
+      <div class="st-preview__stage">
+        <div id="st-panel-digest" role="tabpanel" aria-labelledby="st-tab-digest" data-panel="digest" class="st-preview__panel is-active">
+          <article class="st-card" aria-label="Sample Slack and email morning digest">
+            <header class="st-card__top">
+              <span class="st-card__app">Slack / Email</span>
+              <span class="st-card__time">Tue Mar 10 · 7:00 AM</span>
+            </header>
+            <p class="st-card__channel">#dispatch-owner-only · Cedar Ridge Mechanical (fictional sample)</p>
+            <h3 class="st-card__title">[TEST] Morning Dispatch KPI Digest</h3>
+            <p class="st-card__lede">
+              14 trucks on today&rsquo;s board. Read-only. Owner-only. Built from fictional sample data.
+            </p>
+            <dl class="st-stats">
+              <div>
+                <dt>Trucks</dt>
+                <dd>14</dd>
+              </div>
+              <div>
+                <dt>Open windows</dt>
+                <dd>3</dd>
+              </div>
+              <div>
+                <dt>Missing equipment notes</dt>
+                <dd>2</dd>
+              </div>
+              <div>
+                <dt>Zero-duration flags</dt>
+                <dd>1</dd>
+              </div>
+            </dl>
+            <div class="st-msg">
+              <p class="st-msg__k">Open capacity (next 2 days)</p>
+              <ul>
+                <li>Tue 1:00–3:00 PM · HVAC · 2 open slots (Dana Whitfield)</li>
+                <li>Tue 3:30–5:00 PM · Plumbing · 1 open slot (Priya Voss)</li>
+                <li>Wed 8:00–10:00 AM · HVAC · 1 open slot</li>
+              </ul>
+              <p class="st-msg__k">Booking QA flags</p>
+              <ul>
+                <li>Job J1102 · missing equipment age (air handler, Sample Household 1102)</li>
+                <li>Job J1108 · missing equipment type and age (electrical, Sample Household 1108)</li>
+              </ul>
+              <p class="st-msg__k">Heads-up</p>
+              <ul>
+                <li>Job type &ldquo;Callback / follow-up&rdquo; is set to 0 minutes. Adaptive Capacity will treat it as eating no time on the board.</li>
+              </ul>
+            </div>
+            <p class="st-card__foot">[TEST] Draft pack. Read-only. Zero board write-back. Owner-only delivery.</p>
+          </article>
+        </div>
+
+        <div id="st-panel-aging" role="tabpanel" aria-labelledby="st-tab-aging" data-panel="aging" class="st-preview__panel" hidden>
+          <article class="st-card st-card--alert" aria-label="Sample Slack and SMS unassigned aging alert">
+            <header class="st-card__top">
+              <span class="st-card__app">Slack / SMS</span>
+              <span class="st-card__time">Tue Mar 10 · 10:30 AM</span>
+            </header>
+            <p class="st-card__channel">#dispatch-owner-only · 15-minute watch · threshold 20 min</p>
+            <h3 class="st-card__title">[TEST] Unassigned Aging Alert</h3>
+            <p class="st-card__lede">
+              2 jobs have been sitting in Unassigned past your threshold. Blank skill and zone tags are called out because Dispatch Pro Auto Mode can drop or ping-pong them on a 10-minute reshuffle.
+            </p>
+            <p class="st-sms">
+              [TEST] Aging alert: 2 unassigned jobs past 20 min. 1 blank skill, 1 missing zone. J2001 (32m), J2002 (25m). Zero write-back.
+            </p>
+            <div class="st-msg">
+              <p class="st-msg__k">Aged Unassigned</p>
+              <ul>
+                <li>
+                  <strong>Job J2001</strong> · 32 min unassigned · HVAC · Sample Household 2001 · no tech
+                  <span class="st-pill">Aged 32m</span>
+                </li>
+                <li>
+                  <strong>Job J2002</strong> · 25 min unassigned · Plumbing · Sample Household 2002 · no tech
+                  <span class="st-pill">Aged 25m</span>
+                  <span class="st-pill st-pill--warn">Blank skill</span>
+                </li>
+              </ul>
+              <p class="st-msg__k">Tag callouts</p>
+              <ul>
+                <li>J2002 is missing a skill tag. Auto Mode can silently drop this job when it reshuffles.</li>
+                <li>J2005 is missing a zone assignment. Auto Mode can exclude it from the board rotation.</li>
+              </ul>
+            </div>
+            <p class="st-card__foot">[TEST] Read-only. Zero board write-back. Nothing is assigned, moved, or deleted in ServiceTitan.</p>
+          </article>
+        </div>
+
+        <div id="st-panel-arch" role="tabpanel" aria-labelledby="st-tab-arch" data-panel="arch" class="st-preview__panel" hidden>
+          <div class="st-arch" aria-label="Zero write-back architecture">
+            <p class="st-arch__intro">
+              The dispatcher stays 100% in control. The copilot only reads the board and sends you an alert. It never creates, moves, or deletes a job. Both workflows import inactive, in <strong>[TEST]</strong> mode.
+            </p>
+            <ol class="st-flow">
+              <li class="st-flow__step">
+                <span class="st-flow__n">1</span>
+                <div>
+                  <p class="st-flow__t">ServiceTitan board</p>
+                  <p class="st-flow__d">Jobs, appointments, assignments, and capacity stay where they are. This pack does not write back.</p>
+                </div>
+              </li>
+              <li class="st-flow__branch" aria-hidden="true">
+                <span></span>
+              </li>
+              <li class="st-flow__split">
+                <div class="st-flow__card">
+                  <p class="st-flow__t">The Works / Enterprise</p>
+                  <p class="st-flow__d">Live, GET-only Customer-Built App Keys. No POST, PUT, PATCH, or DELETE.</p>
+                </div>
+                <p class="st-flow__or">or</p>
+                <div class="st-flow__card">
+                  <p class="st-flow__t">Starter / Essentials</p>
+                  <p class="st-flow__d">Same digest and aging alert from a CSV export of your own reports. No API key required.</p>
+                </div>
+              </li>
+              <li class="st-flow__branch" aria-hidden="true">
+                <span></span>
+              </li>
+              <li class="st-flow__step">
+                <span class="st-flow__n">2</span>
+                <div>
+                  <p class="st-flow__t">n8n (your instance)</p>
+                  <p class="st-flow__d">Two read-only workflows: the 7:00 AM digest and the 15-minute Unassigned-Job Aging Watch. Both ship inactive, with [TEST] on.</p>
+                </div>
+              </li>
+              <li class="st-flow__branch" aria-hidden="true">
+                <span></span>
+              </li>
+              <li class="st-flow__step">
+                <span class="st-flow__n">3</span>
+                <div>
+                  <p class="st-flow__t">Slack / Email to the owner</p>
+                  <p class="st-flow__d">One morning digest and mid-day aging alerts. Never sent to a customer. Never written back to the board.</p>
+                </div>
+              </li>
+            </ol>
+            <p class="st-arch__stop">
+              <strong>Zero write-back.</strong> If Auto Mode is ping-ponging jobs, this pack flags the missing tags and aged Unassigned rows. Your dispatcher decides what to change.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .st-preview__tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .st-preview__tab {
+    border: 1px solid #e7e5e4;
+    background: #fff;
+    color: #44403c;
+    border-radius: 9999px;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    cursor: pointer;
+  }
+  .st-preview__tab:hover {
+    border-color: #a8a29e;
+  }
+  .st-preview__tab:focus-visible {
+    outline: 2px solid var(--accent, #1f4d3a);
+    outline-offset: 2px;
+  }
+  .st-preview__tab.is-active {
+    background: var(--accent, #1f4d3a);
+    border-color: var(--accent, #1f4d3a);
+    color: #fff;
+  }
+  .st-preview__stage {
+    margin-top: 1.25rem;
+  }
+  .st-preview__panel[hidden] {
+    display: none;
+  }
+  .st-card,
+  .st-arch {
+    border: 1px solid #e7e5e4;
+    background: #fff;
+    border-radius: 1rem;
+    padding: 1.25rem 1.35rem;
+  }
+  .st-card__top {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #78716c;
+  }
+  .st-card__channel {
+    margin-top: 0.35rem;
+    font-size: 0.8125rem;
+    color: #57534e;
+  }
+  .st-card__title {
+    margin-top: 0.85rem;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: #0c0a09;
+  }
+  .st-card__lede {
+    margin-top: 0.45rem;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: #44403c;
+  }
+  .st-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin: 1.1rem 0;
+  }
+  @media (min-width: 640px) {
+    .st-stats {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  .st-stats div {
+    border: 1px solid #e7e5e4;
+    border-radius: 0.75rem;
+    background: #fafaf9;
+    padding: 0.7rem 0.8rem;
+  }
+  .st-stats dt {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #78716c;
+  }
+  .st-stats dd {
+    margin-top: 0.2rem;
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: #0c0a09;
+  }
+  .st-msg__k {
+    margin-top: 0.9rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #1f4d3a;
+  }
+  .st-msg ul {
+    margin: 0.35rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .st-msg li {
+    position: relative;
+    margin-top: 0.35rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 0.5rem;
+    background: #f5f5f4;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: #292524;
+  }
+  .st-card__foot {
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    color: #78716c;
+  }
+  .st-sms {
+    margin-top: 0.9rem;
+    border-left: 3px solid var(--accent, #1f4d3a);
+    background: #f0f4f1;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #1c1917;
+  }
+  .st-pill {
+    display: inline-block;
+    margin-left: 0.35rem;
+    border-radius: 9999px;
+    background: #1f4d3a;
+    color: #fff;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.45rem;
+    vertical-align: middle;
+  }
+  .st-pill--warn {
+    background: #9a3412;
+  }
+  .st-arch__intro,
+  .st-arch__stop,
+  .st-flow__d {
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: #44403c;
+  }
+  .st-arch__stop {
+    margin-top: 1.1rem;
+    border-radius: 0.75rem;
+    border: 1px solid #d6d3d1;
+    background: #fafaf9;
+    padding: 0.8rem 0.9rem;
+  }
+  .st-flow {
+    margin: 1.1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .st-flow__step {
+    display: flex;
+    gap: 0.85rem;
+    align-items: flex-start;
+    border: 1px solid #e7e5e4;
+    border-radius: 0.85rem;
+    background: #fafaf9;
+    padding: 0.85rem 0.95rem;
+  }
+  .st-flow__n {
+    flex: 0 0 1.6rem;
+    height: 1.6rem;
+    border-radius: 9999px;
+    background: var(--accent, #1f4d3a);
+    color: #fff;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .st-flow__t {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #0c0a09;
+  }
+  .st-flow__branch {
+    display: flex;
+    justify-content: center;
+    height: 1.1rem;
+  }
+  .st-flow__branch span {
+    width: 1px;
+    background: #a8a29e;
+  }
+  .st-flow__split {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
+  @media (min-width: 768px) {
+    .st-flow__split {
+      grid-template-columns: 1fr auto 1fr;
+      align-items: stretch;
+    }
+  }
+  .st-flow__card {
+    border: 1px solid #e7e5e4;
+    border-radius: 0.85rem;
+    background: #fff;
+    padding: 0.85rem 0.95rem;
+  }
+  .st-flow__or {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #78716c;
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector("[data-st-preview]");
+    if (!root) return;
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[role="tab"]'));
+    var panels = Array.prototype.slice.call(root.querySelectorAll('[role="tabpanel"]'));
+    function activate(name, focusTab) {
+      tabs.forEach(function (tab) {
+        var on = tab.getAttribute("data-tab") === name;
+        tab.classList.toggle("is-active", on);
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+        tab.tabIndex = on ? 0 : -1;
+        if (on && focusTab) tab.focus();
+      });
+      panels.forEach(function (panel) {
+        var on = panel.getAttribute("data-panel") === name;
+        panel.classList.toggle("is-active", on);
+        if (on) panel.removeAttribute("hidden");
+        else panel.setAttribute("hidden", "");
+      });
+    }
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener("click", function () {
+        activate(tab.getAttribute("data-tab"), false);
+      });
+      tab.addEventListener("keydown", function (event) {
+        var next = i;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (i + 1) % tabs.length;
+        else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (i - 1 + tabs.length) % tabs.length;
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        activate(tabs[next].getAttribute("data-tab"), true);
+      });
+    });
+  })();
+</script>

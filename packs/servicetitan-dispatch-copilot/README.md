@@ -1,6 +1,6 @@
-# ServiceTitan Dispatch & Capacity Copilot (DRAFT v0.1.0)
+# ServiceTitan Dispatch & Capacity Copilot (DRAFT v0.2.0)
 
-Four short reports for the Operations Manager of an HVAC, plumbing, or electrical shop. They help dispatch catch thin job details, fill open schedule time, see yesterday's numbers, and start the morning knowing what happened overnight.
+Four short morning reports, plus a 15-minute Unassigned-Job Aging Watch, for the Operations Manager of an HVAC, plumbing, or electrical shop. They help dispatch catch thin job details, fill open schedule time, see yesterday's numbers, start the morning knowing what happened overnight, and get a mid-day alert when jobs sit in Unassigned or are missing the skill and zone tags Dispatch Pro Auto Mode needs.
 
 **Status: draft. It has not been tested against a live ServiceTitan account (or a live Gmail or Slack account).** Everything in this folder was checked against made-up sample data only. A 10-Day Founding Client Pilot is the planned way to prove it on your own data; nothing is for sale yet.
 
@@ -10,8 +10,9 @@ Four short reports for the Operations Manager of an HVAC, plumbing, or electrica
 2. **Open-capacity and unsold-estimate filler.** Finds open schedule windows in the next two days and pairs them with customers whose maintenance agreement is overdue (30+ days by default) and customers with an open estimate nobody has touched (7+ days by default). The result is a **callback queue for your dispatchers**. A person decides who to call. It does not text or email anyone.
 3. **Morning Dispatch KPI digest.** Technician utilization, response time on emergency and same-day jobs, open capacity, and unworked estimates, for the previous day. If a number cannot be worked out from the data, you get a "Heads-up" line instead of a guess.
 4. **After-hours handoff summary.** Overnight emergency calls (5:00 PM to 7:00 AM by default) in one brief for the morning shift, with the calls that still need action listed first.
+5. **Unassigned-Job Aging Watch (v0.2, companion workflow).** A 15-minute read-only poll that flags jobs sitting in Unassigned past a configurable threshold (default 20 minutes; use 15–20 to match your shop), blank skill tags, missing zone assignments, and multi-tech / multi-day jobs that Dispatch Pro Auto Mode can silently drop or ping-pong. The alert goes to you only. Nothing is written back to the board.
 
-All four arrive together in one message to **you, the owner** (email and/or Slack), at 7:00 AM Central once you turn it on.
+The first four arrive together in one message to **you, the owner** (email and/or Slack), at 7:00 AM Central once you turn that workflow on. The Aging Watch is a separate workflow with its own disabled 15-minute Schedule, so you can turn it on independently.
 
 ## Who it is for
 
@@ -19,17 +20,17 @@ Operations Managers and owners of HVAC, plumbing, and electrical shops that run 
 
 ## Safety defaults
 
-- **Imported inactive.** Nothing runs until you switch it on, and the Schedule node is switched off.
+- **Imported inactive.** Nothing runs until you switch it on, and every Schedule node is switched off (the 7:00 AM digest and the 15-minute Aging Watch each have their own).
 - **Test mode on.** Every message is labeled **[TEST]**. The default source is built-in fictional data, so a first run touches nothing of yours.
-- **Read-only.** The ServiceTitan steps are GET requests only. No creating, changing, or deleting anything in ServiceTitan. The spreadsheet path only reads files.
+- **Read-only / zero board write-back.** The ServiceTitan steps are GET requests only. No creating, changing, assigning, or deleting anything in ServiceTitan. The spreadsheet path only reads files. Your dispatcher stays 100% in control.
 - **Draft-only callback queue.** It is an internal list.
 - **Never contacts customers.** There is no text-message, Twilio, or customer-email step anywhere in the workflow. The only things it can send are one email to your owner address and one Slack post to your channel.
 - **No guessed numbers.** Missing data shows up as a Heads-up.
 
 ## Setup in short
 
-1. Import `workflow.n8n.json` into n8n.
-2. Leave **source** on `test` and click Execute workflow on **Manual Test Run**. Compare the result to `sample_test_digest.md`.
+1. Import `workflow.n8n.json` (morning digest) and `unassigned-aging-watch.json` (15-minute Aging Watch) into n8n.
+2. Leave **source** on `test` and click Execute workflow on **Manual Test Run** in each file. Compare the digest to `sample_test_digest.md` and the aging alert to `sample_aging_alert.md`.
 3. Export your own reports from ServiceTitan as CSV (see below), set **source** to `csv`, and run again. Still [TEST].
 4. Spot-check the numbers by hand against ServiceTitan.
 5. Only after that, consider the live path and go-live (see "Hard stop").
@@ -62,12 +63,15 @@ All settings live in the **Config** node.
 | `afterHoursStartHour` | 17 | After-hours window starts at this hour (17 = 5 PM) and ends when the digest runs. |
 | `maxItemsPerSection` | 10 | Longest list shown per section. |
 | `historyDays` | 90 | How much job and estimate history the live path asks for. |
+| `agingThresholdMinutes` | 20 | Aging Watch only. How many minutes a job may sit in Unassigned before it is flagged. Use 15–20 to match your shop. |
+
+The Aging Watch has its own Config node with the shared fields above plus `agingThresholdMinutes`. It does not include the digest-only thresholds (replacement age, membership overdue, and so on).
 
 The thresholds are starting points, not industry standards. Set them to match how your shop works.
 
 ## CSV export fallback vs ServiceTitan v2
 
-**CSV export (recommended first).** Export reports from ServiceTitan yourself and save them as six files in `csvFolder`: `technicians.csv`, `jobs.csv`, `capacity.csv`, `memberships.csv`, `estimates.csv`, `calls.csv`. The `fixtures/` folder shows the exact column names. This path reads files only. You may need to rename columns in your export to match.
+**CSV export (recommended first).** Export reports from ServiceTitan yourself and save them as six files in `csvFolder`: `technicians.csv`, `jobs.csv`, `capacity.csv`, `memberships.csv`, `estimates.csv`, `calls.csv`. The `fixtures/` folder shows the exact column names. This path reads files only. You may need to rename columns in your export to match. For the Aging Watch, export a job report as `aging_jobs.csv` (or `jobs.csv` with the extra `skill`, `zone`, `tech_ids`, `unassigned_since`, and `multi_day` columns shown in `fixtures/aging_jobs.csv`).
 
 **ServiceTitan v2 (live, read-only, unverified).** Set `source` to `servicetitan`, attach an n8n OAuth2 (client credentials) credential, and paste your tenant ID and app key into Config. The workflow makes these GET requests, all under `{stApiBase}/{module}/v2/tenant/{tenantId}/`:
 
@@ -91,7 +95,7 @@ The thresholds are starting points, not industry standards. Set them to match ho
 
 ## Hard stop before go-live
 
-Do not turn test mode off or switch the Schedule on until all of these are true:
+Do not turn test mode off or switch either Schedule on until all of these are true:
 
 1. A clean [TEST] run on the sample data.
 2. A clean [TEST] run on **your own** CSV export, with several numbers checked by hand against ServiceTitan.
@@ -111,22 +115,26 @@ Do not turn test mode off or switch the Schedule on until all of these are true:
 
 | File | Purpose |
 | --- | --- |
-| `workflow.n8n.json` | The importable n8n workflow (27 executable nodes, 7 sticky notes). Saved inactive. |
-| `fixtures/` | Fictional sample data: a made-up shop, "Cedar Ridge Mechanical", with HVAC, plumbing, and electrical techs and customers. |
-| `sample_test_digest.md` | The [TEST] digest the workflow produces from the fixtures. Regenerated by the test. |
+| `workflow.n8n.json` | The importable 7:00 AM digest workflow (27 executable nodes, 7 sticky notes). Saved inactive. |
+| `unassigned-aging-watch.json` | The importable 15-minute Unassigned-Job Aging Watch (20 executable nodes, 7 sticky notes). Saved inactive. |
+| `fixtures/` | Fictional sample data: a made-up shop, "Cedar Ridge Mechanical", with HVAC, plumbing, and electrical techs and customers, plus aging-watch jobs. |
+| `sample_test_digest.md` | The [TEST] digest the morning workflow produces from the fixtures. Regenerated by the test. |
+| `sample_aging_alert.md` | The [TEST] aging alert the companion workflow produces from the aging fixtures. Regenerated by the test. |
 | `mock_servicetitan_test.cjs` | Test harness. Needs Node 18+. No network. |
-| `dispatch_logic.cjs` | The logic behind the Code nodes. |
+| `dispatch_logic.cjs` | The logic behind the Code nodes in both workflows. |
 | `build_workflow.cjs` | Rebuilds `workflow.n8n.json` from the logic and fixtures. |
+| `build_aging_workflow.cjs` | Rebuilds `unassigned-aging-watch.json` from the logic and aging fixtures. |
 | `CHANGELOG.md` | Version history. |
 
 ## Checking the pack
 
 ```bash
-node packs/servicetitan-dispatch-copilot/build_workflow.cjs        # only after editing the logic or fixtures
+node packs/servicetitan-dispatch-copilot/build_workflow.cjs        # only after editing the digest logic or fixtures
+node packs/servicetitan-dispatch-copilot/build_aging_workflow.cjs  # only after editing the aging logic or fixtures
 node packs/servicetitan-dispatch-copilot/mock_servicetitan_test.cjs
 ```
 
-The test checks that the workflow is inactive and read-only, that the schedule is disabled, that nothing can message a customer, and that no secrets are present. It then runs the Code nodes pulled from the workflow JSON against the fixtures, asserts the expected flags and numbers, and rewrites `sample_test_digest.md`. It exits 0 only if everything passes.
+The test checks that both workflows are inactive and read-only, that both schedules are disabled, that nothing can message a customer, and that no secrets are present. It then runs the Code nodes pulled from each workflow JSON against the fixtures, asserts the expected flags and numbers (including aging thresholds, blank skill/zone detection, multi-tech/multi-day exclusions, and [TEST] labeling), and rewrites `sample_test_digest.md` and `sample_aging_alert.md`. It exits 0 only if everything passes.
 
 ## License and credit
 

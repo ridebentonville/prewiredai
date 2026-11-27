@@ -707,8 +707,376 @@ function loadTestData(settings, dataset) {
   });
 }
 
+// @@SECTION aging
+const AGING_DEFAULT_THRESHOLD_MINUTES = 20;
+const OPEN_JOB_STATUSES = ['unassigned', 'scheduled', 'pending', 'open', 'dispatched', 'in progress', 'hold', 'on hold'];
+const TERMINAL_JOB_STATUSES = ['completed', 'canceled', 'cancelled', 'closed', 'done'];
+
+function agingThresholdMinutes(s) {
+  return toNum(s && s.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);
+}
+
+function prepareAgingSettings(cfg, nowMs) {
+  const s = prepareSettings(cfg, nowMs);
+  const n = toNum(cfg && cfg.agingThresholdMinutes, AGING_DEFAULT_THRESHOLD_MINUTES);
+  s.agingThresholdMinutes = n > 0 ? n : AGING_DEFAULT_THRESHOLD_MINUTES;
+  return s;
+}
+
+function splitIds(v) {
+  if (isBlank(v)) return [];
+  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);
+  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+}
+
+function uniqueIds(list) {
+  const out = [];
+  const seen = {};
+  (list || []).forEach(function (id) {
+    const s = String(id || '').trim();
+    if (!s || seen[s]) return;
+    seen[s] = true;
+    out.push(s);
+  });
+  return out;
+}
+
+function jobTechIds(job) {
+  const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));
+  if (fromList.length) return fromList;
+  return uniqueIds(splitIds(job.techId || job.tech_id));
+}
+
+function isTerminalJob(job) {
+  return TERMINAL_JOB_STATUSES.indexOf(lc(job.status)) !== -1;
+}
+
+function isOpenJob(job) {
+  if (isTerminalJob(job)) return false;
+  const st = lc(job.status);
+  if (!st) return jobTechIds(job).length === 0;
+  return OPEN_JOB_STATUSES.indexOf(st) !== -1;
+}
+
+function isUnassignedJob(job) {
+  if (!isOpenJob(job)) return false;
+  if (lc(job.status) === 'unassigned') return true;
+  return jobTechIds(job).length === 0;
+}
+
+function jobSpansMultipleLocalDays(job, tz) {
+  if (toBool(job.multiDay, false)) return true;
+  const start = parseTime(job.start);
+  const end = parseTime(job.end);
+  if (start === null || end === null) return false;
+  return localDate(start, tz) !== localDate(end, tz);
+}
+
+function unassignedClock(job) {
+  const t = parseTime(job.unassignedSince);
+  if (t !== null) return t;
+  return parseTime(job.bookedAt);
+}
+
+function agingMinutes(job, asOfMs) {
+  const clock = unassignedClock(job);
+  if (clock === null || asOfMs === null) return null;
+  return Math.floor((asOfMs - clock) / 60000);
+}
+
+function mapAgingJob(r) {
+  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));
+  return {
+    id: String(r.job_id || r.id || ''),
+    bookedAt: r.booked_at || r.bookedAt || '',
+    unassignedSince: r.unassigned_since || r.unassignedSince || '',
+    start: r.scheduled_start || r.start || '',
+    end: r.scheduled_end || r.end || '',
+    status: r.status || '',
+    techId: techIds[0] || '',
+    techIds: techIds,
+    skill: r.skill || '',
+    zone: r.zone || '',
+    customerName: r.customer_name || r.customerName || '',
+    customerPhone: r.customer_phone || r.customerPhone || '',
+    customerType: r.customer_type || r.customerType || '',
+    jobType: r.job_type || r.jobType || '',
+    equipmentType: r.equipment_type || r.equipmentType || '',
+    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),
+    address: r.address || '',
+    priority: r.priority || '',
+    businessUnit: r.business_unit || r.businessUnit || '',
+    summary: r.summary || '',
+    multiDay: toBool(r.multi_day || r.multiDay, false),
+  };
+}
+
+function datasetFromAgingTables(settings, tables) {
+  const t = tables || {};
+  const headsUp = [];
+  const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);
+  if (!jobsTable) headsUp.push('CSV export "aging_jobs.csv" or "jobs.csv" was not found. The aging watch is skipped.');
+  const technicians = (t.technicians || []).map(function (r) {
+    return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };
+  });
+  const techName = {};
+  technicians.forEach(function (tech) { techName[tech.id] = tech.name; });
+  const jobs = (jobsTable || []).map(function (r) {
+    const job = mapAgingJob(r);
+    job.assignedTechNames = job.techIds.map(function (id) { return techName[id] || id; });
+    return job;
+  });
+  return {
+    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),
+    technicians: technicians,
+    jobs: jobs,
+  };
+}
+
+function normalizeAgingServiceTitan(settings, raw) {
+  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : (Array.isArray(r) ? r : []); };
+  const headsUp = (settings.headsUp || []).concat([
+    'ServiceTitan live mapping for the Unassigned Aging Watch is an unverified first draft. Skill tags and zone assignments are not always present on the job record, so a missing field is flagged rather than guessed. The CSV export path is the recommended way to start.',
+  ]);
+  Object.keys(raw || {}).forEach(function (name) {
+    const r = raw[name];
+    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan "' + name + '" read returned no usable data.');
+    else if (r.hasMore === true) headsUp.push('ServiceTitan "' + name + '" has more pages than this draft reads. Totals may be incomplete.');
+  });
+  const techName = {};
+  rows(raw.technicians).forEach(function (t) { techName[String(t.id)] = t.name || ('Technician ' + t.id); });
+  const assignByJob = {};
+  rows(raw.assignments).forEach(function (a) {
+    const jobId = String(a.jobId || a.jobID || '');
+    if (!jobId) return;
+    if (!assignByJob[jobId]) assignByJob[jobId] = [];
+    if (a.technicianId !== undefined && a.technicianId !== null && String(a.technicianId).trim() !== '') {
+      assignByJob[jobId].push(String(a.technicianId));
+    }
+  });
+  const apptByJob = {};
+  rows(raw.appointments).forEach(function (a) {
+    const jobId = String(a.jobId || a.jobID || '');
+    if (!jobId) return;
+    if (!apptByJob[jobId]) apptByJob[jobId] = a;
+  });
+  const jobs = rows(raw.jobs).map(function (j) {
+    const id = String(j.jobNumber || j.id);
+    const a = apptByJob[j.id] || apptByJob[id] || {};
+    const techIds = uniqueIds(assignByJob[j.id] || assignByJob[id] || []);
+    const skill = j.skill || (j.skills && j.skills[0] && (j.skills[0].name || j.skills[0])) || (j.jobType && j.jobType.name) || '';
+    const zone = j.zone || j.zoneName || (j.territory && (j.territory.name || j.territory)) || j.businessUnitLocation || '';
+    return {
+      id: id,
+      bookedAt: j.createdOn || j.bookedOn || '',
+      unassignedSince: j.unassignedOn || j.unassignedSince || '',
+      start: a.start || j.scheduledStart || '',
+      end: a.end || j.scheduledEnd || '',
+      status: j.jobStatus || j.status || '',
+      techId: techIds[0] || '',
+      techIds: techIds,
+      skill: skill ? String(skill) : '',
+      zone: zone ? String(zone) : '',
+      customerName: j.customerId ? 'Customer #' + j.customerId : '',
+      customerPhone: '',
+      customerType: '',
+      jobType: (j.jobType && j.jobType.name) ? j.jobType.name : String(j.type || ''),
+      equipmentType: '',
+      equipmentAgeYears: null,
+      address: j.locationId ? 'Location #' + j.locationId : '',
+      priority: j.priority || '',
+      businessUnit: j.businessUnitId ? String(j.businessUnitId) : (j.businessUnit && j.businessUnit.name ? j.businessUnit.name : ''),
+      summary: j.summary || '',
+      multiDay: false,
+      assignedTechNames: techIds.map(function (tid) { return techName[tid] || tid; }),
+    };
+  });
+  const technicians = rows(raw.technicians).map(function (t) {
+    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '' };
+  });
+  return {
+    settings: Object.assign({}, settings, { headsUp: headsUp }),
+    technicians: technicians,
+    jobs: jobs,
+  };
+}
+
+function fmtAgingWindow(startMs, endMs, tz) {
+  if (startMs === null || endMs === null) return 'no window';
+  if (localDate(startMs, tz) === localDate(endMs, tz)) return fmtWindow(startMs, endMs, tz);
+  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtDay(endMs, tz) + ' ' + fmtTime(endMs, tz);
+}
+
+function agingJobLabel(job, tz) {
+  const techs = (job.assignedTechNames && job.assignedTechNames.length)
+    ? job.assignedTechNames.join(', ')
+    : (jobTechIds(job).length ? jobTechIds(job).join(', ') : 'no tech');
+  const bu = isBlank(job.businessUnit) ? 'trade n/a' : job.businessUnit;
+  const who = isBlank(job.customerName) ? 'customer n/a' : job.customerName;
+  const window = fmtAgingWindow(parseTime(job.start), parseTime(job.end), tz);
+  return 'Job ' + job.id + ' | ' + window + ' | ' + bu + ' | ' + who + ' | tech: ' + techs;
+}
+
+function unassignedAgingWatch(data) {
+  const s = data.settings || {};
+  const tz = s.timezone || 'America/Chicago';
+  const asOfMs = parseTime(s.asOf);
+  const threshold = agingThresholdMinutes(s);
+  const hu = (s.headsUp || []).slice();
+  if (asOfMs === null) hu.push('asOf time is missing, so unassigned age could not be computed.');
+  const agedUnassigned = [];
+  const blankSkill = [];
+  const missingZone = [];
+  const autoModeExclusionRisk = [];
+  (data.jobs || []).forEach(function (job) {
+    if (!isOpenJob(job)) return;
+    const flags = [];
+    const mins = isUnassignedJob(job) ? agingMinutes(job, asOfMs) : null;
+    if (isUnassignedJob(job) && mins !== null && mins >= threshold) {
+      flags.push({ code: 'aged_unassigned', minutes: mins, text: 'Sitting in Unassigned for ' + mins + ' min (threshold ' + threshold + ' min).' });
+    }
+    if (isBlank(job.skill)) {
+      flags.push({ code: 'blank_skill', text: 'Blank skill tag. Dispatch Pro Auto Mode can silently drop or ping-pong this job when it reshuffles.' });
+    }
+    if (isBlank(job.zone)) {
+      flags.push({ code: 'missing_zone', text: 'Missing zone assignment. Auto Mode can exclude this job when it reshuffles.' });
+    }
+    const techs = jobTechIds(job);
+    const multiTech = techs.length > 1;
+    const multiDay = jobSpansMultipleLocalDays(job, tz);
+    if (multiTech || multiDay) {
+      const why = [];
+      if (multiTech) why.push('multi-tech (' + techs.length + ' technicians)');
+      if (multiDay) why.push('multi-day');
+      flags.push({ code: 'automode_exclusion', kind: multiTech && multiDay ? 'multi-tech-multi-day' : (multiTech ? 'multi-tech' : 'multi-day'), text: 'Auto Mode exclusion risk: ' + why.join(' and ') + '. Dispatch Pro can silently leave this in Unassigned or ping-pong it on each 10-minute reshuffle.' });
+    }
+    if (flags.length === 0) return;
+    const row = {
+      jobId: job.id,
+      status: job.status || '',
+      businessUnit: job.businessUnit || '',
+      customerName: job.customerName || '',
+      customerPhone: job.customerPhone || '',
+      address: job.address || '',
+      skill: job.skill || '',
+      zone: job.zone || '',
+      assignedTech: techs.length ? techs.join(', ') : '',
+      unassignedMinutes: mins,
+      label: agingJobLabel(job, tz),
+      flags: flags,
+    };
+    if (flags.some(function (f) { return f.code === 'aged_unassigned'; })) agedUnassigned.push(row);
+    if (flags.some(function (f) { return f.code === 'blank_skill'; })) blankSkill.push(row);
+    if (flags.some(function (f) { return f.code === 'missing_zone'; })) missingZone.push(row);
+    if (flags.some(function (f) { return f.code === 'automode_exclusion'; })) autoModeExclusionRisk.push(row);
+  });
+  const sortAged = function (a, b) { return (b.unassignedMinutes || 0) - (a.unassignedMinutes || 0); };
+  const sortId = function (a, b) { return String(a.jobId).localeCompare(String(b.jobId)); };
+  agedUnassigned.sort(sortAged);
+  blankSkill.sort(sortId);
+  missingZone.sort(sortId);
+  autoModeExclusionRisk.sort(sortId);
+  const flaggedIds = {};
+  agedUnassigned.concat(blankSkill, missingZone, autoModeExclusionRisk).forEach(function (r) { flaggedIds[r.jobId] = true; });
+  return {
+    computed: asOfMs !== null,
+    thresholdMinutes: threshold,
+    reviewedCount: (data.jobs || []).filter(isOpenJob).length,
+    agedCount: agedUnassigned.length,
+    blankSkillCount: blankSkill.length,
+    missingZoneCount: missingZone.length,
+    autoModeExclusionCount: autoModeExclusionRisk.length,
+    flaggedJobCount: Object.keys(flaggedIds).length,
+    agedUnassigned: agedUnassigned,
+    blankSkill: blankSkill,
+    missingZone: missingZone,
+    autoModeExclusionRisk: autoModeExclusionRisk,
+    headsUp: hu,
+  };
+}
+
+function renderAgingAlert(data) {
+  const s = data.settings;
+  const watch = data.agingWatch || unassignedAgingWatch(data);
+  const tz = s.timezone;
+  const asOf = parseTime(s.asOf);
+  const tag = s.testMode ? '[TEST] ' : '';
+  const L = [];
+  L.push('# ' + tag + 'Unassigned Aging Alert: ' + s.businessName);
+  L.push('');
+  L.push((asOf !== null ? fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) : 'time n/a') + ' ' + tz + '. source: ' + s.source + '.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));
+  L.push('Read-only. Zero board write-back. Owner-only delivery. Nothing is assigned, moved, or deleted in ServiceTitan.');
+  L.push('');
+  L.push('Threshold: jobs sitting in Unassigned for ' + watch.thresholdMinutes + '+ minutes. Open jobs reviewed: ' + watch.reviewedCount + '. Flagged jobs: ' + watch.flaggedJobCount + '.');
+  L.push('- Aged Unassigned: ' + watch.agedCount);
+  L.push('- Blank skill tags: ' + watch.blankSkillCount);
+  L.push('- Missing zone assignments: ' + watch.missingZoneCount);
+  L.push('- Auto Mode exclusion risk (multi-tech / multi-day): ' + watch.autoModeExclusionCount);
+  if (watch.headsUp && watch.headsUp.length) {
+    L.push('');
+    watch.headsUp.forEach(function (h) { L.push('Heads-up: ' + h); });
+  }
+  const section = function (title, rows, empty) {
+    L.push('');
+    L.push('## ' + title);
+    L.push('');
+    if (!rows.length) {
+      L.push('- ' + empty);
+      return;
+    }
+    rows.forEach(function (r) {
+      L.push('- ' + r.label);
+      r.flags.forEach(function (f) { L.push('  - ' + f.text); });
+    });
+  };
+  section('Aged Unassigned', watch.agedUnassigned, 'No jobs have been sitting in Unassigned past the threshold.');
+  section('Blank skill tags', watch.blankSkill, 'No open jobs are missing a skill tag.');
+  section('Missing zone assignments', watch.missingZone, 'No open jobs are missing a zone assignment.');
+  section('Auto Mode exclusion risk (multi-tech / multi-day)', watch.autoModeExclusionRisk, 'No open multi-tech or multi-day jobs were found.');
+  L.push('');
+  L.push('---');
+  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Zero board write-back. Owner-only delivery.');
+  const text = L.join('\n');
+  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  const placeholderEmail = !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.ownerEmail) || /@example\.(com|org|net)$/i.test(s.ownerEmail);
+  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';
+  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';
+  const smsParts = [
+    tag.trim() + (s.testMode ? ' ' : '') + 'Aging alert: ' + watch.agedCount + ' unassigned ' + plural(watch.agedCount, 'job', 'jobs') + ' past ' + watch.thresholdMinutes + ' min',
+    watch.blankSkillCount + ' blank skill, ' + watch.missingZoneCount + ' missing zone, ' + watch.autoModeExclusionCount + ' Auto Mode exclusion ' + plural(watch.autoModeExclusionCount, 'risk', 'risks'),
+  ];
+  if (watch.agedUnassigned.length) {
+    smsParts.push(watch.agedUnassigned.slice(0, 2).map(function (r) { return r.jobId + ' (' + r.unassignedMinutes + 'm)'; }).join(', '));
+  }
+  const smsText = smsParts.join('. ') + '. Zero write-back.';
+  const out = {
+    subject: tag + 'Unassigned Aging Alert: ' + s.businessName + (asOf !== null ? ' (' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ')' : ''),
+    text: text,
+    smsText: smsText,
+    html: '<pre style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap">' + esc(text) + '</pre>',
+    emailTo: s.ownerEmail,
+    slackChannel: s.ownerSlackChannel,
+    sendEmail: wantsEmail && !placeholderEmail,
+    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),
+    testMode: s.testMode,
+    deliveryNotes: [],
+  };
+  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');
+  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');
+  return out;
+}
+
+function loadAgingTestData(settings, dataset) {
+  return Object.assign({}, dataset, {
+    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),
+  });
+}
+
 // @@END
 module.exports = {
-  DEFAULTS, prepareSettings, parseCsv, datasetFromTables, bookingQa, capacityFiller, kpiDigest,
-  afterHoursHandoff, renderMessage, normalizeServiceTitan, loadTestData,
+  DEFAULTS, AGING_DEFAULT_THRESHOLD_MINUTES, prepareSettings, prepareAgingSettings,
+  parseCsv, datasetFromTables, datasetFromAgingTables, bookingQa, capacityFiller, kpiDigest,
+  afterHoursHandoff, renderMessage, normalizeServiceTitan, normalizeAgingServiceTitan,
+  loadTestData, loadAgingTestData, unassignedAgingWatch, renderAgingAlert,
+  isUnassignedJob, isOpenJob, jobTechIds,
 };

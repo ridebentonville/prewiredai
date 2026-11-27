@@ -331,14 +331,14 @@ export const templatePacks: TemplatePack[] = [
   {
     slug: "servicetitan-dispatch-copilot",
     name: "ServiceTitan Dispatch & Capacity Copilot",
-    version: "v0.1.0",
+    version: "v0.2.0",
     category: "field-service",
     filterTags: ["reporting"],
     badge: "New",
     headline:
-      "Four read-only dispatch reports for HVAC, plumbing, and electrical shops: which new bookings are missing details, who to call to fill open schedule time, yesterday's dispatch numbers, and what happened overnight. Sent to you, never to a customer.",
+      "Read-only dispatch reports for HVAC, plumbing, and electrical shops: which new bookings are missing details, who to call to fill open schedule time, yesterday's dispatch numbers, what happened overnight, and a 15-minute alert when jobs sit in Unassigned or are missing skill or zone tags. Sent to you, never to a customer. Zero board write-back.",
     summary:
-      "Booking QA and skill-tier routing flags, a draft callback queue for open capacity, a morning Dispatch KPI digest, and an after-hours handoff brief for the Operations Manager.",
+      "Booking QA and skill-tier routing flags, a draft callback queue for open capacity, a morning Dispatch KPI digest, an after-hours handoff brief, and an Unassigned-Job Aging Watch for the Operations Manager.",
     safety:
       "Zero board write-back: your dispatcher stays in control. Read-only and owner-only. The callback queue is a draft list for dispatchers, and nothing is ever sent to a customer. Test mode and sample data are the default.",
     whoFor:
@@ -348,6 +348,7 @@ export const templatePacks: TemplatePack[] = [
       "Open-capacity and unsold-estimate filler: finds open schedule windows and pairs them with customers whose maintenance agreement is overdue or whose estimate has no activity. The result is a draft callback queue for dispatchers.",
       "Morning Dispatch KPI digest: technician utilization, response time on emergency and same-day jobs, open capacity, and unworked estimates for the previous day. If a number cannot be computed, you get a Heads-up line.",
       "After-hours handoff summary: overnight emergency calls in one brief for the 7:00 AM morning shift, with calls that still need action first.",
+      "Unassigned-Job Aging Watch: a 15-minute read-only poll that flags jobs sitting in Unassigned past a configurable threshold (default 20 minutes), blank skill tags, missing zone assignments, and multi-tech or multi-day jobs that Dispatch Pro Auto Mode can silently drop or ping-pong. It never writes back to the board.",
     ],
     workflows: [
       {
@@ -356,25 +357,31 @@ export const templatePacks: TemplatePack[] = [
         description:
           "Reads sample data, a CSV export, or ServiceTitan (read-only), runs the four dispatch workflows, and sends one message to the owner.",
       },
+      {
+        name: "Unassigned-Job Aging Watch",
+        nodes: 20,
+        description:
+          "A 15-minute read-only poll that alerts the owner about aged Unassigned jobs, blank skill or zone tags, and Auto Mode exclusion risks. Zero board write-back.",
+      },
     ],
-    totalNodes: 27,
-    totalNodesWithNotes: 34,
+    totalNodes: 47,
+    totalNodesWithNotes: 61,
     defaults: [
-      "testMode on: the message is labeled [TEST] and goes only to the owner email or Slack channel you set.",
+      "testMode on: every message is labeled [TEST] and goes only to the owner email or Slack channel you set.",
       "Source defaults to built-in fictional sample data, so the ServiceTitan steps are skipped.",
-      "Imported inactive, and the Schedule node (7:00 AM America/Chicago) is switched off on import.",
+      "Imported inactive, and both Schedule nodes are switched off on import (7:00 AM digest and the 15-minute Aging Watch).",
     ],
     testModeWrites:
       "Nothing is written to ServiceTitan in any mode. In test mode the only output is a [TEST] message to the owner address or channel you set.",
     included: [
-      "One importable n8n workflow (saved inactive)",
+      "Two importable n8n workflows (saved inactive): the 7:00 AM digest and the 15-minute Unassigned-Job Aging Watch",
       "Plain-English README with a field-by-field Config table",
-      "Fictional HVAC, plumbing, and electrical sample data (CSV) and a generated sample [TEST] digest",
-      "A test script that checks the workflow's safety settings and runs its logic against the sample data",
+      "Fictional HVAC, plumbing, and electrical sample data (CSV), a generated sample [TEST] digest, and a sample [TEST] aging alert",
+      "A test script that checks both workflows' safety settings and runs their logic against the sample data",
       "Changelog",
     ],
     guardrails: [
-      "Read-only: the ServiceTitan steps are GET requests only. It does not create, change, or delete anything in ServiceTitan.",
+      "Zero board write-back: the ServiceTitan steps are GET requests only. It does not create, change, assign, or delete anything in ServiceTitan. Your dispatcher stays in control.",
       "No customer messages: the workflow has no SMS, Twilio, or customer-email step.",
       "The callback queue is draft-only. A dispatcher decides who to call.",
       "Routing is a suggestion. It never reassigns a job.",

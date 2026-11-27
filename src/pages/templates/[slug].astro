@@ -5,6 +5,7 @@ import Header from "../../components/Header.astro";
 import Footer from "../../components/Footer.astro";
 import PageHead from "../../components/PageHead.astro";
 import TierTable from "../../components/TierTable.astro";
+import ServiceTitanLivePreview from "../../components/ServiceTitanLivePreview.astro";
 import { siteConfig } from "../../config";
 import {
   categoryLabel,
@@ -155,6 +156,8 @@ const schedulingUrl = siteConfig.schedulingUrl?.trim();
           </section>
         )
       }
+
+      {pack.slug === "servicetitan-dispatch-copilot" && <ServiceTitanLivePreview />}
 
       <section class="border-b border-stone-200" aria-labelledby="does-heading">
         <div class="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-6 py-12 sm:px-10 lg:grid-cols-12 lg:gap-16">
