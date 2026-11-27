@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Test harness for the ServiceTitan Dispatch & Capacity Copilot pack (DRAFT v0.2.0).
+ * Test harness for the ServiceTitan Dispatch & Capacity Copilot pack (DRAFT v0.3.0).
  *
  *   node packs/servicetitan-dispatch-copilot/mock_servicetitan_test.cjs
  *
@@ -15,6 +15,10 @@
  *   4. Overwrites sample_test_digest.md with the [TEST] digest produced by the workflow code.
  *   5. Checks unassigned-aging-watch.json the same way, runs the aging Code nodes, and
  *      overwrites sample_aging_alert.md.
+ *   6. v0.3 CSV-Fallback Mode: tests the Jobs/Dispatch column mapper (human ServiceTitan headers,
+ *      aliases, dates, malformed and empty input, missing required columns), checks
+ *      servicetitan-csv-fallback-triage.json, runs its Code nodes on fixtures/sample-servicetitan-export.csv,
+ *      and overwrites sample_csv_fallback_digest.md.
  * Exit code 0 only if every assertion passes.
  */
 'use strict';
@@ -157,7 +161,7 @@ check('no secret-looking values in the workflow', () => {
 // Pattern is assembled from fragments so this file itself contains none of the banned strings.
 const BANNED = new RegExp([['viv', 'int'], ['bri', 'nks'], ['home\\s*sec', 'urity'], ['smart[-\\s]?', 'home'], ['alarm\\s+', 'company']].map((p) => p.join('')).join('|'), 'i');
 check('no banned brand or category strings in workflow, logic, fixtures, or this test', () => {
-  const files = ['workflow.n8n.json', 'unassigned-aging-watch.json', 'dispatch_logic.cjs', 'build_workflow.cjs', 'build_aging_workflow.cjs', 'README.md', 'CHANGELOG.md']
+  const files = ['workflow.n8n.json', 'unassigned-aging-watch.json', 'dispatch_logic.cjs', 'build_workflow.cjs', 'build_aging_workflow.cjs', 'build_csv_fallback_workflow.cjs', 'servicetitan-csv-fallback-triage.json', 'README.md', 'CHANGELOG.md']
     .concat(fs.readdirSync(path.join(HERE, 'fixtures')).map((f) => path.join('fixtures', f)));
   files.forEach((f) => {
     const t = fs.readFileSync(path.join(HERE, f), 'utf8');
@@ -668,6 +672,637 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.ok(!BANNED.test(t));
   });
 
+  // ---------------- 5b. v0.3 CSV-Fallback: column mapper / normalizer
+  const TZ = 'America/Chicago';
+  const sampleCsvText = fs.readFileSync(path.join(fixtureDir, 'sample-servicetitan-export.csv'), 'utf8');
+  const SAMPLE_REF = fs.readFileSync(path.join(fixtureDir, 'sample_export_reference_time.txt'), 'utf8').trim();
+  const sampleNorm = logic.normalizeJobsExport(sampleCsvText, { timezone: TZ });
+  const jobOf = (id) => sampleNorm.jobs.find((j) => j.id === id);
+
+  check('csv v0.3: sample export parses cleanly (16 data rows, all imported, nothing skipped, no Heads-up)', () => {
+    assert.strictEqual(sampleNorm.ok, true);
+    assert.strictEqual(sampleNorm.rowCount, 16);
+    assert.strictEqual(sampleNorm.importedCount, 16);
+    assert.strictEqual(sampleNorm.jobs.length, 16);
+    assert.deepStrictEqual(sampleNorm.skipped, []);
+    assert.deepStrictEqual(sampleNorm.headsUp, []);
+    assert.deepStrictEqual(sampleNorm.missingRequired, []);
+    assert.strictEqual(logic.parseCsv(sampleCsvText).length, 16);
+    assert.strictEqual(logic.parseCsvTable(sampleCsvText).headers.length, 22);
+  });
+  check('csv v0.3: every sample header maps to an internal field (nothing unmapped)', () => {
+    assert.strictEqual(Object.keys(sampleNorm.mapped).length, 22);
+    assert.strictEqual(sampleNorm.mapped.job_id, 'Job #');
+    assert.strictEqual(sampleNorm.mapped.skill, 'Required Skill');
+    assert.strictEqual(sampleNorm.mapped.booked_at, 'Created On');
+    assert.strictEqual(sampleNorm.mapped.tech_name, 'Technician');
+  });
+  check('csv v0.3: mapped fields land on the exact internal job schema', () => {
+    const j = jobOf('S3012');
+    assert.deepStrictEqual(Object.keys(j).sort(), Object.keys(logic.mapCsvJob({})).concat(['assignedTechNames']).sort());
+    assert.strictEqual(j.status, 'Scheduled');
+    assert.strictEqual(j.start, '2026-03-12T18:00:00.000Z'); // 1:00 PM CDT
+    assert.strictEqual(j.end, '2026-03-12T20:00:00.000Z');
+    assert.strictEqual(j.bookedAt, '2026-03-12T11:20:00.000Z'); // 6:20 AM CDT
+    assert.strictEqual(j.unassignedSince, '2026-03-12T11:20:00.000Z');
+    assert.strictEqual(j.skill, 'Residential HVAC');
+    assert.strictEqual(j.zone, 'North');
+    assert.strictEqual(j.businessUnit, 'HVAC');
+    assert.strictEqual(j.jobType, 'Repair');
+    assert.strictEqual(j.customerName, 'Sample Household 3012');
+    assert.strictEqual(j.customerPhone, '(555) 010-3012');
+    assert.strictEqual(j.customerType, 'residential');
+    assert.strictEqual(j.equipmentType, 'furnace');
+    assert.strictEqual(j.equipmentAgeYears, 12);
+    assert.strictEqual(j.priority, 'same-day');
+    assert.match(j.address, /^36 Sample Cedar Ct/);
+    assert.strictEqual(j.multiDay, false);
+    assert.strictEqual(jobOf('S3017').multiDay, true);
+    assert.strictEqual(jobOf('S3001').arrivedAt, '2026-03-11T13:05:00.000Z');
+    assert.strictEqual(jobOf('S3001').actualMinutes, 105);
+    assert.strictEqual(jobOf('S3010').equipmentAgeYears, null);
+  });
+  check('csv v0.3: technicians are derived from the Technician column (multi-tech split, "Unassigned" text is not a tech)', () => {
+    assert.deepStrictEqual(sampleNorm.technicians.map((t) => t.name).sort(), ['Dana Whitfield', 'Marcus Hale', 'Priya Raman']);
+    assert.deepStrictEqual(jobOf('S3016').techIds, ['Dana Whitfield', 'Marcus Hale']);
+    assert.deepStrictEqual(jobOf('S3016').assignedTechNames, ['Dana Whitfield', 'Marcus Hale']);
+    assert.deepStrictEqual(jobOf('S3015').techIds, []);
+    assert.deepStrictEqual(jobOf('S3012').techIds, []);
+    assert.strictEqual(jobOf('S3010').techId, 'Dana Whitfield');
+  });
+  check('csv v0.3: "Working" status is read as In Progress so an in-flight job counts as open', () => {
+    assert.strictEqual(jobOf('S3020').status, 'In Progress');
+    assert.ok(logic.isOpenJob(jobOf('S3020')));
+  });
+  check('csv v0.3: header aliases map to the right internal field', () => {
+    const table = {
+      job_id: ['Job #', 'Job Number', 'Job No', 'Job ID', 'JobId', 'job_id', 'Invoice #'],
+      status: ['Status', 'Job Status', 'job_status'],
+      scheduled_start: ['Scheduled Start', 'Start', 'Appointment Start', 'scheduled_start'],
+      scheduled_end: ['Scheduled End', 'End', 'Appointment End', 'scheduled_end'],
+      business_unit: ['Business Unit', 'Business Unit Name', 'BU', 'business_unit'],
+      job_type: ['Job Type', 'Type', 'Type of Job', 'job_type'],
+      skill: ['Required Skill', 'Skill', 'Tag', 'Required Tag', 'Job Tag', 'skill'],
+      zone: ['Zone', 'Dispatch Zone', 'Zone Name', 'zone'],
+      tech_name: ['Technician', 'Tech', 'Assigned Technician', 'Technician Name'],
+      tech_id: ['Technician ID', 'tech_id'],
+      tech_ids: ['tech_ids'],
+      customer_name: ['Customer', 'Customer Name', 'customer_name'],
+      booked_at: ['Created On', 'Booked On', 'Date Created', 'Booked At', 'booked_at'],
+      priority: ['Priority'],
+      address: ['Address', 'Location', 'Service Location', 'Service Address'],
+      unassigned_since: ['Unassigned Since', 'Unassigned On', 'unassigned_since'],
+      multi_day: ['Multi-Day', 'Multi Day', 'multi_day'],
+      customer_phone: ['Customer Phone', 'Phone'],
+      customer_type: ['Customer Type'],
+      equipment_type: ['Equipment Type'],
+      equipment_age_years: ['Equipment Age'],
+      summary: ['Summary', 'Job Summary'],
+      arrived_at: ['Arrived At', 'Arrival Time'],
+      actual_minutes: ['Actual Minutes', 'Minutes On Site'],
+    };
+    Object.entries(table).forEach(([key, aliases]) => aliases.forEach((a) => {
+      assert.strictEqual(logic.canonicalizeRows([], logic.JOB_COLUMNS, [a]).mapped[key], a, a + ' -> ' + key);
+    }));
+  });
+  check('csv v0.3: header matching ignores case, whitespace, punctuation, and space/underscore/hyphen differences', () => {
+    ['scheduled start', 'SCHEDULED START', '  Scheduled   Start ', 'scheduled_start', 'Scheduled-Start', 'scheduled.start'].forEach((h) => {
+      assert.strictEqual(logic.canonicalizeRows([], logic.JOB_COLUMNS, [h]).mapped.scheduled_start, h, h);
+    });
+    ['Job #', 'job number', 'JOB_NUMBER', 'job-number', 'Job#'].forEach((h) => {
+      assert.strictEqual(logic.canonicalizeRows([], logic.JOB_COLUMNS, [h]).mapped.job_id, h, h);
+    });
+    assert.strictEqual(logic.headerKey('Job #'), logic.headerKey('Job Number'));
+    assert.strictEqual(logic.headerKey('Multi-Day'), logic.headerKey('multi_day'));
+    assert.strictEqual(logic.headerKey('Multi Day'), logic.headerKey('MULTI-DAY'));
+  });
+  check('csv v0.3: Required Skill wins over Tag when both columns exist, and Technician ID wins for ids while Technician supplies names', () => {
+    const r = logic.normalizeJobsExport('Job #,Status,Scheduled Start,Tag,Required Skill,Technician,Technician ID\nA1,Scheduled,3/12/2026 9:00 AM,tag-x,skill-y,Dana W,T01\n', { timezone: TZ });
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.jobs[0].skill, 'skill-y');
+    assert.deepStrictEqual(r.jobs[0].techIds, ['T01']);
+    assert.deepStrictEqual(r.jobs[0].assignedTechNames, ['Dana W']);
+    assert.deepStrictEqual(r.technicians, [{ tech_id: 'T01', name: 'Dana W', trade: '' }]);
+  });
+  check('csv v0.3: parser handles a BOM, CRLF line endings, quoted commas, and doubled quotes', () => {
+    const txt = '﻿Job #,Status,Scheduled Start,Customer,Address\r\nB1,Scheduled,"3/12/2026 9:00 AM","Smith, ""Bob""","1 Sample Way, Testville"\r\n';
+    const t = logic.parseCsvTable(txt);
+    assert.deepStrictEqual(t.headers, ['Job #', 'Status', 'Scheduled Start', 'Customer', 'Address']);
+    assert.strictEqual(t.rows[0].Customer, 'Smith, "Bob"');
+    assert.strictEqual(t.rows[0].Address, '1 Sample Way, Testville');
+    assert.strictEqual(logic.normalizeJobsExport(txt, { timezone: TZ }).jobs[0].customerName, 'Smith, "Bob"');
+  });
+  check('csv v0.3: date parsing is shop-local, DST-aware, and keeps ISO values with an offset untouched', () => {
+    const z = (v) => logic.toIsoInZone(v, TZ);
+    assert.strictEqual(z('3/10/2026 9:50 AM').iso, '2026-03-10T14:50:00.000Z'); // CDT
+    assert.strictEqual(z('2026-03-10 09:50').iso, '2026-03-10T14:50:00.000Z');
+    assert.strictEqual(z('3/7/2026 9:00 AM').iso, '2026-03-07T15:00:00.000Z'); // still CST the day before the change
+    assert.strictEqual(z('3/8/2026 9:00 AM').iso, '2026-03-08T14:00:00.000Z'); // CDT starts Mar 8
+    assert.strictEqual(z('3/10/2026 12:00 AM').iso, '2026-03-10T05:00:00.000Z');
+    assert.strictEqual(z('3/10/2026 12:30 PM').iso, '2026-03-10T17:30:00.000Z');
+    assert.strictEqual(z('3/10/2026').iso, '2026-03-10T05:00:00.000Z');
+    assert.strictEqual(z('2026-03-10T09:50:00-05:00').iso, '2026-03-10T09:50:00-05:00');
+    assert.strictEqual(z('2026-03-10T09:50:00Z').iso, '2026-03-10T09:50:00Z');
+    assert.strictEqual(z('').iso, '');
+    assert.strictEqual(logic.toIsoInZone('3/10/2026 9:50 AM', 'America/Denver').iso, '2026-03-10T15:50:00.000Z');
+    ['13/45/2026 9:00 AM', 'tomorrow morning', '2/30/2026 9:00 AM', '3/10/2026 13:00 PM'].forEach((bad) => assert.strictEqual(z(bad).bad, true, bad));
+  });
+  check('csv v0.3: malformed rows are skipped or blanked and counted in a Heads-up, never thrown', () => {
+    const txt = [
+      'Job #,Status,Scheduled Start,Scheduled End,Zone',
+      'M1,Scheduled,3/12/2026 9:00 AM,3/12/2026 11:00 AM,North',
+      ',Scheduled,3/12/2026 9:00 AM,3/12/2026 11:00 AM,North',
+      ',,,,',
+      'Total,,,,',
+      'M2,Scheduled,not a date,3/12/2026 11:00 AM,South',
+      'M3,Scheduled,3/12/2026 9:00 AM',
+    ].join('\n');
+    let r;
+    assert.doesNotThrow(() => { r = logic.normalizeJobsExport(txt, { timezone: TZ }); });
+    assert.strictEqual(r.ok, true);
+    assert.deepStrictEqual(r.jobs.map((j) => j.id), ['M1', 'M2', 'M3']);
+    assert.deepStrictEqual(r.skipped.map((s) => s.row), [3, 4]); // blank lines are not counted
+    assert.strictEqual(r.jobs[1].start, ''); // unreadable date left blank
+    assert.strictEqual(r.jobs[2].zone, ''); // short row padded
+    assert.ok(r.headsUp.some((h) => /2 rows .* were skipped.*row 3 \(missing job id\)/.test(h)), r.headsUp.join('|'));
+    assert.ok(r.headsUp.some((h) => /1 date value .* could not be read/.test(h) && /not a date/.test(h)), r.headsUp.join('|'));
+  });
+  check('csv v0.3: an unterminated quote is flagged and does not look like a complete successful import', () => {
+    const txt = [
+      'Job #,Status,Scheduled Start,Summary',
+      'Q1,Scheduled,3/12/2026 9:00 AM,"unclosed summary',
+      'Q2,Unassigned,3/12/2026 10:00 AM,ok',
+    ].join('\n');
+    let r;
+    assert.doesNotThrow(() => { r = logic.normalizeJobsExport(txt, { timezone: TZ }); });
+    assert.strictEqual(r.ok, false);
+    assert.match(r.message, /never closed|swallowed/i);
+    assert.ok(r.headsUp.some((h) => /never closed|swallowed/i.test(h)), r.headsUp.join('|'));
+    assert.ok(r.jobs.length < 2, 'Q2 must not be silently imported as a second complete job after a broken quote');
+    const t = logic.parseCsvTable(txt);
+    assert.ok(t.warnings.some((w) => /never closed|swallowed/i.test(w)), t.warnings.join('|'));
+  });
+  check('csv v0.3: two Jobs exports in one batch use only the last snapshot so an older Completed row cannot hide a current Unassigned job', () => {
+    const older = 'Job #,Status,Scheduled Start,Technician\nJ1,Completed,3/10/2026 9:00 AM,Avery\n';
+    const newer = 'Job #,Status,Scheduled Start,Technician\nJ1,Unassigned,3/12/2026 9:00 AM,\n';
+    const s = logic.prepareAgingSettings({ source: 'csv', asOfOverride: '2026-03-12T07:00:00-05:00' }, 0);
+    const lastWins = logic.datasetFromCsvFiles(s, [
+      { name: 'older.csv', text: older },
+      { name: 'newer.csv', text: newer },
+    ]);
+    assert.strictEqual(lastWins.jobs.length, 1);
+    assert.strictEqual(lastWins.jobs[0].status, 'Unassigned');
+    assert.ok(!lastWins.jobs[0].techId && lastWins.jobs[0].techIds.length === 0);
+    assert.ok(lastWins.settings.headsUp.some((h) => /Only the last one \("newer\.csv"\) was used/.test(h) && /older\.csv/.test(h)), lastWins.settings.headsUp.join('|'));
+    const reversed = logic.datasetFromCsvFiles(s, [
+      { name: 'newer.csv', text: newer },
+      { name: 'older.csv', text: older },
+    ]);
+    assert.strictEqual(reversed.jobs[0].status, 'Completed');
+    assert.ok(reversed.settings.headsUp.some((h) => /Only the last one \("older\.csv"\) was used/.test(h) && /newer\.csv/.test(h)), reversed.settings.headsUp.join('|'));
+  });
+  check('csv v0.3: repeated job rows (one per technician or appointment) merge into one job', () => {
+    const txt = [
+      'Job Number,Job Status,Appointment Start,Appointment End,Technician,Zone',
+      'D1,Scheduled,3/12/2026 9:00 AM,3/12/2026 5:00 PM,Dana Whitfield,North',
+      'D1,Scheduled,3/12/2026 9:00 AM,3/13/2026 10:00 AM,Marcus Hale,',
+    ].join('\n');
+    const r = logic.normalizeJobsExport(txt, { timezone: TZ });
+    assert.strictEqual(r.jobs.length, 1);
+    assert.deepStrictEqual(r.jobs[0].techIds, ['Dana Whitfield', 'Marcus Hale']);
+    assert.strictEqual(r.jobs[0].zone, 'North');
+    assert.strictEqual(r.jobs[0].end, '2026-03-13T15:00:00.000Z');
+    assert.ok(r.headsUp.some((h) => /1 repeated job row was merged/.test(h)));
+    const w = logic.unassignedAgingWatch({ settings: logic.prepareAgingSettings({ source: 'csv', asOfOverride: SAMPLE_REF }, 0), jobs: r.jobs });
+    assert.strictEqual(w.autoModeExclusionRisk[0].flags.find((f) => f.code === 'automode_exclusion').kind, 'multi-tech-multi-day');
+  });
+  check('csv v0.3: empty input (empty string, whitespace, null, no rows array) gives a clear error and no crash', () => {
+    ['', '   \n  ', null, undefined, []].forEach((x) => {
+      let r;
+      assert.doesNotThrow(() => { r = logic.normalizeJobsExport(x, { timezone: TZ }); });
+      assert.strictEqual(r.ok, false);
+      assert.deepStrictEqual(r.jobs, []);
+      assert.match(r.message, /is empty/);
+    });
+  });
+  check('csv v0.3: headers-only CSV gives a clear "no job rows" error', () => {
+    const r = logic.normalizeJobsExport('Job #,Status,Scheduled Start\n', { timezone: TZ });
+    assert.strictEqual(r.ok, false);
+    assert.match(r.message, /header row but no job rows/);
+    assert.deepStrictEqual(r.jobs, []);
+  });
+  check('csv v0.3: missing required columns name each missing field and list the headers that were seen', () => {
+    const r = logic.normalizeJobsExport('Job #,Zone,Customer\nX1,North,Sample\n', { timezone: TZ });
+    assert.strictEqual(r.ok, false);
+    assert.strictEqual(r.missingRequired.length, 2);
+    assert.match(r.message, /missing required column\(s\): Status.*; Scheduled Start/);
+    assert.match(r.message, /Columns found: Job #, Zone, Customer/);
+    assert.deepStrictEqual(r.headersSeen, ['Job #', 'Zone', 'Customer']);
+    assert.ok(!/\bat\s.*\.cjs:\d+/.test(r.message), 'no stack trace in a buyer-facing message');
+    const none = logic.normalizeJobsExport('Foo,Bar\n1,2\n', { timezone: TZ });
+    assert.strictEqual(none.missingRequired.length, 3);
+    assert.throws(() => logic.normalizeJobsExport('Foo,Bar\n1,2\n', { timezone: TZ, strict: true }), /missing required column/);
+  });
+  check('csv v0.3: already-parsed rows (parseCsv output) are accepted and give the same result as the raw text', () => {
+    const fromRows = logic.normalizeJobsExport(logic.parseCsv(sampleCsvText), { timezone: TZ });
+    assert.deepStrictEqual(fromRows.jobs, sampleNorm.jobs);
+  });
+  check('csv v0.3: a bad Jobs export becomes a Heads-up in the dataset, the aging watch still runs, and the alert shows the reason', () => {
+    const s = logic.prepareAgingSettings({ source: 'csv', asOfOverride: SAMPLE_REF }, 0);
+    const ds = logic.datasetFromCsvFiles(s, [{ name: 'export.csv', text: 'Foo,Bar\n1,2\n' }]);
+    assert.deepStrictEqual(ds.jobs, []);
+    assert.ok(ds.settings.headsUp.some((h) => /missing required column/.test(h)));
+    const alert = logic.renderAgingAlert(Object.assign({}, ds, { agingWatch: logic.unassignedAgingWatch(ds) }));
+    assert.match(alert.text, /Heads-up: CSV import: .*missing required column/);
+    const none = logic.datasetFromCsvFiles(s, []);
+    assert.ok(none.settings.headsUp.some((h) => /no CSV file was received/.test(h)));
+    assert.doesNotThrow(() => logic.renderMessage(Object.assign({}, none, { bookingQa: logic.bookingQa(none), capacity: logic.capacityFiller(none), kpis: logic.kpiDigest(none), afterHours: logic.afterHoursHandoff(none) })));
+  });
+
+  // ---------------- 5c. aliased headers still produce the existing results
+  const fixtureFiles = ['technicians', 'jobs', 'capacity', 'memberships', 'estimates', 'calls'];
+  const fixtureText = Object.fromEntries(fixtureFiles.concat(['aging_jobs']).map((n) => [n, fs.readFileSync(path.join(fixtureDir, n + '.csv'), 'utf8')]));
+  const digestOf = (ds) => {
+    let x = ds;
+    x = Object.assign({}, x, { bookingQa: logic.bookingQa(x) });
+    x = Object.assign({}, x, { capacity: logic.capacityFiller(x) });
+    x = Object.assign({}, x, { kpis: logic.kpiDigest(x) });
+    x = Object.assign({}, x, { afterHours: logic.afterHoursHandoff(x) });
+    return { data: x, msg: logic.renderMessage(x) };
+  };
+  check('csv v0.3: snake_case fixture files (any file names) give the identical digest as before', () => {
+    const files = fixtureFiles.map((n, i) => ({ name: 'export-' + i + '.csv', text: fixtureText[n] }));
+    const viaFiles = digestOf(logic.datasetFromCsvFiles(csvRun.data.settings, files));
+    assert.strictEqual(viaFiles.msg.text, csvRun.msg.text);
+    assert.deepStrictEqual(viaFiles.data.bookingQa, csvRun.data.bookingQa);
+    assert.deepStrictEqual(viaFiles.data.kpis, csvRun.data.kpis);
+    assert.deepStrictEqual(viaFiles.data.capacity, csvRun.data.capacity);
+    assert.deepStrictEqual(viaFiles.data.afterHours, csvRun.data.afterHours);
+  });
+  check('csv v0.3: the jobs fixture rewritten with human ServiceTitan headers gives the identical digest', () => {
+    const rename = { job_id: 'Job #', booked_at: 'Created On', scheduled_start: 'Scheduled Start', scheduled_end: 'Scheduled End', status: 'Job Status', tech_id: 'Technician ID', customer_name: 'Customer', customer_phone: 'Phone', customer_type: 'Customer Type', job_type: 'Job Type', equipment_type: 'Equipment Type', equipment_age_years: 'Equipment Age', address: 'Service Address', priority: 'Priority', arrived_at: 'Arrived At', actual_minutes: 'Actual Minutes', business_unit: 'Business Unit', summary: 'Summary' };
+    const lines = fixtureText.jobs.split('\n');
+    lines[0] = lines[0].split(',').map((h) => rename[h.trim()]).join(',');
+    assert.ok(!lines[0].includes('undefined'));
+    const tables = {};
+    fixtureFiles.forEach((n) => { tables[n] = logic.parseCsv(fixtureText[n]); });
+    tables.jobs = logic.parseCsv(lines.join('\n'));
+    const viaAlias = digestOf(logic.datasetFromTables(csvRun.data.settings, tables));
+    assert.strictEqual(viaAlias.msg.text, csvRun.msg.text);
+    assert.deepStrictEqual(viaAlias.data.kpis, csvRun.data.kpis);
+    assert.deepStrictEqual(viaAlias.data.bookingQa, csvRun.data.bookingQa);
+  });
+  check('csv v0.3: aging fixture through the new file loader gives the same flags as before', () => {
+    const files = [{ name: 'dispatch board.csv', text: fixtureText.aging_jobs }, { name: 'techs.csv', text: fixtureText.technicians }];
+    const ds = logic.datasetFromCsvFiles(agingRun.data.settings, files);
+    const w = logic.unassignedAgingWatch(ds);
+    const pick = (x) => ({ a: x.agedUnassigned, b: x.blankSkill, z: x.missingZone, m: x.autoModeExclusionRisk, n: x.reviewedCount, f: x.flaggedJobCount });
+    assert.deepStrictEqual(pick(w), pick(agingRun.data.agingWatch));
+  });
+  check('csv v0.3: optional sibling files with human headers are recognized by their columns, not their names', () => {
+    const techs = 'Technician ID,Name,Trade,Shift Hours,Sales Capable\nDana Whitfield,Dana Whitfield,HVAC,8,Yes\nMarcus Hale,Marcus Hale,Plumbing,8,No\n';
+    const caps = 'Window ID,Business Unit,Window Start,Window End,Open Slots\nW1,HVAC,3/12/2026 1:00 PM,3/12/2026 5:00 PM,2\n';
+    const ds = logic.datasetFromCsvFiles(logic.prepareAgingSettings({ source: 'csv', asOfOverride: SAMPLE_REF }, 0), [
+      { name: 'a.csv', text: sampleCsvText }, { name: 'b.csv', text: caps },
+      { name: 'staff.csv', text: techs },
+    ]);
+    assert.strictEqual(ds.capacityWindows.length, 1);
+    assert.strictEqual(ds.capacityWindows[0].openSlots, 2);
+    assert.strictEqual(ds.capacityWindows[0].start, '2026-03-12T18:00:00.000Z');
+    assert.deepStrictEqual(ds.technicians.map((t) => t.name), ['Dana Whitfield', 'Marcus Hale']);
+    assert.strictEqual(ds.technicians[0].shiftHours, 8);
+    assert.strictEqual(ds.technicians[0].salesCapable, true);
+    assert.ok(!ds.settings.headsUp.some((h) => /"capacity.csv" was not found|technician list was built/.test(h)));
+    assert.ok(ds.settings.headsUp.some((h) => /"memberships.csv" was not found/.test(h)));
+  });
+
+  // ---------------- 5d. aging + digest from the sample export
+  const sampleSettings = logic.prepareAgingSettings({ source: 'csv', businessName: 'Summit Mechanical (fictional sample)', asOfOverride: SAMPLE_REF }, 0);
+  const sampleDs = logic.datasetFromCsvFiles(sampleSettings, [{ name: 'sample-servicetitan-export.csv', text: sampleCsvText }]);
+  const sw = logic.unassignedAgingWatch(sampleDs);
+  const sids = (rows) => rows.map((r) => r.jobId);
+  check('csv aging: sample export reviews 11 open jobs and flags 8 (completed and canceled excluded)', () => {
+    assert.strictEqual(sw.reviewedCount, 11);
+    assert.strictEqual(sw.flaggedJobCount, 8);
+    assert.strictEqual(sw.thresholdMinutes, 20);
+  });
+  check('csv aging: unassigned jobs past the 20-minute default flag, newest-under-threshold and assigned jobs do not', () => {
+    assert.deepStrictEqual(sids(sw.agedUnassigned), ['S3019', 'S3013', 'S3012', 'S3015']);
+    assert.deepStrictEqual(sw.agedUnassigned.map((r) => r.unassignedMinutes), [2325, 75, 40, 25]);
+    assert.ok(!sids(sw.agedUnassigned).includes('S3014')); // 10 minutes, under threshold
+    assert.ok(!sids(sw.agedUnassigned).includes('S3010')); // assigned
+    assert.ok(!sids(sw.agedUnassigned).includes('S3004')); // canceled
+  });
+  check('csv aging: Unassigned Since is used when present, Created On otherwise', () => {
+    // S3012 has both (6:20 AM, 40 min). S3015 has only Created On 6:35 AM (25 min).
+    assert.strictEqual(sw.agedUnassigned.find((r) => r.jobId === 'S3012').unassignedMinutes, 40);
+    assert.strictEqual(sw.agedUnassigned.find((r) => r.jobId === 'S3015').unassignedMinutes, 25);
+  });
+  check('csv aging: moving the threshold moves the flags (30 drops the 25-minute job, 5 adds the 10-minute job)', () => {
+    const at = (n) => logic.unassignedAgingWatch(Object.assign({}, sampleDs, { settings: Object.assign({}, sampleDs.settings, { agingThresholdMinutes: n }) }));
+    assert.deepStrictEqual(sids(at(30).agedUnassigned), ['S3019', 'S3013', 'S3012']);
+    assert.deepStrictEqual(sids(at(5).agedUnassigned), ['S3019', 'S3013', 'S3012', 'S3015', 'S3014']);
+  });
+  check('csv aging: blank skill, missing zone, multi-tech, and multi-day are all detected from the human headers', () => {
+    assert.deepStrictEqual(sids(sw.blankSkill), ['S3013']);
+    assert.deepStrictEqual(sids(sw.missingZone), ['S3014', 'S3018']);
+    assert.deepStrictEqual(sids(sw.autoModeExclusionRisk), ['S3016', 'S3017']);
+    const kinds = Object.fromEntries(sw.autoModeExclusionRisk.map((r) => [r.jobId, r.flags.find((f) => f.code === 'automode_exclusion').kind]));
+    assert.strictEqual(kinds.S3016, 'multi-tech');
+    assert.strictEqual(kinds.S3017, 'multi-day');
+    assert.ok(!sids(sw.missingZone).includes('S3021')); // canceled
+  });
+  const sampleDigest = digestOf(sampleDs);
+  check('csv digest: the sample export produces a non-empty [TEST] Morning Triage Digest with Heads-up for missing reports', () => {
+    const t = sampleDigest.msg.text;
+    assert.ok(t.startsWith('# [TEST] Morning Dispatch KPI Digest: Summit Mechanical (fictional sample)'));
+    assert.match(t, /Newly booked jobs reviewed \(last 24 hours\): 9\. Flagged: 5\./);
+    ['capacity', 'memberships', 'estimates', 'calls'].forEach((n) => assert.ok(t.includes('Heads-up: CSV export "' + n + '.csv" was not found'), n));
+    assert.match(t, /technician list was built from the Technician column/);
+    assert.match(t, /Job S3010 .*Repeat address: 1 completed visit/s);
+    assert.match(t, /Response time, emergency and same-day jobs \(booked to arrival\): average 100\.0 min/);
+    assert.ok(!/\(\)/.test(t), 'empty trade must not render as ()');
+    assert.ok(sampleDigest.msg.subject.startsWith('[TEST] Dispatch KPI Digest'));
+  });
+  check('csv digest: nothing is invented when reports are missing (no capacity hours, no estimates, no after-hours numbers)', () => {
+    const t = sampleDigest.msg.text;
+    assert.match(t, /Open capacity, next 2 days: 0\.0 hours in 0 open slots/);
+    assert.match(t, /Unworked estimates: 0 open estimates/);
+    assert.match(t, /After-hours handoff for the morning shift\n\nNot available \(see Heads-up\)\./);
+    assert.match(t, /Technician utilization: not available/);
+  });
+  check('csv digest: the 3 derived technicians each show the one completed job from the report day', () => {
+    assert.deepStrictEqual(sampleDigest.data.kpis.utilization.perTech.map((p) => [p.name, p.jobs]), [['Dana Whitfield', 1], ['Marcus Hale', 1], ['Priya Raman', 1]]);
+  });
+
+  // ---------------- 5e. companion workflow servicetitan-csv-fallback-triage.json
+  const csvWfText = fs.readFileSync(path.join(HERE, 'servicetitan-csv-fallback-triage.json'), 'utf8');
+  let cw;
+  check('csv-fallback workflow: valid JSON, named, and inactive', () => {
+    cw = JSON.parse(csvWfText);
+    assert.strictEqual(cw.active, false);
+    assert.match(cw.name, /CSV-Fallback/);
+  });
+  if (!cw) { report(); return; }
+  cw.by = Object.fromEntries(cw.nodes.map((n) => [n.name, n]));
+  cw.exec = cw.nodes.filter((n) => n.type !== 'n8n-nodes-base.stickyNote');
+  cw.nodeCount = { exec: cw.exec.length, sticky: cw.nodes.length - cw.exec.length, total: cw.nodes.length };
+  const cwCfg = Object.fromEntries(cw.by['Config'].parameters.assignments.assignments.map((a) => [a.name, a.value]));
+  check('csv-fallback workflow: has Manual Test Run plus schedule, webhook, and email-attachment triggers', () => {
+    assert.ok(cw.nodes.some((n) => n.type === 'n8n-nodes-base.manualTrigger'));
+    assert.strictEqual(cw.nodes.filter((n) => n.type === 'n8n-nodes-base.scheduleTrigger').length, 1);
+    assert.strictEqual(cw.nodes.filter((n) => n.type === 'n8n-nodes-base.webhook').length, 1);
+    assert.strictEqual(cw.nodes.filter((n) => n.type === 'n8n-nodes-base.gmailTrigger').length, 1);
+    assert.ok(cw.nodes.some((n) => n.type === 'n8n-nodes-base.readWriteFile'));
+  });
+  check('csv-fallback workflow: every schedule, webhook, and inbound email trigger is disabled', () => {
+    const inbound = cw.nodes.filter((n) => /scheduleTrigger|cron|webhook|gmailTrigger|emailReadImap|formTrigger/i.test(n.type));
+    assert.strictEqual(inbound.length, 3);
+    inbound.forEach((n) => assert.strictEqual(n.disabled, true, n.name));
+    assert.ok(!cw.by['Manual Test Run'].disabled);
+  });
+  check('csv-fallback workflow: Config defaults are testMode on, source test, owner placeholders, 20-minute threshold, and no ServiceTitan keys', () => {
+    assert.strictEqual(cwCfg.testMode, true);
+    assert.strictEqual(cwCfg.source, 'test');
+    assert.strictEqual(cwCfg.agingThresholdMinutes, 20);
+    assert.strictEqual(cwCfg.ownerEmail, 'owner@example.com');
+    assert.strictEqual(cwCfg.timezone, 'America/Chicago');
+    assert.ok(!('stAppKey' in cwCfg) && !('stTenantId' in cwCfg) && !('stApiBase' in cwCfg));
+    assert.strictEqual(cw.by['Config'].parameters.includeOtherFields, true);
+  });
+  check('csv-fallback workflow: node ids/names unique and every connection resolves', () => {
+    assert.strictEqual(new Set(cw.nodes.map((n) => n.id)).size, cw.nodes.length);
+    assert.strictEqual(new Set(cw.nodes.map((n) => n.name)).size, cw.nodes.length);
+    const allIds = new Set([].concat(nodes, aging.nodes).map((n) => n.id));
+    cw.nodes.forEach((n) => assert.ok(!allIds.has(n.id), 'id reused from another workflow: ' + n.name));
+    Object.entries(cw.connections).forEach(([from, v]) => {
+      assert.ok(cw.by[from], 'missing source ' + from);
+      v.main.forEach((outs) => outs.forEach((o) => assert.ok(cw.by[o.node], 'missing target ' + o.node)));
+    });
+  });
+  check('csv-fallback workflow: only allowed node types, and no HTTP Request node at all (it never calls ServiceTitan)', () => {
+    const allowed = new Set(['manualTrigger', 'scheduleTrigger', 'webhook', 'gmailTrigger', 'set', 'if', 'code', 'readWriteFile', 'gmail', 'slack', 'stickyNote'].map((t) => 'n8n-nodes-base.' + t));
+    cw.nodes.forEach((n) => assert.ok(allowed.has(n.type), 'unexpected type ' + n.type));
+    assert.ok(!cw.nodes.some((n) => n.type === 'n8n-nodes-base.httpRequest'));
+    assert.ok(!/"method":\s*"(POST|PUT|PATCH|DELETE)"/i.test(csvWfText));
+    assert.ok(!/ST-App-Key/i.test(csvWfText));
+    cw.nodes.filter((n) => n.type !== 'n8n-nodes-base.code').forEach((n) => assert.ok(!/servicetitan\.io/i.test(JSON.stringify(n.parameters)), n.name));
+    assert.strictEqual(cw.by['Webhook: upload a Jobs CSV (disabled until you are ready)'].parameters.httpMethod, 'POST'); // inbound only
+  });
+  check('csv-fallback workflow: file read is read-only (readWriteFile operation is read)', () => {
+    cw.nodes.filter((n) => n.type === 'n8n-nodes-base.readWriteFile').forEach((n) => assert.strictEqual(n.parameters.operation, 'read'));
+  });
+  check('csv-fallback workflow: no customer-facing send nodes; exactly one Gmail send and one Slack post, both fed by owner fields', () => {
+    cw.nodes.forEach((n) => assert.ok(!/twilio|sms|whatsapp|messagebird|vonage|sendgrid|mailgun|telegram/i.test(n.type + ' ' + n.name), n.name));
+    const senders = cw.exec.filter((n) => /\.gmail$|\.slack$|emailSend/.test(n.type));
+    assert.strictEqual(senders.length, 2);
+    assert.strictEqual(cw.by['Email owner (Gmail)'].parameters.operation, 'send');
+    assert.strictEqual(cw.by['Email owner (Gmail)'].parameters.sendTo, '={{ $json.emailTo }}');
+    assert.ok(cw.by['Post to owner Slack'].parameters.channelId.value.includes('$json.slackChannel'));
+    const asm = cw.by['Assemble Owner Messages'].parameters.jsCode;
+    assert.ok(asm.includes('emailTo: s.ownerEmail') && asm.includes('slackChannel: s.ownerSlackChannel'));
+    assert.ok(asm.includes('renderMessage(d)') && asm.includes('renderAgingAlert(d)'));
+  });
+  check('csv-fallback workflow: the Gmail trigger only reads (no reply/label/forward) and is limited by a placeholder sender', () => {
+    const g = cw.nodes.find((n) => n.type === 'n8n-nodes-base.gmailTrigger');
+    assert.match(g.parameters.filters.q, /from:PASTE_ALLOWED_SENDER_HERE/);
+    assert.strictEqual(g.parameters.options.downloadAttachments, true);
+    assert.strictEqual(cw.nodes.filter((n) => n.type === 'n8n-nodes-base.gmail').length, 1);
+  });
+  check('csv-fallback workflow: Code nodes are generated from dispatch_logic.cjs and make no network or file calls', () => {
+    const codeNodes = cw.nodes.filter((n) => n.type === 'n8n-nodes-base.code');
+    assert.ok(codeNodes.length >= 6);
+    codeNodes.forEach((n) => {
+      assert.match(n.parameters.jsCode, /^\/\/ Generated from dispatch_logic\.cjs/);
+      assert.ok(!/fetch\(|require\(|XMLHttpRequest|helpers\.(httpRequest|request)|\$http|child_process|\bfs\./.test(n.parameters.jsCode), n.name);
+    });
+  });
+  check('csv-fallback workflow: credentials are placeholders only, no pinData, no secrets', () => {
+    cw.nodes.forEach((n) => Object.values(n.credentials || {}).forEach((c) => assert.match(c.id, /^PLACEHOLDER_[A-Z_]+$/)));
+    const ids = new Set(cw.nodes.flatMap((n) => Object.values(n.credentials || {}).map((c) => c.id)));
+    ['PLACEHOLDER_GMAIL', 'PLACEHOLDER_SLACK', 'PLACEHOLDER_WEBHOOK_HEADER_AUTH'].forEach((id) => assert.ok(ids.has(id), id));
+    assert.ok(!('pinData' in cw));
+    assert.strictEqual(cw.by['Webhook: upload a Jobs CSV (disabled until you are ready)'].parameters.authentication, 'headerAuth');
+    assert.ok(!/xox[bap]-|sk-[A-Za-z0-9]{16,}|Bearer\s+[A-Za-z0-9._-]{12,}|client_secret|-----BEGIN|AKIA[0-9A-Z]{12}|\b[0-9a-f]{32,}\b/i.test(csvWfText));
+  });
+  check('csv-fallback workflow: sticky notes cover Start here, Config, Safety, CSV-Fallback (Starter/Essentials, no API key), and the go-live hard stop', () => {
+    const n = cw.nodes.filter((x) => x.type === 'n8n-nodes-base.stickyNote').map((x) => x.parameters.content).join('\n');
+    assert.ok(/START HERE/.test(n) && /Config fields/.test(n) && /Safety defaults/.test(n) && /Hard stop before go-live/.test(n));
+    assert.ok(/CSV-Fallback \(Starter \/ Essentials, no API key\)/.test(n));
+    assert.ok(/Required columns/.test(n) && /Webhook/.test(n) && /Email attachment/.test(n) && /Watch folder/.test(n));
+    assert.ok(!/\$\s?\d/.test(n), 'no dollar amounts');
+  });
+  check('csv-fallback workflow: no banned strings in the JSON, builder, fixtures, README, or generated sample', () => {
+    ['servicetitan-csv-fallback-triage.json', 'build_csv_fallback_workflow.cjs', 'fixtures/sample-servicetitan-export.csv', 'fixtures/sample_export_reference_time.txt', 'README.md', 'CHANGELOG.md'].forEach((f) => {
+      assert.ok(!BANNED.test(fs.readFileSync(path.join(HERE, f), 'utf8')), f);
+    });
+  });
+
+  // run the companion workflow's own Code nodes
+  async function runCw(name, { input, named, binaryBuffers, all }) {
+    const fn = new AsyncFunction('$input', '$', cw.by[name].parameters.jsCode);
+    const items = Array.isArray(input) ? input : [{ json: input }];
+    const $input = { first: () => items[0], all: () => items };
+    const $ = (n) => {
+      if (!(n in (named || {}))) throw new Error('node ' + n + ' not available');
+      return { first: () => ({ json: named[n] }), all: () => [{ json: named[n] }] };
+    };
+    const ctx = { helpers: { getBinaryDataBuffer: async (i, key) => binaryBuffers[i][key] } };
+    const out = await fn.call(ctx, $input, $);
+    return all ? out.map((o) => o.json) : out[0].json;
+  }
+  const cwCfgFull = Object.assign({}, cwCfg, { businessName: 'Summit Mechanical (fictional sample)' });
+  async function runCwTail(dataset) {
+    let d = await runCw('Morning Triage Digest Logic', { input: dataset });
+    d = await runCw('Unassigned Aging Watch Logic', { input: d });
+    const msgs = await runCw('Assemble Owner Messages', { input: d, all: true });
+    return { data: d, msgs };
+  }
+  const csvBin = (name, text) => ({ json: {}, binary: { data: { fileName: name, mimeType: 'text/csv' } } });
+  let cwManual, cwInbound, cwFolder;
+  await checkAsync('csv-fallback workflow: Manual Test Run path (built-in sample export) runs end to end and produces two [TEST] messages', async () => {
+    const prep = await runCw('Prepare Settings', { input: cwCfgFull });
+    assert.strictEqual(prep.settings.source, 'test');
+    assert.strictEqual(prep.inbound, false);
+    const ds = await runCw('Load Built-in Sample Export', { input: prep, named: { 'Prepare Settings': prep } });
+    cwManual = await runCwTail(ds);
+    assert.strictEqual(cwManual.msgs.length, 2);
+    assert.deepStrictEqual(cwManual.msgs.map((m) => m.kind), ['morning-digest', 'aging-alert']);
+    assert.ok(cwManual.msgs[0].subject.startsWith('[TEST] Dispatch KPI Digest: Summit Mechanical'));
+    assert.ok(cwManual.msgs[1].subject.startsWith('[TEST] Unassigned Aging Alert: Summit Mechanical'));
+    cwManual.msgs.forEach((m) => { assert.strictEqual(m.testMode, true); assert.strictEqual(m.sendEmail, false); });
+  });
+  await checkAsync('csv-fallback workflow: webhook upload path (binary CSV) runs end to end, forces csv, and matches the shared module', async () => {
+    const gathered = await runCw('Gather Inbound CSV', {
+      input: [{ json: { headers: {}, body: {} }, binary: { data: { fileName: 'Jobs Dispatch Report.csv', mimeType: 'text/csv' } } }],
+      binaryBuffers: [{ data: Buffer.from(sampleCsvText, 'utf8') }],
+    });
+    assert.strictEqual(gathered.inbound, true);
+    assert.strictEqual(gathered.inboundFiles.length, 1);
+    assert.strictEqual(gathered.inboundFiles[0].name, 'Jobs Dispatch Report.csv');
+    // Config (Set node with includeOtherFields) merges its values over the inbound item
+    const prep = await runCw('Prepare Settings', { input: Object.assign({}, cwCfgFull, gathered, { asOfOverride: SAMPLE_REF }) });
+    assert.strictEqual(prep.settings.source, 'csv'); // upload forces csv even though Config says test
+    assert.strictEqual(prep.settings.testMode, true);
+    assert.strictEqual(prep.inbound, true);
+    const ds = await runCw('Parse CSV Upload', { input: prep, named: { 'Prepare Settings': prep } });
+    assert.strictEqual(ds.jobs.length, 16);
+    cwInbound = await runCwTail(ds);
+    assert.deepStrictEqual(cwInbound.data.agingWatch, logic.unassignedAgingWatch(cwInbound.data));
+    assert.deepStrictEqual(cwInbound.data.kpis, logic.kpiDigest(cwInbound.data));
+    assert.deepStrictEqual(cwInbound.data.bookingQa, logic.bookingQa(cwInbound.data));
+    assert.strictEqual(cwInbound.msgs[0].text, logic.renderMessage(cwInbound.data).text);
+    assert.strictEqual(cwInbound.msgs[1].text, logic.renderAgingAlert(cwInbound.data).text);
+    assert.deepStrictEqual(sids(cwInbound.data.agingWatch.agedUnassigned), ['S3019', 'S3013', 'S3012', 'S3015']);
+  });
+  await checkAsync('csv-fallback workflow: email-attachment path ignores non-CSV attachments and accepts several attachment fields', async () => {
+    const gathered = await runCw('Gather Inbound CSV', {
+      input: [{ json: { subject: 'Daily export' }, binary: {
+        attachment_0: { fileName: 'notes.pdf', mimeType: 'application/pdf' },
+        attachment_1: { fileName: 'export.CSV', mimeType: 'application/octet-stream' },
+        attachment_2: { fileName: 'blob', mimeType: 'text/csv' },
+      } }],
+      binaryBuffers: [{ attachment_0: Buffer.from('%PDF'), attachment_1: Buffer.from(sampleCsvText), attachment_2: Buffer.from(fixtureText.technicians) }],
+    });
+    assert.deepStrictEqual(gathered.inboundFiles.map((f) => f.name), ['export.CSV', 'blob']);
+    const raw = await runCw('Gather Inbound CSV', { input: [{ json: { csv: 'Job #,Status,Scheduled Start\nR1,Scheduled,3/12/2026 9:00 AM\n' } }], binaryBuffers: [{}] });
+    assert.strictEqual(raw.inboundFiles.length, 1);
+  });
+  await checkAsync('csv-fallback workflow: an email or upload with no CSV still produces a clear Heads-up, not a [TEST] sample or a crash', async () => {
+    const gathered = await runCw('Gather Inbound CSV', { input: [{ json: {}, binary: { attachment_0: { fileName: 'photo.png', mimeType: 'image/png' } } }], binaryBuffers: [{ attachment_0: Buffer.from('x') }] });
+    assert.deepStrictEqual(gathered, { inbound: true, inboundFiles: [] });
+    const prep = await runCw('Prepare Settings', { input: Object.assign({}, cwCfgFull, gathered) });
+    assert.strictEqual(prep.settings.source, 'csv');
+    const ds = await runCw('Parse CSV Upload', { input: prep, named: { 'Prepare Settings': prep } });
+    const tail = await runCwTail(ds);
+    assert.match(tail.msgs[1].text, /Heads-up: CSV import: no CSV file was received/);
+    assert.ok(tail.msgs[1].text.includes('source: csv.'));
+    assert.ok(!tail.msgs[1].text.includes('Built from fictional sample data'));
+  });
+  await checkAsync('csv-fallback workflow: a malformed upload becomes a Heads-up in both owner messages', async () => {
+    const prep = await runCw('Prepare Settings', { input: Object.assign({}, cwCfgFull, { inbound: true, inboundFiles: [{ name: 'bad.csv', text: 'Foo,Bar\n1,2\n' }] }) });
+    const ds = await runCw('Parse CSV Upload', { input: prep, named: { 'Prepare Settings': prep } });
+    const tail = await runCwTail(ds);
+    tail.msgs.forEach((m) => assert.match(m.text, /Heads-up: CSV import: .*missing required column\(s\): Job #/));
+  });
+  await checkAsync('csv-fallback workflow: watch-folder path reads files of any name and merges optional siblings', async () => {
+    const prep = await runCw('Prepare Settings', { input: Object.assign({}, cwCfgFull, { source: 'csv', asOfOverride: SAMPLE_REF }) });
+    assert.strictEqual(prep.inbound, false);
+    const ds = await runCw('Parse CSV Upload', {
+      input: [csvBin('Dispatch export 2026-03-12.csv'), csvBin('capacity-report.csv')],
+      named: { 'Prepare Settings': prep },
+      binaryBuffers: [{ data: Buffer.from(sampleCsvText) }, { data: Buffer.from('window_id,business_unit,window_start,window_end,open_slots\nW1,HVAC,2026-03-12T13:00:00-05:00,2026-03-12T17:00:00-05:00,2\n') }],
+    });
+    assert.strictEqual(ds.jobs.length, 16);
+    assert.strictEqual(ds.capacityWindows.length, 1);
+    cwFolder = await runCwTail(ds);
+    assert.ok(cwFolder.msgs[0].text.includes('source: csv'));
+    assert.ok(!cwFolder.msgs[0].text.includes('"capacity.csv" was not found'));
+  });
+  await checkAsync('csv-fallback workflow: source servicetitan is refused (falls back to test with a Heads-up) because there is no API path', async () => {
+    const prep = await runCw('Prepare Settings', { input: Object.assign({}, cwCfgFull, { source: 'servicetitan', testMode: false }) });
+    assert.strictEqual(prep.settings.source, 'test');
+    assert.strictEqual(prep.settings.testMode, true);
+    assert.ok(prep.settings.headsUp.some((h) => /no ServiceTitan API path/.test(h)));
+  });
+  await checkAsync('csv-fallback workflow: routing sends test data down the built-in branch and csv down the upload/folder branches', async () => {
+    const gate = cw.by['Source is CSV?'].parameters.conditions.conditions[0];
+    assert.strictEqual(gate.rightValue, 'csv');
+    assert.deepStrictEqual(cw.connections['Source is CSV?'].main[1].map((o) => o.node), ['Load Built-in Sample Export']);
+    assert.deepStrictEqual(cw.connections['Source is CSV?'].main[0].map((o) => o.node), ['Upload just arrived?']);
+    assert.deepStrictEqual(cw.connections['Upload just arrived?'].main[0].map((o) => o.node), ['Parse CSV Upload']);
+    assert.deepStrictEqual(cw.connections['Upload just arrived?'].main[1].map((o) => o.node), ['Read CSV Exports']);
+    ['Webhook: upload a Jobs CSV (disabled until you are ready)', 'Email attachment: inbound Jobs CSV (disabled until you are ready)'].forEach((t) => {
+      assert.deepStrictEqual(cw.connections[t].main[0].map((o) => o.node), ['Gather Inbound CSV']);
+    });
+  });
+  if (!cwManual || !cwInbound) { report(); return; }
+  check('csv-fallback workflow: built-in sample run equals the module run on the sample file (embedded copy in sync)', () => {
+    assert.deepStrictEqual(cwManual.data.jobs, sampleDs.jobs);
+    assert.deepStrictEqual(cwManual.data.technicians, sampleDs.technicians);
+    assert.strictEqual(cwManual.data.settings.asOf, SAMPLE_REF);
+    const strip = (t) => t.replace('source: test', 'source: X').replace('source: csv', 'source: X').replace(' Built from fictional sample data.', '');
+    assert.strictEqual(strip(cwManual.msgs[0].text), strip(cwInbound.msgs[0].text));
+    assert.strictEqual(strip(cwManual.msgs[1].text), strip(cwInbound.msgs[1].text));
+  });
+  check('csv-fallback workflow: the morning digest message is the same text the main digest pack produces for the same data', () => {
+    assert.strictEqual(cwInbound.msgs[0].text, sampleDigest.msg.text);
+    assert.strictEqual(cwInbound.msgs[0].subject, sampleDigest.msg.subject);
+    assert.strictEqual(cwInbound.msgs[1].text, logic.renderAgingAlert(Object.assign({}, sampleDs, { agingWatch: sw })).text);
+  });
+
+  // existing workflows now accept human headers in the csv path too
+  await checkAsync('existing aging workflow Parse CSV Exports now accepts a human-header Jobs export', async () => {
+    const prep = await runAgingNode('Prepare Settings', { input: Object.assign({}, agingCfgVals, { source: 'csv', asOfOverride: SAMPLE_REF }) });
+    const ds = await runAgingNode('Parse CSV Exports', {
+      input: [{ json: {}, binary: { data: { fileName: 'jobs.csv' } } }],
+      named: { 'Prepare Settings': prep },
+      buffers: [Buffer.from(sampleCsvText)],
+    });
+    assert.strictEqual(ds.jobs.length, 16);
+    const w = logic.unassignedAgingWatch(ds);
+    assert.deepStrictEqual(sids(w.agedUnassigned), ['S3019', 'S3013', 'S3012', 'S3015']);
+  });
+  await checkAsync('existing digest workflow Parse CSV Exports now accepts a human-header Jobs export (other files become Heads-up lines)', async () => {
+    const prep = await runNode('Prepare Settings', { input: Object.assign({}, cfgVals, { source: 'csv', asOfOverride: SAMPLE_REF }) });
+    const ds = await runNode('Parse CSV Exports', {
+      input: [{ json: {}, binary: { data: { fileName: 'jobs.csv' } } }],
+      named: { 'Prepare Settings': prep },
+      buffers: [Buffer.from(sampleCsvText)],
+    });
+    assert.strictEqual(ds.jobs.length, 16);
+    assert.ok(ds.settings.headsUp.some((h) => /"calls.csv" was not found/.test(h)));
+  });
+
+  // sample output for buyers (regenerated on every run)
+  const csvSampleHeader = '<!-- Generated by mock_servicetitan_test.cjs from fixtures/sample-servicetitan-export.csv. Do not hand-edit; re-run the test to regenerate. -->\n\n';
+  fs.writeFileSync(path.join(HERE, 'sample_csv_fallback_digest.md'), csvSampleHeader + cwInbound.msgs[0].text + '\n\n\n' + cwInbound.msgs[1].text + '\n');
+  check('sample_csv_fallback_digest.md was written with both [TEST] messages and no banned strings', () => {
+    const t = fs.readFileSync(path.join(HERE, 'sample_csv_fallback_digest.md'), 'utf8');
+    assert.ok(t.includes('# [TEST] Morning Dispatch KPI Digest') && t.includes('# [TEST] Unassigned Aging Alert') && t.includes('Summit Mechanical (fictional sample)'));
+    assert.ok(!BANNED.test(t));
+  });
+
   // ---------------- 6. diagram + site entry stay in sync with the shipped pack
   const repo = path.resolve(HERE, '..', '..');
   const diagram = fs.readFileSync(path.join(repo, 'public', 'diagrams', 'servicetitan-dispatch-copilot.html'), 'utf8');
@@ -699,13 +1334,29 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
   });
   const tsText = fs.readFileSync(path.join(repo, 'src', 'templates.ts'), 'utf8');
   const entry = tsText.slice(tsText.indexOf('slug: "servicetitan-dispatch-copilot"'), tsText.indexOf('slug: "speed-to-lead"'));
-  check('templates.ts entry: node counts match the shipped digest and aging workflow JSON', () => {
+  check('templates.ts entry: node counts match the shipped digest, aging, and CSV-fallback workflow JSON', () => {
     const agingExec = aging.nodeCount.exec;
     const agingTotal = aging.nodeCount.total;
     assert.ok(entry.includes('nodes: ' + nodeCount.exec + ','), 'digest workflow node count');
     assert.ok(entry.includes('nodes: ' + agingExec + ','), 'aging workflow node count');
-    assert.ok(entry.includes('totalNodes: ' + (nodeCount.exec + agingExec) + ','), 'pack executable total');
-    assert.ok(entry.includes('totalNodesWithNotes: ' + (nodeCount.total + agingTotal) + ','), 'pack total with notes');
+    assert.ok(entry.includes('nodes: ' + cw.nodeCount.exec + ','), 'csv-fallback workflow node count');
+    assert.ok(entry.includes('totalNodes: ' + (nodeCount.exec + agingExec + cw.nodeCount.exec) + ','), 'pack executable total');
+    assert.ok(entry.includes('totalNodesWithNotes: ' + (nodeCount.total + agingTotal + cw.nodeCount.total) + ','), 'pack total with notes');
+  });
+  check('templates.ts entry: v0.3.0 and CSV-Fallback Mode copy for Starter / Essentials (no API key, no pricing)', () => {
+    assert.ok(entry.includes('version: "v0.3.0"'));
+    assert.ok(/CSV-Fallback/.test(entry) && /Starter/.test(entry) && /Essentials/.test(entry));
+    assert.ok(/no (API|App) ?[Kk]ey|without (an )?(API|App) ?[Kk]ey/i.test(entry));
+    assert.ok(entry.includes('name: "ServiceTitan CSV-Fallback Triage"'));
+    assert.ok(/Pricing/i.test(entry) && !/\$\s?\d/.test(entry));
+  });
+  check('README and CHANGELOG describe v0.3.0 CSV-Fallback Mode without claiming live verification', () => {
+    const readme = fs.readFileSync(path.join(HERE, 'README.md'), 'utf8');
+    const changelog = fs.readFileSync(path.join(HERE, 'CHANGELOG.md'), 'utf8');
+    assert.ok(/v0\.3\.0/.test(readme) && /v0\.3\.0/.test(changelog));
+    ['CSV-Fallback', 'Starter', 'Essentials', 'servicetitan-csv-fallback-triage.json', 'sample-servicetitan-export.csv', 'Job #', 'Scheduled Start', 'Required Skill', 'Heads-up'].forEach((x) => assert.ok(readme.includes(x), 'README missing ' + x));
+    assert.ok(/NOT tested against a live|not (yet )?tested against a live|unverified/i.test(readme));
+    assert.ok(!/verified against a live|tested against a live (ServiceTitan|account) and/i.test(readme.replace(/not (yet )?tested against a live/gi, '').replace(/NOT tested against a live/g, '')));
   });
   check('templates.ts entry: paid-pending, New badge, diagram on, no price, no banned strings', () => {
     assert.ok(!/free:\s*true/.test(entry));

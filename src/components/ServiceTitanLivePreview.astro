@@ -153,7 +153,7 @@ const demoExists = existsSync(
         <div id="st-panel-arch" role="tabpanel" aria-labelledby="st-tab-arch" data-panel="arch" class="st-preview__panel" hidden>
           <div class="st-arch" aria-label="Zero write-back architecture">
             <p class="st-arch__intro">
-              The dispatcher stays 100% in control. The copilot only reads the board and sends you an alert. It never creates, moves, or deletes a job. Both workflows import inactive, in <strong>[TEST]</strong> mode.
+              The dispatcher stays 100% in control. The copilot only reads the board and sends you an alert. It never creates, moves, or deletes a job. All three workflows import inactive, in <strong>[TEST]</strong> mode.
             </p>
             <ol class="st-flow">
               <li class="st-flow__step">
@@ -174,7 +174,7 @@ const demoExists = existsSync(
                 <p class="st-flow__or">or</p>
                 <div class="st-flow__card">
                   <p class="st-flow__t">Starter / Essentials</p>
-                  <p class="st-flow__d">Same digest and aging alert from a CSV export of your own reports. No API key required.</p>
+                  <p class="st-flow__d">Same digest and aging alert from one exported Jobs/Dispatch report, by email, upload, or folder. No API key required.</p>
                 </div>
               </li>
               <li class="st-flow__branch" aria-hidden="true">
@@ -184,7 +184,7 @@ const demoExists = existsSync(
                 <span class="st-flow__n">2</span>
                 <div>
                   <p class="st-flow__t">n8n (your instance)</p>
-                  <p class="st-flow__d">Two read-only workflows: the 7:00 AM digest and the 15-minute Unassigned-Job Aging Watch. Both ship inactive, with [TEST] on.</p>
+                  <p class="st-flow__d">Three read-only workflows: the 7:00 AM digest, the 15-minute Unassigned-Job Aging Watch, and the CSV-Fallback companion for Starter/Essentials shops. All ship inactive, with [TEST] on.</p>
                 </div>
               </li>
               <li class="st-flow__branch" aria-hidden="true">

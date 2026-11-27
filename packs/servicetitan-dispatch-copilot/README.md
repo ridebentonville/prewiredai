@@ -1,4 +1,4 @@
-# ServiceTitan Dispatch & Capacity Copilot (DRAFT v0.2.0)
+# ServiceTitan Dispatch & Capacity Copilot (DRAFT v0.3.0)
 
 Four short morning reports, plus a 15-minute Unassigned-Job Aging Watch, for the Operations Manager of an HVAC, plumbing, or electrical shop. They help dispatch catch thin job details, fill open schedule time, see yesterday's numbers, start the morning knowing what happened overnight, and get a mid-day alert when jobs sit in Unassigned or are missing the skill and zone tags Dispatch Pro Auto Mode needs.
 
@@ -11,6 +11,8 @@ Four short morning reports, plus a 15-minute Unassigned-Job Aging Watch, for the
 3. **Morning Dispatch KPI digest.** Technician utilization, response time on emergency and same-day jobs, open capacity, and unworked estimates, for the previous day. If a number cannot be worked out from the data, you get a "Heads-up" line instead of a guess.
 4. **After-hours handoff summary.** Overnight emergency calls (5:00 PM to 7:00 AM by default) in one brief for the morning shift, with the calls that still need action listed first.
 5. **Unassigned-Job Aging Watch (v0.2, companion workflow).** A 15-minute read-only poll that flags jobs sitting in Unassigned past a configurable threshold (default 20 minutes; use 15–20 to match your shop), blank skill tags, missing zone assignments, and multi-tech / multi-day jobs that Dispatch Pro Auto Mode can silently drop or ping-pong. The alert goes to you only. Nothing is written back to the board.
+
+6. **CSV-Fallback Mode (v0.3, companion workflow).** For ServiceTitan Starter and Essentials shops, which do not get a Customer-Built App Key. Export one Jobs/Dispatch report as CSV, send it in (webhook upload, email attachment, or watch folder), and get the same Morning Triage Digest and Aging Watch alert with no ServiceTitan API credentials. See "CSV-Fallback Mode" below.
 
 The first four arrive together in one message to **you, the owner** (email and/or Slack), at 7:00 AM Central once you turn that workflow on. The Aging Watch is a separate workflow with its own disabled 15-minute Schedule, so you can turn it on independently.
 
@@ -29,8 +31,8 @@ Operations Managers and owners of HVAC, plumbing, and electrical shops that run 
 
 ## Setup in short
 
-1. Import `workflow.n8n.json` (morning digest) and `unassigned-aging-watch.json` (15-minute Aging Watch) into n8n.
-2. Leave **source** on `test` and click Execute workflow on **Manual Test Run** in each file. Compare the digest to `sample_test_digest.md` and the aging alert to `sample_aging_alert.md`.
+1. Import `workflow.n8n.json` (morning digest), `unassigned-aging-watch.json` (15-minute Aging Watch), and, for Starter / Essentials shops with no API key, `servicetitan-csv-fallback-triage.json` (CSV-Fallback Mode) into n8n.
+2. Leave **source** on `test` and click Execute workflow on **Manual Test Run** in each file. Compare the digest to `sample_test_digest.md`, the aging alert to `sample_aging_alert.md`, and the CSV-Fallback output to `sample_csv_fallback_digest.md`.
 3. Export your own reports from ServiceTitan as CSV (see below), set **source** to `csv`, and run again. Still [TEST].
 4. Spot-check the numbers by hand against ServiceTitan.
 5. Only after that, consider the live path and go-live (see "Hard stop").
@@ -69,9 +71,56 @@ The Aging Watch has its own Config node with the shared fields above plus `aging
 
 The thresholds are starting points, not industry standards. Set them to match how your shop works.
 
-## CSV export fallback vs ServiceTitan v2
+## CSV-Fallback Mode (Starter and Essentials, no API key)
 
-**CSV export (recommended first).** Export reports from ServiceTitan yourself and save them as six files in `csvFolder`: `technicians.csv`, `jobs.csv`, `capacity.csv`, `memberships.csv`, `estimates.csv`, `calls.csv`. The `fixtures/` folder shows the exact column names. This path reads files only. You may need to rename columns in your export to match. For the Aging Watch, export a job report as `aging_jobs.csv` (or `jobs.csv` with the extra `skill`, `zone`, `tech_ids`, `unassigned_since`, and `multi_day` columns shown in `fixtures/aging_jobs.csv`).
+ServiceTitan's Starter and Essentials tiers do not get Customer-Built App Keys, so there is no API to call. `servicetitan-csv-fallback-triage.json` runs the **same** Morning Triage Digest and Unassigned Aging Watch logic from one exported Jobs/Dispatch CSV. It never calls ServiceTitan, and it sends only to the owner. It is a draft and has not been tested against a live ServiceTitan, Gmail, or Slack account.
+
+**Try it in about 2 minutes.** Import the file, leave `source` = `test`, click Execute workflow on Manual Test Run. You get a [TEST] digest and a [TEST] aging alert built from `fixtures/sample-servicetitan-export.csv`, a made-up Jobs/Dispatch export from a fictional shop ("Summit Mechanical"). Compare with `sample_csv_fallback_digest.md`.
+
+**Export.** In ServiceTitan, run your Jobs or Dispatch report with the columns below and export it to CSV (comma-separated, header row first). Column names vary by shop, so the importer matches headers loosely.
+
+**Required columns** (the file is rejected with a plain-language Heads-up naming what is missing, and listing the headers it did see):
+
+| Needed | Accepted headers (examples) |
+| --- | --- |
+| Job id | `Job #`, `Job Number`, `Job No`, `Job ID`, `Invoice #` |
+| Status | `Status`, `Job Status` |
+| Scheduled start | `Scheduled Start`, `Start`, `Appointment Start` |
+
+**Optional columns** (more columns means fewer Heads-up lines and better flags):
+
+| Field | Accepted headers (examples) |
+| --- | --- |
+| Scheduled end | `Scheduled End`, `End`, `Appointment End` |
+| Business unit | `Business Unit`, `Business Unit Name`, `BU` |
+| Job type | `Job Type`, `Type`, `Type of Job` |
+| Skill | `Required Skill`, `Skill`, `Tag`, `Required Tag`, `Job Tag` |
+| Zone | `Zone`, `Dispatch Zone`, `Zone Name` |
+| Technician | `Technician`, `Tech`, `Assigned Technician`, `Technician Name` (several names in one cell, separated by commas, count as a multi-tech job), or `Technician ID` |
+| Customer, phone, type | `Customer`, `Customer Name`; `Customer Phone`, `Phone`; `Customer Type` |
+| Created | `Created On`, `Booked On`, `Date Created`, `Booked At` |
+| Unassigned since | `Unassigned Since`, `Unassigned On` (blank means the clock starts at Created On) |
+| Priority, address, summary | `Priority`; `Address`, `Location`, `Service Location`; `Summary`, `Job Summary` |
+| Multi-day | `Multi-Day`, `Multi Day` (a job whose start and end fall on different days is also treated as multi-day) |
+| Equipment, arrival | `Equipment Type`, `Equipment Age`, `Arrived At`, `Actual Minutes` |
+
+Matching ignores capitalization, extra spaces, punctuation (`#` and `Number` are the same), and whether words are separated by spaces, underscores, or hyphens. The original snake_case fixture headers (`job_id`, `scheduled_start`, ...) still work. Dates like `3/10/2026 9:50 AM` or `2026-03-10 09:50` are read as local time in your `timezone`; ISO dates with an offset are kept as they are.
+
+**What a single Jobs export gives you.** The Aging Watch runs fully. The Morning Digest runs partially: Booking QA, the report-day job counts, and response time (when Arrived At is present) work. Technician names are taken from the Technician column. Capacity, memberships, estimates, calls, and technician shift hours are not in a jobs export, so each missing piece becomes a "Heads-up" line. Nothing is estimated or invented. If you also export any of those reports (same CSV rules, same header matching), drop them in alongside the jobs file and they are used. File names do not matter; each file is recognized by its columns.
+
+**Messy rows.** A row with no job id is skipped. A footer or subtotal row (no status and no start) is skipped. An unreadable date is left blank. Several rows for the same job number (one per technician or appointment) are merged, with technicians combined. Every one of these is counted in a Heads-up. An empty file or a header-only file produces a Heads-up and no crash.
+
+**Three ways to get the CSV in** (each trigger is disabled on import):
+
+1. **Email attachment.** The Gmail trigger reads an incoming message with a CSV attached. Edit its query so only one sender you trust matches (`from:PASTE_ALLOWED_SENDER_HERE` is a placeholder that matches nothing). It only reads. It does not reply or forward.
+2. **Watch folder.** Drop the file in `csvFolder` and run Manual Test Run (with `source` = `csv`) or the 7:00 AM schedule. n8n only reads files inside its allowed folder.
+3. **Webhook / form upload.** POST the file as multipart field `data` to the webhook URL, from a form, a script, or an automation tool. Keep it behind the header-auth credential.
+
+An upload that arrives by email or webhook is always treated as `csv` and still labeled [TEST] until you turn test mode off. Both messages (the digest and the aging alert) go only to `ownerEmail` / `ownerSlackChannel`.
+
+## Advanced: six-file CSV set and ServiceTitan v2
+
+**Six-file CSV set (still supported).** For the original `source` = `csv` path in `workflow.n8n.json` and `unassigned-aging-watch.json`, save `technicians.csv`, `jobs.csv`, `capacity.csv`, `memberships.csv`, `estimates.csv`, and `calls.csv` in `csvFolder`. Those two workflows now also accept the human ServiceTitan headers above in their jobs file; the fixture column names still work. For the Aging Watch, export a job report as `aging_jobs.csv` (or `jobs.csv` with the extra `skill`, `zone`, `tech_ids`, `unassigned_since`, and `multi_day` columns shown in `fixtures/aging_jobs.csv`). The `fixtures/` folder shows the snake_case column names. This path reads files only.
 
 **ServiceTitan v2 (live, read-only, unverified).** Set `source` to `servicetitan`, attach an n8n OAuth2 (client credentials) credential, and paste your tenant ID and app key into Config. The workflow makes these GET requests, all under `{stApiBase}/{module}/v2/tenant/{tenantId}/`:
 
@@ -95,7 +144,7 @@ The thresholds are starting points, not industry standards. Set them to match ho
 
 ## Hard stop before go-live
 
-Do not turn test mode off or switch either Schedule on until all of these are true:
+Do not turn test mode off or switch any Schedule, Webhook, or Email trigger on until all of these are true:
 
 1. A clean [TEST] run on the sample data.
 2. A clean [TEST] run on **your own** CSV export, with several numbers checked by hand against ServiceTitan.
@@ -117,13 +166,17 @@ Do not turn test mode off or switch either Schedule on until all of these are tr
 | --- | --- |
 | `workflow.n8n.json` | The importable 7:00 AM digest workflow (27 executable nodes, 7 sticky notes). Saved inactive. |
 | `unassigned-aging-watch.json` | The importable 15-minute Unassigned-Job Aging Watch (20 executable nodes, 7 sticky notes). Saved inactive. |
+| `servicetitan-csv-fallback-triage.json` | The importable CSV-Fallback Mode workflow for Starter / Essentials shops (19 executable nodes, 6 sticky notes). Saved inactive; schedule, webhook, and email triggers disabled. |
 | `fixtures/` | Fictional sample data: a made-up shop, "Cedar Ridge Mechanical", with HVAC, plumbing, and electrical techs and customers, plus aging-watch jobs. |
+| `fixtures/sample-servicetitan-export.csv` | A fictional Jobs/Dispatch export ("Summit Mechanical") with human ServiceTitan headers, for CSV-Fallback Mode. `fixtures/sample_export_reference_time.txt` fixes its "now". |
+| `sample_csv_fallback_digest.md` | The [TEST] digest and [TEST] aging alert the CSV-Fallback workflow produces from the sample export. Regenerated by the test. |
 | `sample_test_digest.md` | The [TEST] digest the morning workflow produces from the fixtures. Regenerated by the test. |
 | `sample_aging_alert.md` | The [TEST] aging alert the companion workflow produces from the aging fixtures. Regenerated by the test. |
 | `mock_servicetitan_test.cjs` | Test harness. Needs Node 18+. No network. |
-| `dispatch_logic.cjs` | The logic behind the Code nodes in both workflows. |
+| `dispatch_logic.cjs` | The logic behind the Code nodes in all three workflows. |
 | `build_workflow.cjs` | Rebuilds `workflow.n8n.json` from the logic and fixtures. |
 | `build_aging_workflow.cjs` | Rebuilds `unassigned-aging-watch.json` from the logic and aging fixtures. |
+| `build_csv_fallback_workflow.cjs` | Rebuilds `servicetitan-csv-fallback-triage.json` from the logic and the sample export. |
 | `CHANGELOG.md` | Version history. |
 
 ## Checking the pack
@@ -131,10 +184,11 @@ Do not turn test mode off or switch either Schedule on until all of these are tr
 ```bash
 node packs/servicetitan-dispatch-copilot/build_workflow.cjs        # only after editing the digest logic or fixtures
 node packs/servicetitan-dispatch-copilot/build_aging_workflow.cjs  # only after editing the aging logic or fixtures
+node packs/servicetitan-dispatch-copilot/build_csv_fallback_workflow.cjs  # only after editing the CSV mapper or sample export
 node packs/servicetitan-dispatch-copilot/mock_servicetitan_test.cjs
 ```
 
-The test checks that both workflows are inactive and read-only, that both schedules are disabled, that nothing can message a customer, and that no secrets are present. It then runs the Code nodes pulled from each workflow JSON against the fixtures, asserts the expected flags and numbers (including aging thresholds, blank skill/zone detection, multi-tech/multi-day exclusions, and [TEST] labeling), and rewrites `sample_test_digest.md` and `sample_aging_alert.md`. It exits 0 only if everything passes.
+The test checks that all three workflows are inactive and read-only, that all three schedules (and the CSV-fallback inbound webhook and Gmail trigger) are disabled, that nothing can message a customer, and that no secrets are present. It then runs the Code nodes pulled from each workflow JSON against the fixtures, asserts the expected flags and numbers (including aging thresholds, blank skill/zone detection, multi-tech/multi-day exclusions, and [TEST] labeling), covers the CSV column mapper (header aliases, dates, malformed and empty files, missing required columns), and rewrites `sample_test_digest.md`, `sample_aging_alert.md`, and `sample_csv_fallback_digest.md`. It exits 0 only if everything passes.
 
 ## License and credit
 

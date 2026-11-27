@@ -331,7 +331,7 @@ export const templatePacks: TemplatePack[] = [
   {
     slug: "servicetitan-dispatch-copilot",
     name: "ServiceTitan Dispatch & Capacity Copilot",
-    version: "v0.2.0",
+    version: "v0.3.0",
     category: "field-service",
     filterTags: ["reporting"],
     badge: "New",
@@ -348,6 +348,7 @@ export const templatePacks: TemplatePack[] = [
       "Open-capacity and unsold-estimate filler: finds open schedule windows and pairs them with customers whose maintenance agreement is overdue or whose estimate has no activity. The result is a draft callback queue for dispatchers.",
       "Morning Dispatch KPI digest: technician utilization, response time on emergency and same-day jobs, open capacity, and unworked estimates for the previous day. If a number cannot be computed, you get a Heads-up line.",
       "After-hours handoff summary: overnight emergency calls in one brief for the 7:00 AM morning shift, with calls that still need action first.",
+      "CSV-Fallback Mode for Starter and Essentials: no App Key needed. Email, drop in a folder, or upload one Jobs/Dispatch report and get the same morning digest and aging alert. Common ServiceTitan column headers are matched for you, and anything a single report cannot supply becomes a Heads-up line.",
       "Unassigned-Job Aging Watch: a 15-minute read-only poll that flags jobs sitting in Unassigned past a configurable threshold (default 20 minutes), blank skill tags, missing zone assignments, and multi-tech or multi-day jobs that Dispatch Pro Auto Mode can silently drop or ping-pong. It never writes back to the board.",
     ],
     workflows: [
@@ -363,21 +364,27 @@ export const templatePacks: TemplatePack[] = [
         description:
           "A 15-minute read-only poll that alerts the owner about aged Unassigned jobs, blank skill or zone tags, and Auto Mode exclusion risks. Zero board write-back.",
       },
+      {
+        name: "ServiceTitan CSV-Fallback Triage",
+        nodes: 19,
+        description:
+          "For Starter and Essentials shops with no App Key. Takes one Jobs/Dispatch CSV by email attachment, watch folder, or upload, and sends the owner the same digest and aging alert.",
+      },
     ],
-    totalNodes: 47,
-    totalNodesWithNotes: 61,
+    totalNodes: 66,
+    totalNodesWithNotes: 86,
     defaults: [
       "testMode on: every message is labeled [TEST] and goes only to the owner email or Slack channel you set.",
       "Source defaults to built-in fictional sample data, so the ServiceTitan steps are skipped.",
-      "Imported inactive, and both Schedule nodes are switched off on import (7:00 AM digest and the 15-minute Aging Watch).",
+      "Imported inactive, and every Schedule, webhook, and email trigger is switched off on import.",
     ],
     testModeWrites:
       "Nothing is written to ServiceTitan in any mode. In test mode the only output is a [TEST] message to the owner address or channel you set.",
     included: [
-      "Two importable n8n workflows (saved inactive): the 7:00 AM digest and the 15-minute Unassigned-Job Aging Watch",
+      "Three importable n8n workflows (saved inactive): the 7:00 AM digest, the 15-minute Unassigned-Job Aging Watch, and the CSV-Fallback Triage for Starter and Essentials",
       "Plain-English README with a field-by-field Config table",
-      "Fictional HVAC, plumbing, and electrical sample data (CSV), a generated sample [TEST] digest, and a sample [TEST] aging alert",
-      "A test script that checks both workflows' safety settings and runs their logic against the sample data",
+      "Fictional HVAC, plumbing, and electrical sample data (CSV), including a sample Jobs/Dispatch export with ServiceTitan-style headers, plus a sample [TEST] digest and [TEST] aging alert",
+      "A test script that checks all three workflows' safety settings and runs their logic against the sample data",
       "Changelog",
     ],
     guardrails: [
@@ -407,7 +414,7 @@ export const templatePacks: TemplatePack[] = [
       },
       {
         q: "Do I need ServiceTitan API access?",
-        a: "Not to start, and not on every plan. Shops on The Works or Enterprise can connect live with GET-only Customer-Built App Keys (nothing is written back). Starter and Essentials shops can run the same digest from a CSV export of their own ServiceTitan reports. The live endpoint paths and field mapping are still unverified, so the CSV path is the recommended way to start.",
+        a: "Not to start, and not on every plan. Shops on The Works or Enterprise can connect live with GET-only Customer-Built App Keys (nothing is written back). Starter and Essentials shops use CSV-Fallback Mode instead: no App Key, just email or upload a Jobs/Dispatch report export and get the same digest and aging alert. The live endpoint paths and field mapping are still unverified, so the CSV path is the recommended way to start.",
       },
       {
         q: "Will I get a message just because I imported it?",
@@ -440,7 +447,7 @@ export const templatePacks: TemplatePack[] = [
           },
           {
             heading: "Starter / Essentials",
-            body: "Same digest from a CSV export of your ServiceTitan reports. No API key required.",
+            body: "CSV-Fallback Mode: email, upload, or drop in a folder one Jobs/Dispatch report export and get the same digest and aging alert. No API key required, and common ServiceTitan column headers are matched for you.",
           },
         ],
       },

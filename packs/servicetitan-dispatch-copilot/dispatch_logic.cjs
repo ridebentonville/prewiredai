@@ -103,6 +103,24 @@ function plural(n, one, many) {
   return n === 1 ? one : (many || one + 's');
 }
 
+function splitIds(v) {
+  if (isBlank(v)) return [];
+  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);
+  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+}
+
+function uniqueIds(list) {
+  const out = [];
+  const seen = {};
+  (list || []).forEach(function (id) {
+    const s = String(id || '').trim();
+    if (!s || seen[s]) return;
+    seen[s] = true;
+    out.push(s);
+  });
+  return out;
+}
+
 // @@SECTION settings
 function prepareSettings(cfg, nowMs) {
   const notes = [];
@@ -145,12 +163,17 @@ function prepareSettings(cfg, nowMs) {
 }
 
 // @@SECTION csv
-function parseCsv(text) {
+// CSV parsing, header-alias mapping, and the Jobs/Dispatch export normalizer.
+// Real ServiceTitan report exports use human headers ("Job #", "Scheduled Start", "Required Skill").
+// Everything below renames those onto the snake_case column names the fixtures use, then onto the
+// internal job schema. Matching ignores case, punctuation, and spaces/underscores/hyphens.
+function parseCsvTable(text) {
   const rows = [];
+  const warnings = [];
   let row = [];
   let field = '';
   let inQuotes = false;
-  const src = String(text).replace(/^﻿/, '');
+  const src = String(text === null || text === undefined ? '' : text).replace(/^﻿/, '');
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     if (inQuotes) {
@@ -164,24 +187,380 @@ function parseCsv(text) {
     } else if (c === '\n' || c === '\r') {
       if (c === '\r' && src[i + 1] === '\n') i++;
       row.push(field); field = '';
-      if (row.some(function (x) { return x !== ''; })) rows.push(row);
+      if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);
       row = [];
     } else { field += c; }
   }
   row.push(field);
-  if (row.some(function (x) { return x !== ''; })) rows.push(row);
-  if (rows.length === 0) return [];
+  if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);
+  if (inQuotes) {
+    warnings.push('A quoted field was never closed. Later jobs in this file may have been swallowed into an earlier row. Re-export the CSV and try again.');
+  }
+  if (rows.length === 0) return { headers: [], rows: [], warnings: warnings };
   const header = rows[0].map(function (h) { return h.trim(); });
-  return rows.slice(1).map(function (r) {
+  const body = [];
+  rows.slice(1).forEach(function (r) {
+    if (r.length > header.length) {
+      warnings.push('A row had more columns (' + r.length + ') than the header (' + header.length + '). Extra cells were ignored. Check for a missing quote or an unescaped comma.');
+    }
     const o = {};
     header.forEach(function (h, i) { o[h] = r[i] === undefined ? '' : r[i].trim(); });
+    body.push(o);
+  });
+  return { headers: header, rows: body, warnings: warnings };
+}
+
+function parseCsv(text) {
+  return parseCsvTable(text).rows;
+}
+
+function headerKey(h) {
+  return String(h === null || h === undefined ? '' : h).toLowerCase().replace(/#/g, ' number ').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '');
+}
+
+// key = the snake_case column the fixtures use. Aliases are tried in order after the key itself.
+const JOB_COLUMNS = [
+  { key: 'job_id', label: 'Job # (or Job Number / Job ID)', required: true, aliases: ['Job #', 'Job Number', 'Job No', 'Job ID', 'JobId', 'Job Num', 'Job', 'Invoice #', 'Invoice Number'] },
+  { key: 'status', label: 'Status (or Job Status)', required: true, aliases: ['Status', 'Job Status', 'Appointment Status'] },
+  { key: 'scheduled_start', label: 'Scheduled Start (or Start / Appointment Start)', required: true, aliases: ['Scheduled Start', 'Scheduled Start Date', 'Scheduled Start Time', 'Appointment Start', 'Start', 'Start Time', 'Start Date', 'Job Start', 'Scheduled Date'] },
+  { key: 'scheduled_end', label: 'Scheduled End', aliases: ['Scheduled End', 'Scheduled End Date', 'Scheduled End Time', 'Appointment End', 'End', 'End Time', 'End Date', 'Job End'] },
+  { key: 'booked_at', label: 'Created On', aliases: ['Created On', 'Created Date', 'Booked On', 'Date Created', 'Booked At', 'Created', 'Booking Date', 'Job Created Date'] },
+  { key: 'unassigned_since', label: 'Unassigned Since', aliases: ['Unassigned Since', 'Unassigned On', 'Unassigned Date', 'Unassigned At'] },
+  { key: 'business_unit', label: 'Business Unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
+  { key: 'job_type', label: 'Job Type', aliases: ['Job Type', 'Type', 'Type of Job', 'Job Type Name'] },
+  { key: 'skill', label: 'Required Skill', aliases: ['Required Skill', 'Required Skills', 'Skill', 'Skills', 'Tag', 'Tags', 'Required Tag', 'Required Tags', 'Job Tag', 'Job Tags'] },
+  { key: 'zone', label: 'Zone', aliases: ['Zone', 'Dispatch Zone', 'Zone Name', 'Service Zone'] },
+  { key: 'tech_id', label: 'Technician ID', aliases: ['Technician ID', 'Technician Id', 'Tech ID', 'Assigned Technician ID'] },
+  { key: 'tech_ids', label: 'Technician IDs', aliases: ['Technician IDs', 'Tech IDs', 'Assigned Technician IDs'] },
+  { key: 'tech_name', label: 'Technician', aliases: ['Technician', 'Technicians', 'Tech', 'Assigned Technician', 'Assigned Technicians', 'Technician Name', 'Technician Names', 'Tech Name', 'Assigned Tech'] },
+  { key: 'customer_name', label: 'Customer', aliases: ['Customer', 'Customer Name', 'Client'] },
+  { key: 'customer_phone', label: 'Customer Phone', aliases: ['Customer Phone', 'Customer Phone Number', 'Phone', 'Phone Number', 'Contact Phone'] },
+  { key: 'customer_type', label: 'Customer Type', aliases: ['Customer Type'] },
+  { key: 'equipment_type', label: 'Equipment Type', aliases: ['Equipment Type', 'Equipment'] },
+  { key: 'equipment_age_years', label: 'Equipment Age', aliases: ['Equipment Age', 'Equipment Age Years', 'Equipment Age (Years)'] },
+  { key: 'address', label: 'Address', aliases: ['Address', 'Location', 'Service Location', 'Service Address', 'Job Address', 'Location Address'] },
+  { key: 'priority', label: 'Priority', aliases: ['Priority', 'Job Priority'] },
+  { key: 'summary', label: 'Summary', aliases: ['Summary', 'Job Summary', 'Description', 'Job Description'] },
+  { key: 'multi_day', label: 'Multi-Day', aliases: ['Multi-Day', 'Multi Day', 'Multiday'] },
+  { key: 'arrived_at', label: 'Arrived At', aliases: ['Arrived At', 'Arrived On', 'Arrival Time', 'Actual Arrival', 'On Site Time'] },
+  { key: 'actual_minutes', label: 'Actual Minutes', aliases: ['Actual Minutes', 'Minutes On Site', 'On Site Minutes', 'Time On Site Minutes'] },
+];
+const JOB_DATE_KEYS = ['booked_at', 'unassigned_since', 'scheduled_start', 'scheduled_end', 'arrived_at'];
+
+// Optional sibling exports (same alias rules). Only used when a shop also drops these files.
+const TABLE_COLUMNS = {
+  jobs: JOB_COLUMNS,
+  aging_jobs: JOB_COLUMNS,
+  technicians: [
+    { key: 'tech_id', aliases: ['Technician ID', 'Tech ID', 'ID', 'Employee ID'] },
+    { key: 'name', aliases: ['Name', 'Technician', 'Technician Name', 'Tech', 'Tech Name', 'Employee'] },
+    { key: 'trade', aliases: ['Trade', 'Business Unit', 'Department'] },
+    { key: 'sales_capable', aliases: ['Sales Capable', 'Can Sell', 'Sales'] },
+    { key: 'shift_hours', aliases: ['Shift Hours', 'Shift Length', 'Hours'] },
+  ],
+  capacity: [
+    { key: 'window_id', aliases: ['Window ID', 'Slot ID', 'ID'] },
+    { key: 'business_unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
+    { key: 'window_start', aliases: ['Window Start', 'Slot Start', 'Start'] },
+    { key: 'window_end', aliases: ['Window End', 'Slot End', 'End'] },
+    { key: 'open_slots', aliases: ['Open Slots', 'Open Capacity', 'Available Slots', 'Slots Open'] },
+  ],
+  memberships: [
+    { key: 'membership_id', aliases: ['Membership ID', 'Membership #', 'Membership Number', 'ID'] },
+    { key: 'customer_name', aliases: ['Customer', 'Customer Name'] },
+    { key: 'customer_phone', aliases: ['Customer Phone', 'Phone', 'Phone Number'] },
+    { key: 'business_unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
+    { key: 'plan', aliases: ['Plan', 'Membership Plan', 'Membership Type'] },
+    { key: 'status', aliases: ['Status', 'Membership Status'] },
+    { key: 'next_service_due', aliases: ['Next Service Due', 'Next Service Date', 'Next Due', 'Next Visit Due'] },
+  ],
+  estimates: [
+    { key: 'estimate_id', aliases: ['Estimate ID', 'Estimate #', 'Estimate Number', 'ID'] },
+    { key: 'customer_name', aliases: ['Customer', 'Customer Name'] },
+    { key: 'customer_phone', aliases: ['Customer Phone', 'Phone', 'Phone Number'] },
+    { key: 'business_unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
+    { key: 'status', aliases: ['Status', 'Estimate Status'] },
+    { key: 'amount', aliases: ['Amount', 'Total', 'Estimate Total', 'Subtotal'] },
+    { key: 'created_at', aliases: ['Created At', 'Created On', 'Created Date'] },
+    { key: 'last_followup_at', aliases: ['Last Followup At', 'Last Follow Up', 'Last Follow-Up', 'Last Followup', 'Last Follow Up On'] },
+  ],
+  calls: [
+    { key: 'call_id', aliases: ['Call ID', 'Call #', 'Call Number', 'ID'] },
+    { key: 'received_at', aliases: ['Received At', 'Received On', 'Call Time', 'Call Date', 'Date'] },
+    { key: 'caller_name', aliases: ['Caller Name', 'Caller', 'Customer Name'] },
+    { key: 'caller_phone', aliases: ['Caller Phone', 'Phone', 'Phone Number', 'From'] },
+    { key: 'address', aliases: ['Address', 'Location'] },
+    { key: 'summary', aliases: ['Summary', 'Call Summary'] },
+    { key: 'urgency', aliases: ['Urgency'] },
+    { key: 'status', aliases: ['Status', 'Call Status'] },
+    { key: 'handled_by', aliases: ['Handled By', 'Answered By', 'Agent'] },
+    { key: 'follow_up_needed', aliases: ['Follow Up Needed', 'Follow-Up Needed', 'Needs Follow Up'] },
+    { key: 'notes', aliases: ['Notes'] },
+  ],
+};
+const TABLE_DATE_KEYS = {
+  capacity: ['window_start', 'window_end'],
+  estimates: ['created_at', 'last_followup_at'],
+  calls: ['received_at'],
+};
+
+// Rename a table's columns onto the canonical snake_case names. Every canonical key is present on
+// every output row ('' when the column was not in the export), so downstream code never sees undefined.
+function canonicalizeRows(rows, columns, headersIn) {
+  const list = Array.isArray(rows) ? rows : [];
+  const headers = headersIn && headersIn.length ? headersIn : (list.length ? Object.keys(list[0]) : []);
+  const byKey = {};
+  headers.forEach(function (h) {
+    const k = headerKey(h);
+    if (k && !Object.prototype.hasOwnProperty.call(byKey, k)) byKey[k] = h;
+  });
+  const used = {};
+  const mapped = {};
+  columns.forEach(function (col) {
+    const names = [col.key].concat(col.aliases || []);
+    for (let i = 0; i < names.length; i++) {
+      const h = Object.prototype.hasOwnProperty.call(byKey, headerKey(names[i])) ? byKey[headerKey(names[i])] : undefined;
+      if (h !== undefined && !used[h]) { used[h] = true; mapped[col.key] = h; break; }
+    }
+  });
+  const out = list.map(function (r) {
+    const o = {};
+    columns.forEach(function (col) {
+      const v = mapped[col.key] === undefined ? '' : r[mapped[col.key]];
+      o[col.key] = v === undefined || v === null ? '' : String(v).trim();
+    });
     return o;
   });
+  return {
+    rows: out,
+    mapped: mapped,
+    headers: headers,
+    missing: columns.filter(function (c) { return c.required && mapped[c.key] === undefined; }).map(function (c) { return c.label; }),
+    unmapped: headers.filter(function (h) { return !used[h]; }),
+  };
+}
+
+function wallToMs(y, mo, d, h, mi, tz) {
+  const target = Date.UTC(y, mo - 1, d, h, mi);
+  let guess = target;
+  for (let i = 0; i < 3; i++) {
+    const p = localParts(guess, tz);
+    const dp = p.date.split('-').map(Number);
+    guess += target - Date.UTC(dp[0], dp[1] - 1, dp[2], p.hour, p.minute);
+  }
+  return guess;
+}
+
+// ISO values that already carry an offset or Z are kept as-is. Everything else ("3/10/2026 9:50 AM",
+// "2026-03-10 09:50") is read as shop-local wall time in `tz`. Unparseable values return bad: true.
+function toIsoInZone(v, tz) {
+  if (isBlank(v)) return { iso: '', bad: false };
+  const raw = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}.*(Z|[+-]\d{2}:?\d{2})$/i.test(raw) && parseTime(raw) !== null) return { iso: raw, bad: false };
+  let y; let mo; let d; let h = 0; let mi = 0; let sec = 0; let ap = '';
+  let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?)?$/);
+  if (m) {
+    y = +m[1]; mo = +m[2]; d = +m[3];
+    h = m[4] ? +m[4] : 0; mi = m[5] ? +m[5] : 0; sec = m[6] ? +m[6] : 0;
+  } else {
+    m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?)?$/);
+    if (!m) return { iso: '', bad: true };
+    mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000;
+    h = m[4] ? +m[4] : 0; mi = m[5] ? +m[5] : 0; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : '';
+  }
+  if (ap) {
+    if (h < 1 || h > 12) return { iso: '', bad: true };
+    h = (h % 12) + (ap === 'pm' ? 12 : 0);
+  }
+  const probe = new Date(Date.UTC(y, mo - 1, d));
+  if (mo < 1 || mo > 12 || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return { iso: '', bad: true };
+  return { iso: new Date(wallToMs(y, mo, d, h, mi, tz || 'America/Chicago') + sec * 1000).toISOString(), bad: false };
+}
+
+function mapAgingJob(r) {
+  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));
+  return {
+    id: String(r.job_id || r.id || ''),
+    bookedAt: r.booked_at || r.bookedAt || '',
+    unassignedSince: r.unassigned_since || r.unassignedSince || '',
+    start: r.scheduled_start || r.start || '',
+    end: r.scheduled_end || r.end || '',
+    status: r.status || '',
+    techId: techIds[0] || '',
+    techIds: techIds,
+    skill: r.skill || '',
+    zone: r.zone || '',
+    customerName: r.customer_name || r.customerName || '',
+    customerPhone: r.customer_phone || r.customerPhone || '',
+    customerType: r.customer_type || r.customerType || '',
+    jobType: r.job_type || r.jobType || '',
+    equipmentType: r.equipment_type || r.equipmentType || '',
+    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),
+    address: r.address || '',
+    priority: r.priority || '',
+    businessUnit: r.business_unit || r.businessUnit || '',
+    summary: r.summary || '',
+    multiDay: toBool(r.multi_day || r.multiDay, false),
+  };
+}
+
+// The single internal job schema: aging fields plus the two fields the morning digest reads.
+function mapCsvJob(r) {
+  return Object.assign(mapAgingJob(r), { arrivedAt: r.arrived_at || '', actualMinutes: toNum(r.actual_minutes, null) });
+}
+
+const NO_TECH_WORDS = /^(unassigned|none|n\/a|na|null|-|—|–)$/i;
+function techList(v) {
+  return splitIds(v).filter(function (x) { return !NO_TECH_WORDS.test(x); });
+}
+
+// Minimum for a Jobs/Dispatch export: job id, status, scheduled start. Everything else is optional and
+// a blank skill / zone / technician is reported by the aging watch rather than guessed.
+function prepareJobRows(rowsIn, opts) {
+  const o = opts || {};
+  const tz = o.timezone || 'America/Chicago';
+  const label = o.label || 'Jobs export';
+  const rows = Array.isArray(rowsIn) ? rowsIn : [];
+  const c = canonicalizeRows(rows, JOB_COLUMNS, o.headers);
+  const res = {
+    ok: false, rows: [], technicians: [], headsUp: [], errors: [], missingRequired: c.missing,
+    headersSeen: c.headers, mapped: c.mapped, rowCount: rows.length, importedCount: 0, skipped: [],
+  };
+  const seen = c.headers.length ? ' Columns found: ' + c.headers.slice(0, 25).join(', ') + (c.headers.length > 25 ? ', ...' : '') + '.' : '';
+  if (c.headers.length === 0) {
+    res.errors.push(label + ' is empty. Export a ServiceTitan Jobs/Dispatch report with a header row and at least one job, then try again.');
+    return res;
+  }
+  if (c.missing.length) {
+    res.errors.push(label + ' is missing required column(s): ' + c.missing.join('; ') + '.' + seen + ' Add the missing column(s) to your ServiceTitan Jobs/Dispatch report and export again.');
+    return res;
+  }
+  if (rows.length === 0) {
+    res.errors.push(label + ' has a header row but no job rows. Export a report that includes at least one job.');
+    return res;
+  }
+  const byId = {};
+  const order = [];
+  const techNames = {};
+  const badDates = [];
+  let merged = 0;
+  const earlier = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x < y) ? a : b; };
+  const later = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x > y) ? a : b; };
+  c.rows.forEach(function (r, idx) {
+    const line = idx + 2; // row number counting the header as row 1; blank lines are not counted
+    if (isBlank(r.job_id)) { res.skipped.push({ row: line, reason: 'missing job id' }); return; }
+    if (isBlank(r.status) && isBlank(r.scheduled_start)) { res.skipped.push({ row: line, reason: 'no status and no scheduled start (subtotal or footer row?)' }); return; }
+    JOB_DATE_KEYS.forEach(function (k) {
+      const t = toIsoInZone(r[k], tz);
+      if (t.bad) { badDates.push('job ' + r.job_id + ' ' + k + ' "' + r[k] + '"'); r[k] = ''; } else { r[k] = t.iso; }
+    });
+    const ids = uniqueIds(techList(r.tech_id).concat(techList(r.tech_ids)));
+    const names = techList(r.tech_name);
+    const finalIds = ids.length ? ids : names;
+    finalIds.forEach(function (id, i) {
+      const nm = ids.length ? (names.length === ids.length ? names[i] : '') : id;
+      if (!techNames[id] || (nm && techNames[id] === id)) techNames[id] = nm || techNames[id] || '';
+    });
+    r.tech_ids = finalIds.join(',');
+    r.tech_id = finalIds[0] || '';
+    delete r.tech_name;
+    if (lc(r.status) === 'working') r.status = 'In Progress';
+    const prev = byId[r.job_id];
+    if (!prev) { byId[r.job_id] = r; order.push(r.job_id); return; }
+    merged++;
+    const all = uniqueIds(splitIds(prev.tech_ids).concat(finalIds));
+    prev.tech_ids = all.join(',');
+    prev.tech_id = all[0] || '';
+    prev.scheduled_start = earlier(prev.scheduled_start, r.scheduled_start) || '';
+    prev.scheduled_end = later(prev.scheduled_end, r.scheduled_end) || '';
+    Object.keys(r).forEach(function (k) { if (isBlank(prev[k]) && !isBlank(r[k])) prev[k] = r[k]; });
+  });
+  res.rows = order.map(function (id) { return byId[id]; });
+  res.technicians = Object.keys(techNames).map(function (id) { return { tech_id: id, name: techNames[id] || id, trade: '' }; });
+  res.importedCount = res.rows.length;
+  if (res.skipped.length) {
+    res.headsUp.push(res.skipped.length + ' ' + plural(res.skipped.length, 'row') + ' in the ' + label + ' ' + plural(res.skipped.length, 'was', 'were') + ' skipped. First: row ' + res.skipped[0].row + ' (' + res.skipped[0].reason + ').');
+  }
+  if (badDates.length) {
+    res.headsUp.push(badDates.length + ' date ' + plural(badDates.length, 'value') + ' in the ' + label + ' could not be read and ' + plural(badDates.length, 'was', 'were') + ' left blank (' + badDates.slice(0, 3).join('; ') + (badDates.length > 3 ? '; ...' : '') + '). Use dates like 3/10/2026 9:50 AM or 2026-03-10 09:50.');
+  }
+  if (merged > 0) {
+    res.headsUp.push(merged + ' repeated job ' + plural(merged, 'row') + ' ' + plural(merged, 'was', 'were') + ' merged into the job with the same number (one row per technician or appointment). Technicians were combined and the earliest start and latest end were kept.');
+  }
+  if (res.rows.length === 0) res.errors.push('No usable job rows were found in the ' + label + '.' + seen);
+  res.ok = res.errors.length === 0;
+  return res;
+}
+
+// Public entry point. input = CSV text or parseCsv rows. Never throws unless opts.strict is true;
+// check result.ok / result.message. result.jobs uses the internal job schema.
+function normalizeJobsExport(input, opts) {
+  const o = opts || {};
+  let rows;
+  let headers = o.headers;
+  const parseWarnings = Array.isArray(o.parseWarnings) ? o.parseWarnings.slice() : [];
+  if (typeof input === 'string') {
+    const t = parseCsvTable(input);
+    rows = t.rows;
+    headers = t.headers;
+    (t.warnings || []).forEach(function (w) { parseWarnings.push(w); });
+  } else {
+    rows = Array.isArray(input) ? input : [];
+  }
+  const res = prepareJobRows(rows, Object.assign({}, o, { headers: headers }));
+  parseWarnings.forEach(function (w) {
+    res.errors.push(w);
+    res.headsUp.push(w);
+  });
+  if (res.errors.length) res.ok = false;
+  const nameById = {};
+  res.technicians.forEach(function (t) { nameById[t.tech_id] = t.name; });
+  res.jobs = res.rows.map(function (r) {
+    const job = mapCsvJob(r);
+    job.assignedTechNames = job.techIds.map(function (id) { return nameById[id] || id; });
+    return job;
+  });
+  res.message = res.errors.join(' ');
+  if (o.strict && !res.ok) throw new Error(res.message);
+  return res;
+}
+
+// Canonicalize every table that was supplied. Jobs tables go through prepareJobRows (required-column
+// check, date normalization, duplicate merge). Idempotent for the snake_case fixture files.
+function prepareCsvTables(settings, tables) {
+  const tz = settings && settings.timezone;
+  const out = {};
+  const headsUp = [];
+  let technicians = [];
+  Object.keys(tables || {}).forEach(function (name) {
+    const rows = tables[name];
+    if (!Array.isArray(rows)) return;
+    if (name === 'jobs' || name === 'aging_jobs') {
+      const r = prepareJobRows(rows, { timezone: tz, label: name + '.csv' });
+      r.errors.concat(r.headsUp).forEach(function (m) { headsUp.push('CSV import: ' + m); });
+      out[name] = r.rows;
+      if (!technicians.length) technicians = r.technicians;
+    } else if (TABLE_COLUMNS[name]) {
+      const c = canonicalizeRows(rows, TABLE_COLUMNS[name]);
+      (TABLE_DATE_KEYS[name] || []).forEach(function (k) {
+        c.rows.forEach(function (r) { const t = toIsoInZone(r[k], tz); r[k] = t.bad ? '' : t.iso; });
+      });
+      out[name] = c.rows;
+    } else {
+      out[name] = rows;
+    }
+  });
+  return { tables: out, headsUp: headsUp, technicians: technicians };
 }
 
 function datasetFromTables(settings, tables) {
-  const t = tables || {};
-  const headsUp = [];
+  const prep = prepareCsvTables(settings, tables || {});
+  const t = prep.tables;
+  const headsUp = prep.headsUp.slice();
+  if (!Array.isArray(t.technicians) && prep.technicians.length) {
+    t.technicians = prep.technicians;
+    headsUp.push('No technicians export was supplied, so the technician list was built from the Technician column in the jobs export. Shift hours and sales capability are not in a jobs export.');
+  }
   ['technicians', 'jobs', 'capacity', 'memberships', 'estimates', 'calls'].forEach(function (name) {
     if (!Array.isArray(t[name])) headsUp.push('CSV export "' + name + '.csv" was not found. Anything that needs it is skipped.');
   });
@@ -223,6 +602,77 @@ function datasetFromTables(settings, tables) {
       };
     }) : null,
   };
+}
+
+// Work out which export a file is. Header signature first (a Jobs export is the one with a job id column),
+// then the file name, then "the only file is the jobs file" so a bad Jobs export still gets a clear error.
+function classifyCsvTable(fileName, table, fileCount) {
+  const has = function (name, key) { return canonicalizeRows([], TABLE_COLUMNS[name], table.headers).mapped[key] !== undefined; };
+  if (has('jobs', 'job_id')) return 'jobs';
+  if (has('calls', 'call_id') || has('calls', 'received_at')) return 'calls';
+  if (has('memberships', 'membership_id') || has('memberships', 'next_service_due')) return 'memberships';
+  if (has('estimates', 'estimate_id') || has('estimates', 'last_followup_at')) return 'estimates';
+  if (has('capacity', 'window_start') && has('capacity', 'open_slots')) return 'capacity';
+  if (has('technicians', 'tech_id') && has('technicians', 'name')) return 'technicians';
+  const n = String(fileName || '').toLowerCase();
+  if (/job|dispatch|appointment/.test(n)) return 'jobs';
+  if (/tech/.test(n)) return 'technicians';
+  if (/capacity/.test(n)) return 'capacity';
+  if (/member/.test(n)) return 'memberships';
+  if (/estimate/.test(n)) return 'estimates';
+  if (/call/.test(n)) return 'calls';
+  return fileCount === 1 ? 'jobs' : null;
+}
+
+// files = [{ name, text }] in any order and with any file names. One Jobs/Dispatch export is enough.
+// Returns the digest dataset (jobs use the internal schema that both the digest and the aging watch read).
+function datasetFromCsvFiles(settings, files) {
+  const list = Array.isArray(files) ? files : [];
+  const tables = {};
+  const notes = [];
+  const jobFiles = [];
+  list.forEach(function (f) {
+    const name = String((f && f.name) || 'upload.csv');
+    const t = parseCsvTable(f && f.text);
+    (t.warnings || []).forEach(function (w) { notes.push('CSV import: file "' + name + '": ' + w); });
+    const kind = classifyCsvTable(name, t, list.length);
+    if (!kind) {
+      notes.push('CSV import: file "' + name + '" was not recognized as a jobs, technicians, capacity, memberships, estimates, or calls export and was ignored.');
+    } else if (kind === 'jobs') {
+      jobFiles.push({ name: name, table: t });
+    } else {
+      tables[kind] = (tables[kind] || []).concat(canonicalizeRows(t.rows, TABLE_COLUMNS[kind], t.headers).rows);
+    }
+  });
+  // One Jobs/Dispatch snapshot per batch. Merging two exports of the same job number
+  // (an older Completed row plus a newer Unassigned row) can hide today's board.
+  // Repeated rows inside a single file are still merged (one row per technician or appointment).
+  let jobRows = [];
+  let derived = [];
+  if (jobFiles.length) {
+    const chosen = jobFiles[jobFiles.length - 1];
+    if (jobFiles.length > 1) {
+      const ignored = jobFiles.slice(0, -1).map(function (f) { return '"' + f.name + '"'; }).join(', ');
+      notes.push('CSV import: ' + jobFiles.length + ' Jobs/Dispatch exports were received. Only the last one ("' + chosen.name + '") was used so an older snapshot cannot hide the current board. Ignored: ' + ignored + '.');
+    }
+    const r = prepareJobRows(chosen.table.rows, { timezone: settings.timezone, label: 'Jobs export "' + chosen.name + '"', headers: chosen.table.headers });
+    r.errors.concat(r.headsUp).forEach(function (m) { notes.push('CSV import: ' + m); });
+    jobRows = r.rows;
+    derived = r.technicians;
+  }
+  if (list.length === 0) notes.push('CSV import: no CSV file was received. Send or drop a ServiceTitan Jobs/Dispatch export.');
+  if (jobRows.length) tables.jobs = jobRows;
+  const ds = datasetFromTables(Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(notes) }), tables);
+  const norm = jobRows.length ? normalizeJobsExport(jobRows, { timezone: settings.timezone }) : null;
+  if (norm) {
+    const nameById = {};
+    ds.technicians.forEach(function (t) { nameById[t.id] = t.name; });
+    ds.jobs = norm.jobs.map(function (j) {
+      j.assignedTechNames = j.techIds.map(function (id) { return nameById[id] || id; });
+      return j;
+    });
+  }
+  return ds;
 }
 
 // @@SECTION booking_qa
@@ -532,7 +982,7 @@ function renderMessage(data) {
   const u = k.utilization;
   L.push(u.team ? '- Technician utilization (team): ' + fix1(u.team.pct) + '% (' + u.team.minutes + ' on-site minutes of ' + u.team.shiftMinutes + ' shift minutes)' : '- Technician utilization: not available (see Heads-up)');
   u.perTech.forEach(function (p) {
-    L.push('  - ' + p.name + ' (' + p.trade + '): ' + (p.utilizationPct === null ? 'n/a' : fix1(p.utilizationPct) + '%') + ', ' + p.jobs + ' completed ' + plural(p.jobs, 'job'));
+    L.push('  - ' + p.name + (isBlank(p.trade) ? '' : ' (' + p.trade + ')') + ': ' + (p.utilizationPct === null ? 'n/a' : fix1(p.utilizationPct) + '%') + ', ' + p.jobs + ' completed ' + plural(p.jobs, 'job'));
   });
   L.push(k.responseTime
     ? '- Response time, emergency and same-day jobs (booked to arrival): average ' + fix1(k.responseTime.avgMinutes) + ' min, longest ' + k.responseTime.maxMinutes + ' min, across ' + k.responseTime.count + ' ' + plural(k.responseTime.count, 'job')
@@ -723,24 +1173,6 @@ function prepareAgingSettings(cfg, nowMs) {
   return s;
 }
 
-function splitIds(v) {
-  if (isBlank(v)) return [];
-  if (Array.isArray(v)) return v.map(function (x) { return String(x).trim(); }).filter(Boolean);
-  return String(v).split(/[,|;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
-}
-
-function uniqueIds(list) {
-  const out = [];
-  const seen = {};
-  (list || []).forEach(function (id) {
-    const s = String(id || '').trim();
-    if (!s || seen[s]) return;
-    seen[s] = true;
-    out.push(s);
-  });
-  return out;
-}
-
 function jobTechIds(job) {
   const fromList = uniqueIds(job.techIds || splitIds(job.tech_ids));
   if (fromList.length) return fromList;
@@ -784,39 +1216,14 @@ function agingMinutes(job, asOfMs) {
   return Math.floor((asOfMs - clock) / 60000);
 }
 
-function mapAgingJob(r) {
-  const techIds = uniqueIds(splitIds(r.tech_ids).concat(splitIds(r.tech_id || r.techId)));
-  return {
-    id: String(r.job_id || r.id || ''),
-    bookedAt: r.booked_at || r.bookedAt || '',
-    unassignedSince: r.unassigned_since || r.unassignedSince || '',
-    start: r.scheduled_start || r.start || '',
-    end: r.scheduled_end || r.end || '',
-    status: r.status || '',
-    techId: techIds[0] || '',
-    techIds: techIds,
-    skill: r.skill || '',
-    zone: r.zone || '',
-    customerName: r.customer_name || r.customerName || '',
-    customerPhone: r.customer_phone || r.customerPhone || '',
-    customerType: r.customer_type || r.customerType || '',
-    jobType: r.job_type || r.jobType || '',
-    equipmentType: r.equipment_type || r.equipmentType || '',
-    equipmentAgeYears: toNum(r.equipment_age_years || r.equipmentAgeYears, null),
-    address: r.address || '',
-    priority: r.priority || '',
-    businessUnit: r.business_unit || r.businessUnit || '',
-    summary: r.summary || '',
-    multiDay: toBool(r.multi_day || r.multiDay, false),
-  };
-}
-
 function datasetFromAgingTables(settings, tables) {
-  const t = tables || {};
-  const headsUp = [];
+  const prep = prepareCsvTables(settings, tables || {});
+  const t = prep.tables;
+  const headsUp = prep.headsUp.slice();
   const jobsTable = Array.isArray(t.aging_jobs) ? t.aging_jobs : (Array.isArray(t.jobs) ? t.jobs : null);
   if (!jobsTable) headsUp.push('CSV export "aging_jobs.csv" or "jobs.csv" was not found. The aging watch is skipped.');
-  const technicians = (t.technicians || []).map(function (r) {
+  const techRows = Array.isArray(t.technicians) ? t.technicians : prep.technicians;
+  const technicians = techRows.map(function (r) {
     return { id: String(r.tech_id || r.id || ''), name: r.name || ('Technician ' + (r.tech_id || r.id || '')), trade: r.trade || '' };
   });
   const techName = {};
@@ -1075,7 +1482,8 @@ function loadAgingTestData(settings, dataset) {
 // @@END
 module.exports = {
   DEFAULTS, AGING_DEFAULT_THRESHOLD_MINUTES, prepareSettings, prepareAgingSettings,
-  parseCsv, datasetFromTables, datasetFromAgingTables, bookingQa, capacityFiller, kpiDigest,
+  parseCsv, parseCsvTable, headerKey, canonicalizeRows, toIsoInZone, JOB_COLUMNS, TABLE_COLUMNS, mapAgingJob, mapCsvJob,
+  normalizeJobsExport, datasetFromCsvFiles, datasetFromTables, datasetFromAgingTables, bookingQa, capacityFiller, kpiDigest,
   afterHoursHandoff, renderMessage, normalizeServiceTitan, normalizeAgingServiceTitan,
   loadTestData, loadAgingTestData, unassignedAgingWatch, renderAgingAlert,
   isUnassignedJob, isOpenJob, jobTechIds,
