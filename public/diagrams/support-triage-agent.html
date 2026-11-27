@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft-First Support Triage Agent — workflow</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --surface-subtle: #f5f5f4;
+      --text: #1c1917;
+      --muted: #57534e;
+      --muted-light: #78716c;
+      --border: #e7e5e4;
+      --border-strong: #d6d3d1;
+
+      /* Accent green — read-only / owner-only */
+      --accent: #1f4d3a;
+      --accent-soft: #eef4f1;
+      --accent-border: #b8cfc4;
+
+      /* Restrained amber/stone — gated write or send */
+      --gated: #7c4a15;
+      --gated-soft: #faf4ea;
+      --gated-border: #dec9a8;
+
+      /* Human approval / hard stop */
+      --stop: #44403c;
+      --stop-accent: #9a3412;
+      --stop-soft: #f5f0ec;
+      --stop-border: #cbbeb5;
+
+      --radius: 16px;
+      --radius-sm: 10px;
+      --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --transition: 140ms ease;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :root {
+        --transition: 0ms;
+      }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .diagram-shell {
+      width: 100%;
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 20px 20px 18px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px 20px;
+      margin-bottom: 14px;
+    }
+
+    .header-main {
+      min-width: 0;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 4px;
+      font-weight: 600;
+    }
+
+    .title {
+      font-size: clamp(16px, 2vw, 20px);
+      line-height: 1.25;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin: 0 0 4px;
+      color: var(--text);
+    }
+
+    .caption {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .pack-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding-top: 2px;
+    }
+
+    .meta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .meta-pill strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Legend bar */
+    .legend-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px 16px;
+      padding: 8px 12px;
+      margin-bottom: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 18px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .swatch--safe {
+      background: var(--accent);
+    }
+
+    .swatch--stop {
+      background: var(--stop-accent);
+      border-radius: 999px;
+    }
+
+    .swatch--gated {
+      background: var(--gated);
+      border: 1px solid var(--gated-border);
+    }
+
+    .legend-hint {
+      color: var(--muted-light);
+      font-size: 11px;
+    }
+
+    /* Architecture map container */
+    .map-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 5fr) auto minmax(0, 1.25fr);
+      gap: 10px;
+      align-items: stretch;
+      margin-bottom: 14px;
+    }
+
+    .workflow-zone {
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .workflow-zone--locked {
+      background: #f8f5ef;
+      border-color: var(--gated-border);
+      border-style: dashed;
+    }
+
+    .zone-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 0 2px;
+    }
+
+    .zone-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text);
+    }
+
+    .zone-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .zone-sub--accent {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .zone-sub--gated {
+      color: var(--gated);
+      font-weight: 600;
+    }
+
+    /* Stage sequence inside zone 1 */
+    .stage-row {
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1fr) 16px
+        minmax(0, 1fr) 16px
+        minmax(0, 1fr) 16px
+        minmax(0, 1fr) 16px
+        minmax(0, 1fr);
+      align-items: stretch;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .stage-single {
+      display: flex;
+      flex: 1;
+    }
+
+    .connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted-light);
+      user-select: none;
+    }
+
+    .connector svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+
+    /* Hard stop divider between workflows */
+    .boundary-divider {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 6px 2px;
+      position: relative;
+      min-width: 34px;
+    }
+
+    .boundary-line {
+      width: 2px;
+      flex: 1;
+      min-height: 24px;
+      background-image: repeating-linear-gradient(
+        to bottom,
+        var(--stop-accent) 0,
+        var(--stop-accent) 5px,
+        transparent 5px,
+        transparent 9px
+      );
+      opacity: 0.7;
+    }
+
+    .boundary-badge {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--stop-accent);
+      background: var(--stop-soft);
+      border: 1px solid var(--stop-border);
+      border-radius: 999px;
+      padding: 8px 5px;
+      white-space: nowrap;
+    }
+
+    /* Stage button cards */
+    .stage-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      font-family: inherit;
+      text-align: left;
+      width: 100%;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 11px 11px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      position: relative;
+      transition: border-color var(--transition), box-shadow var(--transition), background-color var(--transition), transform var(--transition);
+    }
+
+    .stage-btn:hover {
+      border-color: var(--border-strong);
+      background: #fcfcfb;
+    }
+
+    .stage-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    /* Risk top accent bar inside card */
+    .stage-btn::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 14px;
+      right: 14px;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--accent);
+      opacity: 0.35;
+      transition: opacity var(--transition);
+    }
+
+    .stage-btn[data-risk="stop"]::before {
+      background: var(--stop-accent);
+      opacity: 0.75;
+    }
+
+    .stage-btn[data-risk="gated"]::before {
+      background: var(--gated);
+      opacity: 0.65;
+    }
+
+    .stage-btn[aria-expanded="true"] {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-soft), 0 4px 14px rgba(28, 25, 23, 0.06);
+      background: var(--surface);
+    }
+
+    .stage-btn[aria-expanded="true"]::before {
+      opacity: 1;
+    }
+
+    .stage-btn[data-risk="stop"][aria-expanded="true"] {
+      border-color: var(--stop-accent);
+      box-shadow: 0 0 0 2px var(--stop-soft), 0 4px 14px rgba(28, 25, 23, 0.06);
+    }
+
+    .stage-btn[data-risk="gated"][aria-expanded="true"] {
+      border-color: var(--gated);
+      box-shadow: 0 0 0 2px var(--gated-soft), 0 4px 14px rgba(28, 25, 23, 0.06);
+    }
+
+    .stage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .stage-num {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted-light);
+    }
+
+    .stage-btn[aria-expanded="true"] .stage-num {
+      color: var(--accent);
+    }
+
+    .stage-btn[data-risk="stop"][aria-expanded="true"] .stage-num {
+      color: var(--stop-accent);
+    }
+
+    .stage-btn[data-risk="gated"][aria-expanded="true"] .stage-num {
+      color: var(--gated);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      line-height: 1.3;
+      white-space: nowrap;
+    }
+
+    .badge--safe {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent-border);
+    }
+
+    .badge--stop {
+      background: var(--stop-soft);
+      color: var(--stop-accent);
+      border: 1px solid var(--stop-border);
+    }
+
+    .badge--gated {
+      background: var(--gated-soft);
+      color: var(--gated);
+      border: 1px solid var(--gated-border);
+    }
+
+    .stage-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text);
+      margin: 0;
+    }
+
+    .stage-summary {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--muted);
+      margin: 0;
+      flex: 1;
+    }
+
+    .stage-tools {
+      font-size: 10px;
+      color: var(--muted-light);
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+      white-space: normal;
+      overflow: visible;
+      overflow-wrap: anywhere;
+    }
+
+    /* Detail panel */
+    .detail-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .detail-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px 14px;
+    }
+
+    .detail-title-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .detail-step {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .detail-step[data-risk="stop"] {
+      color: var(--stop-accent);
+      background: var(--stop-soft);
+      border-color: var(--stop-border);
+    }
+
+    .detail-step[data-risk="gated"] {
+      color: var(--gated);
+      background: var(--gated-soft);
+      border-color: var(--gated-border);
+    }
+
+    .detail-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--text);
+    }
+
+    .detail-badges {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .detail-file-tag {
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 8px;
+    }
+
+    .detail-body {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 92ch;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .detail-fact {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+
+    .detail-fact-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted-light);
+      margin: 0 0 3px;
+      font-weight: 600;
+    }
+
+    .detail-fact-value {
+      font-size: 11.5px;
+      color: var(--text);
+      margin: 0;
+      line-height: 1.45;
+    }
+
+    .invariants-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .invariants-label {
+      font-weight: 600;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 10.5px;
+    }
+
+    .invariant-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .invariant-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--muted-light);
+      display: inline-block;
+    }
+
+    /* Tablet / narrow desktop */
+    @media (max-width: 980px) {
+      .map-layout {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .stage-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .connector {
+        display: none;
+      }
+
+      .boundary-divider {
+        flex-direction: row;
+        min-width: 0;
+        padding: 2px 8px;
+      }
+
+      .boundary-line {
+        height: 2px;
+        width: auto;
+        min-height: 0;
+        background-image: repeating-linear-gradient(
+          to right,
+          var(--stop-accent) 0,
+          var(--stop-accent) 5px,
+          transparent 5px,
+          transparent 9px
+        );
+      }
+
+      .boundary-badge {
+        writing-mode: horizontal-tb;
+        transform: none;
+        padding: 4px 10px;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Mobile down to 360px */
+    @media (max-width: 600px) {
+      .diagram-shell {
+        padding: 14px 12px 16px;
+      }
+
+      .stage-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .stage-btn {
+        padding: 12px;
+      }
+
+      .detail-panel {
+        padding: 14px;
+      }
+
+      .legend-hint {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="diagram-shell" aria-label="Draft-First Support Triage Agent workflow architecture diagram">
+    <header class="header">
+      <div class="header-main">
+        <p class="eyebrow">Prewired AI · Draft Pack v0.1.0</p>
+        <h1 class="title">Draft-First Support Triage Agent — workflow</h1>
+        <p class="caption">Architecture diagram of the draft pack, not a live product screenshot.</p>
+      </div>
+      <div class="pack-meta" aria-label="Pack structure">
+        <span class="meta-pill"><strong>Triage</strong> 57 nodes · no send node</span>
+        <span class="meta-pill"><strong>Send-approved</strong> 28 nodes · locked</span>
+      </div>
+    </header>
+
+    <div class="legend-bar" role="note" aria-label="Risk and boundary legend">
+      <div class="legend-items">
+        <span class="legend-item"><span class="swatch swatch--safe" aria-hidden="true"></span>Read-only / internal</span>
+        <span class="legend-item"><span class="swatch swatch--stop" aria-hidden="true"></span>Human approval / hard stop</span>
+        <span class="legend-item"><span class="swatch swatch--gated" aria-hidden="true"></span>Gated write or send</span>
+      </div>
+      <span class="legend-hint">Select any stage (click or Enter/Space) to inspect</span>
+    </div>
+
+    <section class="map-layout" aria-label="Workflow stages">
+      <!-- Workflow 1: Triage (57 executable nodes, NO send node) -->
+      <div class="workflow-zone" aria-label="Triage workflow: 57 executable nodes, no send node">
+        <div class="zone-header">
+          <span class="zone-title">Workflow 1 · Triage</span>
+          <span class="zone-sub zone-sub--accent">57 executable nodes · NO send node</span>
+        </div>
+
+        <div class="stage-row">
+          <!-- Stage 1 -->
+          <button
+            type="button"
+            class="stage-btn"
+            id="stage-btn-1"
+            data-stage="1"
+            data-risk="safe"
+            aria-expanded="true"
+            aria-controls="stage-detail-panel"
+          >
+            <div class="stage-top">
+              <span class="stage-num">01</span>
+              <span class="badge badge--safe">read-only</span>
+            </div>
+            <h2 class="stage-name">Ticket or email arrives</h2>
+            <p class="stage-summary">Generic helpdesk/email webhook; Zendesk-shape adapter available.</p>
+            <span class="stage-tools">Webhook · Zendesk shape</span>
+          </button>
+
+          <div class="connector" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2.5 8h10M9 4.5L12.5 8 9 11.5"/>
+            </svg>
+          </div>
+
+          <!-- Stage 2 -->
+          <button
+            type="button"
+            class="stage-btn"
+            id="stage-btn-2"
+            data-stage="2"
+            data-risk="safe"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <div class="stage-top">
+              <span class="stage-num">02</span>
+              <span class="badge badge--safe">read-only</span>
+            </div>
+            <h2 class="stage-name">Classify</h2>
+            <p class="stage-summary">Rules-based labels; optional AI classify is off unless turned on.</p>
+            <span class="stage-tools">Rules · AI off by default</span>
+          </button>
+
+          <div class="connector" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2.5 8h10M9 4.5L12.5 8 9 11.5"/>
+            </svg>
+          </div>
+
+          <!-- Stage 3 -->
+          <button
+            type="button"
+            class="stage-btn"
+            id="stage-btn-3"
+            data-stage="3"
+            data-risk="safe"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <div class="stage-top">
+              <span class="stage-num">03</span>
+              <span class="badge badge--safe">read-only</span>
+            </div>
+            <h2 class="stage-name">Read-only context</h2>
+            <p class="stage-summary">HubSpot lookup and KB passages (sheet or HTTP). No CRM writes.</p>
+            <span class="stage-tools">HubSpot · KB Sheet/HTTP</span>
+          </button>
+
+          <div class="connector" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2.5 8h10M9 4.5L12.5 8 9 11.5"/>
+            </svg>
+          </div>
+
+          <!-- Stage 4 -->
+          <button
+            type="button"
+            class="stage-btn"
+            id="stage-btn-4"
+            data-stage="4"
+            data-risk="safe"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <div class="stage-top">
+              <span class="stage-num">04</span>
+              <span class="badge badge--safe">internal only</span>
+            </div>
+            <h2 class="stage-name">Internal Slack summary</h2>
+            <p class="stage-summary">Escalation and summary for high-risk or VIP accounts only.</p>
+            <span class="stage-tools">Slack (internal channel)</span>
+          </button>
+
+          <div class="connector" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2.5 8h10M9 4.5L12.5 8 9 11.5"/>
+            </svg>
+          </div>
+
+          <!-- Stage 5 -->
+          <button
+            type="button"
+            class="stage-btn"
+            id="stage-btn-5"
+            data-stage="5"
+            data-risk="stop"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <div class="stage-top">
+              <span class="stage-num">05</span>
+              <span class="badge badge--stop">hard stop</span>
+            </div>
+            <h2 class="stage-name">Hold a draft</h2>
+            <p class="stage-summary">Google Sheet and/or Gmail Draft. Cannot send to customer.</p>
+            <span class="stage-tools">Google Sheet · Gmail Draft</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Hard-stop boundary between separate files -->
+      <div class="boundary-divider" aria-label="Human approval boundary between separate workflow files">
+        <span class="boundary-line" aria-hidden="true"></span>
+        <span class="boundary-badge">Human approval</span>
+        <span class="boundary-line" aria-hidden="true"></span>
+      </div>
+
+      <!-- Workflow 2: Optional send-approved (28 executable nodes, separate locked file) -->
+      <div class="workflow-zone workflow-zone--locked" aria-label="Optional send-approved workflow: 28 executable nodes, separate locked file">
+        <div class="zone-header">
+          <span class="zone-title">Workflow 2 · Optional</span>
+          <span class="zone-sub zone-sub--gated">28 nodes · locked</span>
+        </div>
+
+        <div class="stage-single">
+          <!-- Stage 6 -->
+          <button
+            type="button"
+            class="stage-btn"
+            id="stage-btn-6"
+            data-stage="6"
+            data-risk="gated"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <div class="stage-top">
+              <span class="stage-num">06</span>
+              <span class="badge badge--gated">gated</span>
+            </div>
+            <h2 class="stage-name">Send-approved workflow</h2>
+            <p class="stage-summary">Separate locked file. Sends human-approved rows; testMode &amp; dryRun defaults.</p>
+            <span class="stage-tools">Separate file · Optional</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detail panel -->
+    <section
+      id="stage-detail-panel"
+      class="detail-panel"
+      role="region"
+      aria-live="polite"
+      aria-labelledby="detail-title"
+    >
+      <div class="detail-header">
+        <div class="detail-title-group">
+          <span class="detail-step" id="detail-step" data-risk="safe">Stage 01 of 06</span>
+          <h2 class="detail-title" id="detail-title">Ticket or email arrives</h2>
+        </div>
+        <div class="detail-badges">
+          <span class="detail-file-tag" id="detail-file">Triage workflow (57 nodes)</span>
+          <span class="badge badge--safe" id="detail-risk-badge">read-only</span>
+        </div>
+      </div>
+
+      <p class="detail-body" id="detail-body">
+        Incoming support tickets or customer emails enter through a generic helpdesk/email webhook, with a Zendesk-shape payload adapter available. This starts the draft-first triage workflow, which produces no auto-replies and contains no send node.
+      </p>
+
+      <div class="detail-grid">
+        <div class="detail-fact">
+          <p class="detail-fact-label">Systems &amp; Inputs</p>
+          <p class="detail-fact-value" id="detail-systems">Generic helpdesk or email webhook; Zendesk-shape adapter.</p>
+        </div>
+        <div class="detail-fact">
+          <p class="detail-fact-label">Write / Send Scope</p>
+          <p class="detail-fact-value" id="detail-scope">Read-only ingest. No outbound email or CRM write.</p>
+        </div>
+        <div class="detail-fact">
+          <p class="detail-fact-label">Safety Gate</p>
+          <p class="detail-fact-value" id="detail-gate">Draft-first design; triage has no send node and sends no auto-replies.</p>
+        </div>
+      </div>
+
+      <div class="invariants-bar" aria-label="Pack safety invariants">
+        <span class="invariants-label">Pack invariants</span>
+        <span class="invariant-item"><span class="invariant-dot" aria-hidden="true"></span>Two files never merged</span>
+        <span class="invariant-item"><span class="invariant-dot" aria-hidden="true"></span>Draft-first</span>
+        <span class="invariant-item"><span class="invariant-dot" aria-hidden="true"></span>Triage has no send node</span>
+        <span class="invariant-item"><span class="invariant-dot" aria-hidden="true"></span>Human approval required</span>
+        <span class="invariant-item"><span class="invariant-dot" aria-hidden="true"></span>testMode default</span>
+        <span class="invariant-item"><span class="invariant-dot" aria-hidden="true"></span>No auto-replies</span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var STAGES = {
+        "1": {
+          step: "Stage 01 of 06",
+          title: "Ticket or email arrives",
+          file: "Triage workflow (57 nodes)",
+          risk: "safe",
+          badgeText: "read-only",
+          badgeClass: "badge badge--safe",
+          body: "Incoming support tickets or customer emails enter through a generic helpdesk/email webhook, with a Zendesk-shape payload adapter available. This starts the draft-first triage workflow, which produces no auto-replies and contains no send node.",
+          systems: "Generic helpdesk or email webhook; Zendesk-shape adapter.",
+          scope: "Read-only ingest. No outbound email or CRM write.",
+          gate: "Draft-first design; triage has no send node and sends no auto-replies."
+        },
+        "2": {
+          step: "Stage 02 of 06",
+          title: "Classify",
+          file: "Triage workflow (57 nodes)",
+          risk: "safe",
+          badgeText: "read-only",
+          badgeClass: "badge badge--safe",
+          body: "Messages are tagged with deterministic, rules-based labels for topic, urgency, and account tier. Optional AI classification is off by default unless explicitly turned on by the operator.",
+          systems: "Rules-based labeler; optional AI classify flag (off by default).",
+          scope: "In-memory classification only. No customer messaging.",
+          gate: "Deterministic defaults; no auto-replies triggered by any label."
+        },
+        "3": {
+          step: "Stage 03 of 06",
+          title: "Read-only context",
+          file: "Triage workflow (57 nodes)",
+          risk: "safe",
+          badgeText: "read-only",
+          badgeClass: "badge badge--safe",
+          body: "Fetches account details from HubSpot and relevant knowledge-base passages from a spreadsheet or HTTP endpoint to inform the draft. All lookups are strictly read-only with no CRM writes.",
+          systems: "HubSpot (read-only lookup), knowledge base (Google Sheet or HTTP).",
+          scope: "Zero CRM writes; zero external mutations.",
+          gate: "Read-only credentials and endpoints; context only feeds internal summary and draft."
+        },
+        "4": {
+          step: "Stage 04 of 06",
+          title: "Internal Slack summary / escalation",
+          file: "Triage workflow (57 nodes)",
+          risk: "safe",
+          badgeText: "internal only",
+          badgeClass: "badge badge--safe",
+          body: "For high-risk issues or VIP accounts, posts a concise triage summary and escalation notice to an internal Slack channel. Visibility is strictly owner-only and internal to the team.",
+          systems: "Slack (internal team channel only).",
+          scope: "Internal notification only; never visible to the customer.",
+          gate: "Owner-only visibility; triage workflow still has no customer send node."
+        },
+        "5": {
+          step: "Stage 05 of 06",
+          title: "Hold a draft",
+          file: "Triage workflow (57 nodes · hard stop)",
+          risk: "stop",
+          badgeText: "human approval",
+          badgeClass: "badge badge--stop",
+          body: "Stores the proposed reply in a Google Sheet review queue and/or creates a Gmail Draft. The triage workflow ends here: it has no send node and cannot send to the customer, so human approval is required before anything goes out.",
+          systems: "Google Sheet review queue and/or Gmail Draft.",
+          scope: "Draft-only write. Cannot dispatch customer email.",
+          gate: "Hard stop: human approval required; two files never merged; no auto-replies."
+        },
+        "6": {
+          step: "Stage 06 of 06",
+          title: "Optional send-approved workflow (separate file, locked)",
+          file: "Send-approved workflow (28 nodes · separate locked file)",
+          risk: "gated",
+          badgeText: "gated",
+          badgeClass: "badge badge--gated",
+          body: "Lives in a separate, locked workflow file that is never merged with triage. It sends only rows a person explicitly approved, ships with testMode and dryRun defaults on, and is optional—most teams send by hand from Gmail or their helpdesk and never import this file.",
+          systems: "Approved queue rows (Google Sheet) → Gmail or helpdesk send.",
+          scope: "Gated customer send, restricted strictly to human-approved rows.",
+          gate: "Separate locked file; human approval required; testMode and dryRun default to on."
+        }
+      };
+
+      var buttons = Array.prototype.slice.call(document.querySelectorAll(".stage-btn"));
+      var elStep = document.getElementById("detail-step");
+      var elTitle = document.getElementById("detail-title");
+      var elFile = document.getElementById("detail-file");
+      var elBadge = document.getElementById("detail-risk-badge");
+      var elBody = document.getElementById("detail-body");
+      var elSystems = document.getElementById("detail-systems");
+      var elScope = document.getElementById("detail-scope");
+      var elGate = document.getElementById("detail-gate");
+
+      function selectStage(stageId, focusButton) {
+        var data = STAGES[stageId];
+        if (!data) return;
+
+        buttons.forEach(function (btn) {
+          var isSelected = btn.getAttribute("data-stage") === stageId;
+          btn.setAttribute("aria-expanded", isSelected ? "true" : "false");
+          if (isSelected && focusButton) {
+            btn.focus();
+          }
+        });
+
+        elStep.textContent = data.step;
+        elStep.setAttribute("data-risk", data.risk);
+        elTitle.textContent = data.title;
+        elFile.textContent = data.file;
+        elBadge.textContent = data.badgeText;
+        elBadge.className = data.badgeClass;
+        elBody.textContent = data.body;
+        elSystems.textContent = data.systems;
+        elScope.textContent = data.scope;
+        elGate.textContent = data.gate;
+      }
+
+      buttons.forEach(function (btn, index) {
+        btn.addEventListener("click", function () {
+          selectStage(btn.getAttribute("data-stage"), false);
+        });
+
+        btn.addEventListener("keydown", function (event) {
+          if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            event.preventDefault();
+            var next = buttons[(index + 1) % buttons.length];
+            selectStage(next.getAttribute("data-stage"), true);
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            event.preventDefault();
+            var prev = buttons[(index - 1 + buttons.length) % buttons.length];
+            selectStage(prev.getAttribute("data-stage"), true);
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            selectStage(buttons[0].getAttribute("data-stage"), true);
+          } else if (event.key === "End") {
+            event.preventDefault();
+            selectStage(buttons[buttons.length - 1].getAttribute("data-stage"), true);
+          }
+        });
+      });
+
+      selectStage("1", false);
+    })();
+  </script>
+
+<script>
+  (function () {
+    var TYPE = "prewired-diagram-height";
+    function report() {
+      var shell = document.querySelector(".diagram-shell") || document.body;
+      var h = Math.ceil((shell.getBoundingClientRect && shell.getBoundingClientRect().height) || shell.scrollHeight || 0);
+      if (h && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: TYPE, height: h }, "*");
+      }
+    }
+    window.addEventListener("load", report);
+    window.addEventListener("resize", report);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(report).catch(function () {});
+    }
+    setTimeout(report, 50);
+    setTimeout(report, 300);
+  })();
+</script>
+
+</body>
+</html>

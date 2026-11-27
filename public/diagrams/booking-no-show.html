@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Booking, Reminders and No-Show Recovery — workflow</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --surface-subtle: #f5f5f4;
+      --border: #e7e5e4;
+      --border-strong: #d6d3d1;
+      --text: #1c1917;
+      --muted: #57534e;
+      --muted-light: #78716c;
+
+      /* Accent green: read-only / owner-only */
+      --accent: #1f4d3a;
+      --accent-soft: #eef5f1;
+      --accent-border: #b7d3c6;
+
+      /* Restrained amber / stone: gated write or send */
+      --gated: #854d0e;
+      --gated-soft: #faf5eb;
+      --gated-border: #dfd0b4;
+
+      /* Clear hard-stop / human-approval marker */
+      --stop: #8c2f27;
+      --stop-soft: #faf0ee;
+      --stop-border: #dfb9b4;
+
+      --radius: 16px;
+      --radius-sm: 10px;
+      --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --t-fast: 140ms ease;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .diagram-shell {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 18px 24px 20px;
+      min-height: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px 24px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .title-block {
+      min-width: 240px;
+      flex: 1 1 440px;
+    }
+
+    .kicker {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.01em;
+      margin-bottom: 5px;
+    }
+
+    .kicker-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .kicker-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex: 0 0 auto;
+    }
+
+    .kicker-sep {
+      color: var(--border-strong);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      color: var(--text);
+    }
+
+    .caption {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex: 0 0 auto;
+    }
+
+    .swatch--safe {
+      background: var(--accent);
+    }
+
+    .swatch--gated {
+      background: var(--gated-soft);
+      border: 1.5px solid var(--gated);
+    }
+
+    .swatch--stop {
+      background: var(--stop);
+      border-radius: 2px;
+    }
+
+    /* Stage flow */
+    .flow-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px 26px;
+      position: relative;
+    }
+
+    .stage-slot {
+      position: relative;
+      display: flex;
+    }
+
+    /* Horizontal arrows between columns on 3-col desktop */
+    .stage-slot:not(:nth-child(3n))::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -21px;
+      width: 16px;
+      height: 1px;
+      background: var(--border-strong);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .stage-slot:not(:nth-child(3n))::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -21px;
+      width: 6px;
+      height: 6px;
+      border-top: 1.5px solid var(--muted-light);
+      border-right: 1.5px solid var(--muted-light);
+      transform: translateY(-50%) rotate(45deg);
+      pointer-events: none;
+    }
+
+    /* Subtle row-wrap cue from stage 3 to stage 4 */
+    .stage-slot--row-end .wrap-cue {
+      position: absolute;
+      bottom: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--muted-light);
+      line-height: 1;
+      letter-spacing: 0.03em;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .stage-card {
+      appearance: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 14px 13px 16px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      transition: border-color var(--t-fast), box-shadow var(--t-fast), background-color var(--t-fast), transform var(--t-fast);
+    }
+
+    .stage-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--accent);
+    }
+
+    .stage-card[data-risk="gated"]::before {
+      background: var(--gated);
+    }
+
+    .stage-card[data-risk="stop"]::before {
+      background: var(--stop);
+    }
+
+    .stage-card:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-1px);
+    }
+
+    .stage-card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .stage-card[aria-expanded="true"] {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+      background: #ffffff;
+    }
+
+    .stage-card[data-risk="gated"][aria-expanded="true"] {
+      border-color: var(--gated);
+      box-shadow: 0 0 0 1px var(--gated), 0 6px 18px -12px rgba(28, 25, 23, 0.22);
+    }
+
+    .stage-card[data-risk="stop"][aria-expanded="true"] {
+      border-color: var(--stop);
+      box-shadow: 0 0 0 1px var(--stop), 0 6px 18px -12px rgba(28, 25, 23, 0.22);
+    }
+
+    .stage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .stage-num {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted-light);
+      letter-spacing: 0.04em;
+    }
+
+    .stage-badges {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      line-height: 1.5;
+      border: 1px solid transparent;
+    }
+
+    .badge--safe {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+    }
+
+    .badge--gated {
+      color: var(--gated);
+      background: var(--gated-soft);
+      border-color: var(--gated-border);
+    }
+
+    .badge--stop {
+      color: var(--stop);
+      background: var(--stop-soft);
+      border-color: var(--stop-border);
+    }
+
+    .stage-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .stage-summary {
+      font-size: 11.5px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    /* Detail panel */
+    .detail-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1 0 auto;
+    }
+
+    .detail-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detail-heading {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 220px;
+      flex: 1 1 360px;
+    }
+
+    .detail-eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted-light);
+    }
+
+    .detail-title {
+      margin: 0;
+      font-size: 15.5px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .detail-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn {
+      appearance: none;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: border-color var(--t-fast), background-color var(--t-fast);
+    }
+
+    .nav-btn:hover:not(:disabled) {
+      border-color: var(--border-strong);
+      background: var(--surface);
+    }
+
+    .nav-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1.45fr 1fr 1fr;
+      gap: 14px 18px;
+    }
+
+    .detail-block {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .detail-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted-light);
+    }
+
+    .detail-text {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .detail-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .detail-list li {
+      position: relative;
+      padding-left: 12px;
+    }
+
+    .detail-list li::before {
+      content: "–";
+      position: absolute;
+      left: 0;
+      color: var(--muted-light);
+    }
+
+    .gate-callout {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .gate-callout[data-tone="safe"] {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+      color: var(--accent);
+    }
+
+    .gate-callout[data-tone="gated"] {
+      background: var(--gated-soft);
+      border-color: var(--gated-border);
+      color: var(--gated);
+    }
+
+    .gate-callout[data-tone="stop"] {
+      background: var(--stop-soft);
+      border-color: var(--stop-border);
+      color: var(--stop);
+    }
+
+    .gate-callout strong {
+      font-weight: 600;
+    }
+
+    /* Pack invariants footer bar inside detail panel */
+    .invariants-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 16px;
+      padding-top: 11px;
+      border-top: 1px dashed var(--border);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .invariant-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .invariant-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted-light);
+      flex: 0 0 auto;
+    }
+
+    .invariant-dot--safe {
+      background: var(--accent);
+    }
+
+    .invariant-dot--gated {
+      background: var(--gated);
+    }
+
+    .invariant-dot--stop {
+      background: var(--stop);
+    }
+
+    /* Tablet layout (2 columns) */
+    @media (max-width: 860px) {
+      .diagram-shell {
+        padding: 16px 16px 20px;
+      }
+
+      .flow-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px 22px;
+      }
+
+      .stage-slot:not(:nth-child(3n))::after,
+      .stage-slot:not(:nth-child(3n))::before {
+        display: none;
+      }
+
+      .stage-slot:not(:nth-child(2n))::after {
+        display: block;
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -18px;
+        width: 13px;
+        height: 1px;
+        background: var(--border-strong);
+        transform: translateY(-50%);
+      }
+
+      .stage-slot:not(:nth-child(2n))::before {
+        display: block;
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -18px;
+        width: 6px;
+        height: 6px;
+        border-top: 1.5px solid var(--muted-light);
+        border-right: 1.5px solid var(--muted-light);
+        transform: translateY(-50%) rotate(45deg);
+      }
+
+      .stage-slot--row-end .wrap-cue {
+        display: none;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .detail-block--wide {
+        grid-column: 1 / -1;
+      }
+    }
+
+    /* Small screens down to 360px (vertical stack) */
+    @media (max-width: 580px) {
+      .diagram-shell {
+        padding: 14px 12px 18px;
+        gap: 14px;
+      }
+
+      h1 {
+        font-size: 16.5px;
+      }
+
+      .flow-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .stage-slot:not(:nth-child(2n))::after,
+      .stage-slot:not(:nth-child(2n))::before {
+        display: none;
+      }
+
+      /* Vertical connector between stacked cards */
+      .stage-slot:not(:last-child)::after {
+        display: block;
+        content: "";
+        position: absolute;
+        left: 24px;
+        bottom: -14px;
+        top: auto;
+        right: auto;
+        width: 1px;
+        height: 11px;
+        background: var(--border-strong);
+        transform: none;
+      }
+
+      .stage-slot:not(:last-child)::before {
+        display: block;
+        content: "";
+        position: absolute;
+        left: 21px;
+        bottom: -14px;
+        top: auto;
+        right: auto;
+        width: 6px;
+        height: 6px;
+        border-top: none;
+        border-right: 1.5px solid var(--muted-light);
+        border-bottom: 1.5px solid var(--muted-light);
+        transform: rotate(45deg);
+      }
+
+      .detail-panel {
+        padding: 14px;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :root {
+        --t-fast: 0ms;
+      }
+
+      *, *::before, *::after {
+        transition-duration: 0ms !important;
+        animation-duration: 0ms !important;
+      }
+
+      .stage-card:hover {
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="diagram-shell" aria-label="Booking, Reminders and No-Show Recovery workflow diagram">
+    <header class="header">
+      <div class="title-block">
+        <div class="kicker">
+          <span class="kicker-pill"><span class="kicker-dot" aria-hidden="true"></span>v0.1.0 draft</span>
+          <span>1 n8n workflow</span>
+          <span class="kicker-sep" aria-hidden="true">/</span>
+          <span>62 executable nodes</span>
+          <span class="kicker-sep" aria-hidden="true">/</span>
+          <span>imported inactive</span>
+        </div>
+        <h1>Booking, Reminders and No-Show Recovery — workflow</h1>
+        <p class="caption">Architecture diagram of the draft pack — not a live product screenshot. Select any stage to inspect gates and stop rules.</p>
+      </div>
+
+      <div class="legend" role="note" aria-label="Risk color legend">
+        <span class="legend-item">
+          <span class="swatch swatch--safe" aria-hidden="true"></span>
+          read-only / owner-only
+        </span>
+        <span class="legend-item">
+          <span class="swatch swatch--gated" aria-hidden="true"></span>
+          gated write-or-send
+        </span>
+        <span class="legend-item">
+          <span class="swatch swatch--stop" aria-hidden="true"></span>
+          human approval / hard stop
+        </span>
+      </div>
+    </header>
+
+    <section class="flow-section" aria-label="Workflow stages">
+      <div class="flow-grid" id="stage-grid">
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-1"
+            data-stage="0"
+            data-risk="safe"
+            aria-expanded="true"
+            aria-controls="stage-detail-panel"
+          >
+            <span class="stage-top">
+              <span class="stage-num">01</span>
+              <span class="stage-badges">
+                <span class="badge badge--safe">read-only</span>
+              </span>
+            </span>
+            <span class="stage-title">Booking arrives</span>
+            <span class="stage-summary">Calendly webhook, optional Google Calendar trigger, or manual test run.</span>
+          </button>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-2"
+            data-stage="1"
+            data-risk="gated"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <span class="stage-top">
+              <span class="stage-num">02</span>
+              <span class="stage-badges">
+                <span class="badge badge--gated">gated</span>
+                <span class="badge badge--stop">1st send stop</span>
+              </span>
+            </span>
+            <span class="stage-title">Confirmation message</span>
+            <span class="stage-summary">Sent only after testMode/go-live gates (default is testMode preview).</span>
+          </button>
+        </div>
+
+        <div class="stage-slot stage-slot--row-end">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-3"
+            data-stage="2"
+            data-risk="gated"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <span class="stage-top">
+              <span class="stage-num">03</span>
+              <span class="stage-badges">
+                <span class="badge badge--gated">gated</span>
+              </span>
+            </span>
+            <span class="stage-title">Reminders</span>
+            <span class="stage-summary">24-hour and 2-hour reminders with reschedule and cancel links.</span>
+          </button>
+          <span class="wrap-cue" aria-hidden="true">continues below ↓</span>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-4"
+            data-stage="3"
+            data-risk="safe"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <span class="stage-top">
+              <span class="stage-num">04</span>
+              <span class="stage-badges">
+                <span class="badge badge--safe">owner-only</span>
+              </span>
+            </span>
+            <span class="stage-title">Status mark</span>
+            <span class="stage-summary">Showed or no-show webhook recorded internally before any follow-up.</span>
+          </button>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-5"
+            data-stage="4"
+            data-risk="gated"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <span class="stage-top">
+              <span class="stage-num">05</span>
+              <span class="stage-badges">
+                <span class="badge badge--gated">gated</span>
+              </span>
+            </span>
+            <span class="stage-title">Single win-back</span>
+            <span class="stage-summary">One no-show follow-up message, then the sequence stops.</span>
+          </button>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-6"
+            data-stage="5"
+            data-risk="stop"
+            aria-expanded="false"
+            aria-controls="stage-detail-panel"
+          >
+            <span class="stage-top">
+              <span class="stage-num">06</span>
+              <span class="stage-badges">
+                <span class="badge badge--stop">hard stop</span>
+              </span>
+            </span>
+            <span class="stage-title">Owner alerts</span>
+            <span class="stage-summary">Owner alerts and hard stops on cancel, reschedule, or opt-out.</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      class="detail-panel"
+      id="stage-detail-panel"
+      role="region"
+      aria-live="polite"
+      aria-labelledby="detail-title"
+    >
+      <div class="detail-header">
+        <div class="detail-heading">
+          <div class="detail-eyebrow">
+            <span id="detail-step-label">Stage 01 of 06</span>
+            <span id="detail-badges"></span>
+          </div>
+          <h2 class="detail-title" id="detail-title">Booking arrives</h2>
+        </div>
+        <div class="detail-nav" aria-label="Stage navigation">
+          <button type="button" class="nav-btn" id="prev-stage-btn" aria-label="Previous stage">← Prev</button>
+          <button type="button" class="nav-btn" id="next-stage-btn" aria-label="Next stage">Next →</button>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-block detail-block--wide">
+          <span class="detail-label">What happens here</span>
+          <p class="detail-text" id="detail-description"></p>
+        </div>
+
+        <div class="detail-block">
+          <span class="detail-label">Inputs &amp; touchpoints</span>
+          <ul class="detail-list" id="detail-touchpoints"></ul>
+        </div>
+
+        <div class="detail-block">
+          <span class="detail-label">Gate &amp; stop condition</span>
+          <div class="gate-callout" id="detail-gate" data-tone="safe"></div>
+        </div>
+      </div>
+
+      <div class="invariants-bar" aria-label="Pack safety defaults">
+        <span class="invariant-item">
+          <span class="invariant-dot invariant-dot--safe" aria-hidden="true"></span>
+          Imported inactive by default
+        </span>
+        <span class="invariant-item">
+          <span class="invariant-dot invariant-dot--gated" aria-hidden="true"></span>
+          testMode default (preview only)
+        </span>
+        <span class="invariant-item">
+          <span class="invariant-dot invariant-dot--stop" aria-hidden="true"></span>
+          Hard stop before first live customer message
+        </span>
+        <span class="invariant-item">
+          <span class="invariant-dot invariant-dot--stop" aria-hidden="true"></span>
+          Stops on cancel / reschedule / opt-out
+        </span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var stages = [
+        {
+          num: "01",
+          title: "Booking arrives",
+          badges: [
+            { text: "read-only", tone: "safe" }
+          ],
+          description:
+            "Captures a new appointment from a Calendly webhook, an optional Google Calendar trigger, or a manual test run inside n8n. Normalizes attendee details, timezone, and appointment ID without contacting the customer.",
+          touchpoints: [
+            "Calendly booking webhook",
+            "Google Calendar trigger (optional)",
+            "Manual test run payload in n8n"
+          ],
+          gateTone: "safe",
+          gateTitle: "Imported inactive — no external sends.",
+          gateBody:
+            " The pack imports inactive in n8n and defaults to testMode so you can replay sample bookings before enabling triggers."
+        },
+        {
+          num: "02",
+          title: "Confirmation message",
+          badges: [
+            { text: "gated", tone: "gated" },
+            { text: "human approval", tone: "stop" }
+          ],
+          description:
+            "Formats the booking confirmation with appointment time and self-serve reschedule/cancel links. While testMode is enabled (the default), the workflow outputs a preview to the owner log instead of messaging the customer.",
+          touchpoints: [
+            "testMode / go-live gate check",
+            "Confirmation template (SMS or Email)",
+            "Owner preview log in testMode"
+          ],
+          gateTone: "stop",
+          gateTitle: "Hard stop before first live message.",
+          gateBody:
+            " Requires explicit human approval and disabling testMode before the first live message can be sent to a real customer."
+        },
+        {
+          num: "03",
+          title: "Reminders",
+          badges: [
+            { text: "gated", tone: "gated" }
+          ],
+          description:
+            "Schedules two pre-appointment reminders — at 24 hours and 2 hours before start — each carrying direct reschedule and cancel links. Re-checks booking state and opt-out status immediately prior to each dispatch.",
+          touchpoints: [
+            "24-hour reminder window",
+            "2-hour reminder window",
+            "Reschedule & cancel link check"
+          ],
+          gateTone: "gated",
+          gateTitle: "Gated send + automatic halt.",
+          gateBody:
+            " Runs in testMode preview by default. Stops immediately on cancel, reschedule, or opt-out before either reminder fires."
+        },
+        {
+          num: "04",
+          title: "Status mark",
+          badges: [
+            { text: "owner-only", tone: "safe" }
+          ],
+          description:
+            "Waits for a staff or internal showed / no-show webhook after the scheduled slot. If the attendee showed, the workflow records completion and exits cleanly with no further customer messages.",
+          touchpoints: [
+            "Internal showed / no-show webhook",
+            "Booking state update",
+            "Clean exit branch on showed"
+          ],
+          gateTone: "safe",
+          gateTitle: "Internal state check only.",
+          gateBody:
+            " No customer message is sent at this stage; only an explicit no-show mark unlocks the single win-back branch."
+        },
+        {
+          num: "05",
+          title: "Single win-back",
+          badges: [
+            { text: "gated", tone: "gated" }
+          ],
+          description:
+            "Sends at most one polite no-show recovery message with a re-booking link, then terminates the sequence. There are no multi-step chase loops or repeated follow-ups.",
+          touchpoints: [
+            "Single no-show follow-up template",
+            "One-shot send counter guard",
+            "Re-booking link (Calendly)"
+          ],
+          gateTone: "gated",
+          gateTitle: "One follow-up, then hard stop.",
+          gateBody:
+            " Respects testMode default and live-send approval. Suppressed completely if the customer cancelled, rescheduled, or opted out."
+        },
+        {
+          num: "06",
+          title: "Owner alerts",
+          badges: [
+            { text: "owner-only", tone: "safe" },
+            { text: "hard stop", tone: "stop" }
+          ],
+          description:
+            "Delivers concise internal alerts to the owner for cancellations, reschedules, opt-outs, and no-shows, and enforces terminal stops across all pending reminders and win-back branches.",
+          touchpoints: [
+            "Owner notification (Email or Slack)",
+            "Cancel / reschedule webhook listener",
+            "Opt-out suppression list"
+          ],
+          gateTone: "stop",
+          gateTitle: "Hard stops always win.",
+          gateBody:
+            " Immediately stops all customer messaging on cancel, reschedule, or opt-out — and requires human approval before any first live send."
+        }
+      ];
+
+      var buttons = Array.prototype.slice.call(
+        document.querySelectorAll(".stage-card")
+      );
+      var stepLabel = document.getElementById("detail-step-label");
+      var badgesEl = document.getElementById("detail-badges");
+      var titleEl = document.getElementById("detail-title");
+      var descEl = document.getElementById("detail-description");
+      var touchEl = document.getElementById("detail-touchpoints");
+      var gateEl = document.getElementById("detail-gate");
+      var prevBtn = document.getElementById("prev-stage-btn");
+      var nextBtn = document.getElementById("next-stage-btn");
+
+      var currentIndex = 0;
+
+      function renderStage(index) {
+        currentIndex = index;
+        var stage = stages[index];
+
+        buttons.forEach(function (btn, i) {
+          btn.setAttribute("aria-expanded", i === index ? "true" : "false");
+        });
+
+        stepLabel.textContent = "Stage " + stage.num + " of 0" + stages.length;
+
+        badgesEl.innerHTML = "";
+        stage.badges.forEach(function (b) {
+          var span = document.createElement("span");
+          span.className = "badge badge--" + b.tone;
+          span.textContent = b.text;
+          badgesEl.appendChild(span);
+        });
+
+        titleEl.textContent = stage.title;
+        descEl.textContent = stage.description;
+
+        touchEl.innerHTML = "";
+        stage.touchpoints.forEach(function (item) {
+          var li = document.createElement("li");
+          li.textContent = item;
+          touchEl.appendChild(li);
+        });
+
+        gateEl.setAttribute("data-tone", stage.gateTone);
+        gateEl.innerHTML = "";
+        var strong = document.createElement("strong");
+        strong.textContent = stage.gateTitle;
+        gateEl.appendChild(strong);
+        gateEl.appendChild(document.createTextNode(stage.gateBody));
+
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === stages.length - 1;
+      }
+
+      buttons.forEach(function (btn, index) {
+        btn.addEventListener("click", function () {
+          renderStage(index);
+        });
+      });
+
+      prevBtn.addEventListener("click", function () {
+        if (currentIndex > 0) {
+          renderStage(currentIndex - 1);
+          buttons[currentIndex].focus();
+        }
+      });
+
+      nextBtn.addEventListener("click", function () {
+        if (currentIndex < stages.length - 1) {
+          renderStage(currentIndex + 1);
+          buttons[currentIndex].focus();
+        }
+      });
+
+      renderStage(0);
+    })();
+  </script>
+
+<script>
+  (function () {
+    var TYPE = "prewired-diagram-height";
+    function report() {
+      var shell = document.querySelector(".diagram-shell") || document.body;
+      var h = Math.ceil((shell.getBoundingClientRect && shell.getBoundingClientRect().height) || shell.scrollHeight || 0);
+      if (h && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: TYPE, height: h }, "*");
+      }
+    }
+    window.addEventListener("load", report);
+    window.addEventListener("resize", report);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(report).catch(function () {});
+    }
+    setTimeout(report, 50);
+    setTimeout(report, 300);
+  })();
+</script>
+
+</body>
+</html>

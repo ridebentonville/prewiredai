@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Speed to Lead — workflow</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --surface-subtle: #f5f5f4;
+      --border: #e7e5e4;
+      --border-strong: #d6d3d1;
+      --text: #1c1917;
+      --muted: #57534e;
+      --muted-light: #78716c;
+
+      /* Accent green — read-only / owner-only */
+      --accent: #1f4d3a;
+      --accent-soft: #eef5f1;
+      --accent-border: #b7d3c6;
+
+      /* Restrained amber / stone — gated write or send */
+      --gated: #854d0e;
+      --gated-soft: #faf5eb;
+      --gated-border: #dfd0b4;
+
+      /* Clear human-approval / hard-stop marker */
+      --stop: #8c2f27;
+      --stop-soft: #faf0ee;
+      --stop-border: #dfb9b4;
+
+      --radius: 16px;
+      --radius-sm: 10px;
+      --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --t-fast: 140ms ease;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .diagram-shell {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 20px 24px 22px;
+      min-height: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px 24px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .title-block {
+      min-width: 240px;
+      flex: 1 1 420px;
+    }
+
+    .kicker {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      margin-bottom: 4px;
+    }
+
+    .kicker-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .kicker-sep {
+      color: var(--border-strong);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      color: var(--text);
+    }
+
+    .caption {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex: 0 0 auto;
+    }
+
+    .swatch--safe {
+      background: var(--accent);
+    }
+
+    .swatch--gated {
+      background: var(--gated-soft);
+      border: 1.5px solid var(--gated);
+    }
+
+    .swatch--stop {
+      background: var(--stop);
+      border-radius: 2px;
+      position: relative;
+    }
+
+    /* Stage flow grid */
+    .flow-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px 26px;
+      position: relative;
+    }
+
+    .stage-slot {
+      position: relative;
+      display: flex;
+    }
+
+    /* Horizontal connectors between columns on 3-col desktop */
+    .stage-slot:not(:nth-child(3n))::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -21px;
+      width: 16px;
+      height: 1px;
+      background: var(--border-strong);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .stage-slot:not(:nth-child(3n))::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -21px;
+      width: 6px;
+      height: 6px;
+      border-top: 1.5px solid var(--muted-light);
+      border-right: 1.5px solid var(--muted-light);
+      transform: translateY(-50%) rotate(45deg);
+      pointer-events: none;
+    }
+
+    /* Subtle row-wrap indicator under stage 3 */
+    .stage-slot--row-end .wrap-cue {
+      position: absolute;
+      bottom: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--muted-light);
+      line-height: 1;
+      letter-spacing: 0.04em;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .stage-card {
+      appearance: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 14px 13px 15px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      transition: border-color var(--t-fast), box-shadow var(--t-fast), background-color var(--t-fast), transform var(--t-fast);
+    }
+
+    .stage-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: var(--accent);
+      transition: background-color var(--t-fast);
+    }
+
+    .stage-card[data-risk="gated"]::before {
+      background: var(--gated);
+    }
+
+    .stage-card[data-risk="stop"]::before {
+      background: var(--stop);
+      width: 4px;
+    }
+
+    .stage-card:hover {
+      border-color: var(--border-strong);
+      background: #ffffff;
+    }
+
+    .stage-card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .stage-card[aria-expanded="true"] {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+      background: #ffffff;
+    }
+
+    .stage-card[data-risk="gated"][aria-expanded="true"] {
+      border-color: var(--gated);
+      box-shadow: 0 0 0 1px var(--gated), 0 6px 18px -12px rgba(28, 25, 23, 0.22);
+    }
+
+    .stage-card[data-risk="stop"][aria-expanded="true"] {
+      border-color: var(--stop);
+      box-shadow: 0 0 0 1px var(--stop), 0 6px 18px -12px rgba(28, 25, 23, 0.24);
+    }
+
+    .stage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .stage-num {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted-light);
+      letter-spacing: 0.04em;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      line-height: 1.3;
+    }
+
+    .badge--safe {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+    }
+
+    .badge--gated {
+      color: var(--gated);
+      background: var(--gated-soft);
+      border: 1px solid var(--gated-border);
+    }
+
+    .badge--stop {
+      color: var(--stop);
+      background: var(--stop-soft);
+      border: 1px solid var(--stop-border);
+    }
+
+    .stop-icon {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--stop);
+      border-radius: 1px;
+    }
+
+    .stage-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .stage-brief {
+      font-size: 11.5px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* Detail panel */
+    .detail-region {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1 1 auto;
+    }
+
+    .detail-panel[hidden] {
+      display: none;
+    }
+
+    .detail-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+
+    .detail-heading-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .detail-step-tag {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+    }
+
+    .detail-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1.25fr 0.9fr;
+      gap: 16px 22px;
+    }
+
+    .detail-col-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted-light);
+      margin: 0 0 6px;
+    }
+
+    .detail-text {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .detail-text--muted {
+      color: var(--muted);
+    }
+
+    .guardrail-box {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-subtle);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    .guardrail-box--gated {
+      background: var(--gated-soft);
+      border-color: var(--gated-border);
+    }
+
+    .guardrail-box--stop {
+      background: var(--stop-soft);
+      border-color: var(--stop-border);
+    }
+
+    .guardrail-box--safe {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .tag-list li {
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 8px;
+    }
+
+    .detail-outcome {
+      margin-top: 10px;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+
+    .detail-outcome strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Footer bar */
+    .footer-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px 16px;
+      font-size: 11px;
+      color: var(--muted-light);
+      padding-top: 2px;
+    }
+
+    .footer-defaults {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+    }
+
+    .footer-defaults span {
+      color: var(--muted);
+    }
+
+    code {
+      font-family: inherit;
+      font-size: 0.95em;
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: rgba(28, 25, 23, 0.06);
+    }
+
+    /* Tablet layout (2 columns) */
+    @media (max-width: 899px) {
+      .diagram-shell {
+        padding: 18px 18px 20px;
+      }
+
+      .flow-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px 20px;
+      }
+
+      .stage-slot:not(:nth-child(3n))::after,
+      .stage-slot:not(:nth-child(3n))::before,
+      .stage-slot--row-end .wrap-cue {
+        display: none;
+      }
+
+      .stage-slot:not(:nth-child(2n))::after {
+        content: "";
+        display: block;
+        position: absolute;
+        top: 50%;
+        right: -16px;
+        width: 12px;
+        height: 1px;
+        background: var(--border-strong);
+        transform: translateY(-50%);
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .detail-col--meta {
+        grid-column: 1 / -1;
+      }
+    }
+
+    /* Small screens down to 360px (vertical stack) */
+    @media (max-width: 599px) {
+      .diagram-shell {
+        padding: 14px 12px 18px;
+        min-height: auto;
+      }
+
+      h1 {
+        font-size: 18px;
+      }
+
+      .flow-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .stage-slot:not(:nth-child(2n))::after {
+        display: none;
+      }
+
+      .stage-slot:not(:last-child)::after {
+        content: "";
+        display: block;
+        position: absolute;
+        left: 24px;
+        bottom: -14px;
+        top: auto;
+        right: auto;
+        width: 1px;
+        height: 12px;
+        background: var(--border-strong);
+        transform: none;
+      }
+
+      .detail-region {
+        padding: 14px 14px;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0ms !important;
+        animation-duration: 0ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="diagram-shell" aria-label="Speed to Lead workflow architecture diagram">
+    <header class="header">
+      <div class="title-block">
+        <div class="kicker">
+          <span class="kicker-pill">Speed to Lead (with Form-to-CRM) v0.1.3 (draft)</span>
+          <span class="kicker-sep" aria-hidden="true">/</span>
+          <span>1 n8n workflow &middot; 59 executable nodes</span>
+        </div>
+        <h1>Speed to Lead — workflow</h1>
+        <p class="caption">Architecture diagram of the draft pack, not a live product screenshot. Select any stage to inspect controls.</p>
+      </div>
+
+      <div class="legend" aria-label="Risk color legend">
+        <span class="legend-item">
+          <span class="swatch swatch--safe" aria-hidden="true"></span>
+          <span>Read-only / owner-only</span>
+        </span>
+        <span class="legend-item">
+          <span class="swatch swatch--gated" aria-hidden="true"></span>
+          <span>Gated write or send</span>
+        </span>
+        <span class="legend-item">
+          <span class="swatch swatch--stop" aria-hidden="true"></span>
+          <span>Human approval / hard stop</span>
+        </span>
+      </div>
+    </header>
+
+    <section class="flow-section" aria-label="Workflow stages">
+      <div class="flow-grid" role="group" aria-label="Six sequential workflow stages">
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-1"
+            data-stage="1"
+            data-risk="safe"
+            aria-expanded="true"
+            aria-controls="detail-1"
+          >
+            <span class="stage-top">
+              <span class="stage-num">01</span>
+              <span class="badge badge--safe">Read-only</span>
+            </span>
+            <span class="stage-title">Lead arrives</span>
+            <span class="stage-brief">Form webhook or equivalent intake payload.</span>
+          </button>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-2"
+            data-stage="2"
+            data-risk="gated"
+            aria-expanded="false"
+            aria-controls="detail-2"
+          >
+            <span class="stage-top">
+              <span class="stage-num">02</span>
+              <span class="badge badge--gated">Gated</span>
+            </span>
+            <span class="stage-title">Dedupe and upsert</span>
+            <span class="stage-brief">Find-or-update contact in HubSpot; assign owner.</span>
+          </button>
+        </div>
+
+        <div class="stage-slot stage-slot--row-end">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-3"
+            data-stage="3"
+            data-risk="safe"
+            aria-expanded="false"
+            aria-controls="detail-3"
+          >
+            <span class="stage-top">
+              <span class="stage-num">03</span>
+              <span class="badge badge--safe">Owner-only</span>
+            </span>
+            <span class="stage-title">Owner alert</span>
+            <span class="stage-brief">Notify the assigned owner that a new lead arrived.</span>
+          </button>
+          <span class="wrap-cue" aria-hidden="true">&darr; next: gates</span>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-4"
+            data-stage="4"
+            data-risk="gated"
+            aria-expanded="false"
+            aria-controls="detail-4"
+          >
+            <span class="stage-top">
+              <span class="stage-num">04</span>
+              <span class="badge badge--gated">Gated</span>
+            </span>
+            <span class="stage-title">Consent, quiet hours, STOP</span>
+            <span class="stage-brief">No outbound message proceeds without these checks.</span>
+          </button>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-5"
+            data-stage="5"
+            data-risk="stop"
+            aria-expanded="false"
+            aria-controls="detail-5"
+          >
+            <span class="stage-top">
+              <span class="stage-num">05</span>
+              <span class="badge badge--stop"><span class="stop-icon" aria-hidden="true"></span>Hard stop</span>
+            </span>
+            <span class="stage-title">testMode preview vs live</span>
+            <span class="stage-brief">Default <code>[TEST]</code> preview; human stop before live send.</span>
+          </button>
+        </div>
+
+        <div class="stage-slot">
+          <button
+            type="button"
+            class="stage-card"
+            id="stage-btn-6"
+            data-stage="6"
+            data-risk="gated"
+            aria-expanded="false"
+            aria-controls="detail-6"
+          >
+            <span class="stage-top">
+              <span class="stage-num">06</span>
+              <span class="badge badge--gated">Gated</span>
+            </span>
+            <span class="stage-title">First reply &amp; follow-ups</span>
+            <span class="stage-brief">Sends only after go-live approval and gates pass.</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="detail-region" aria-label="Selected stage details">
+      <!-- Stage 1 -->
+      <article class="detail-panel" id="detail-1" aria-labelledby="stage-btn-1">
+        <div class="detail-header">
+          <div class="detail-heading-wrap">
+            <span class="detail-step-tag">Stage 01 of 06</span>
+            <h2 class="detail-title">Lead arrives</h2>
+          </div>
+          <span class="badge badge--safe">Read-only intake</span>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <h3 class="detail-col-label">What happens</h3>
+            <p class="detail-text">
+              Accepts an inbound lead from a web form webhook or equivalent intake trigger, then normalizes contact fields, source attributes, and timestamps for downstream steps.
+            </p>
+          </div>
+          <div>
+            <h3 class="detail-col-label">Controls &amp; safeguards</h3>
+            <div class="guardrail-box guardrail-box--safe">
+              Pack is <strong>imported inactive</strong> in n8n. No live form submissions are processed until you wire the intake endpoint and activate the workflow. No external message is sent here.
+            </div>
+          </div>
+          <div class="detail-col--meta">
+            <h3 class="detail-col-label">Interfaces</h3>
+            <ul class="tag-list">
+              <li>n8n webhook</li>
+              <li>Form intake</li>
+            </ul>
+            <p class="detail-outcome"><strong>Next:</strong> Normalized payload passes to CRM dedupe.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Stage 2 -->
+      <article class="detail-panel" id="detail-2" aria-labelledby="stage-btn-2" hidden>
+        <div class="detail-header">
+          <div class="detail-heading-wrap">
+            <span class="detail-step-tag">Stage 02 of 06</span>
+            <h2 class="detail-title">Dedupe and upsert</h2>
+          </div>
+          <span class="badge badge--gated">Gated CRM write</span>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <h3 class="detail-col-label">What happens</h3>
+            <p class="detail-text">
+              Looks up an existing contact before writing to prevent duplicates, then creates or updates the record in HubSpot (with optional HighLevel or Sheets mapping) and assigns a lead owner.
+            </p>
+          </div>
+          <div>
+            <h3 class="detail-col-label">Controls &amp; safeguards</h3>
+            <div class="guardrail-box guardrail-box--gated">
+              CRM write is gated by dedupe lookup and explicit credentials. Because the workflow is <strong>imported inactive</strong> and defaults to <code>testMode</code>, field mappings can be verified before live use.
+            </div>
+          </div>
+          <div class="detail-col--meta">
+            <h3 class="detail-col-label">Interfaces</h3>
+            <ul class="tag-list">
+              <li>HubSpot</li>
+              <li>HighLevel (optional)</li>
+              <li>Sheets (optional)</li>
+            </ul>
+            <p class="detail-outcome"><strong>Next:</strong> Contact ID and owner pass to internal alert.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Stage 3 -->
+      <article class="detail-panel" id="detail-3" aria-labelledby="stage-btn-3" hidden>
+        <div class="detail-header">
+          <div class="detail-heading-wrap">
+            <span class="detail-step-tag">Stage 03 of 06</span>
+            <h2 class="detail-title">Owner alert</h2>
+          </div>
+          <span class="badge badge--safe">Owner-only notification</span>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <h3 class="detail-col-label">What happens</h3>
+            <p class="detail-text">
+              Sends an internal notification to the assigned owner with the lead's intake summary and CRM record reference so a human can review the inquiry immediately.
+            </p>
+          </div>
+          <div>
+            <h3 class="detail-col-label">Controls &amp; safeguards</h3>
+            <div class="guardrail-box guardrail-box--safe">
+              Internal owner-only path: the lead is not contacted at this stage. Safe to inspect during initial setup under the <code>testMode</code> default before any customer-facing channel is enabled.
+            </div>
+          </div>
+          <div class="detail-col--meta">
+            <h3 class="detail-col-label">Interfaces</h3>
+            <ul class="tag-list">
+              <li>Slack / Email</li>
+              <li>Internal owner channel</li>
+            </ul>
+            <p class="detail-outcome"><strong>Next:</strong> Outbound eligibility checked at stage 04.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Stage 4 -->
+      <article class="detail-panel" id="detail-4" aria-labelledby="stage-btn-4" hidden>
+        <div class="detail-header">
+          <div class="detail-heading-wrap">
+            <span class="detail-step-tag">Stage 04 of 06</span>
+            <h2 class="detail-title">Consent, quiet hours, and STOP gates</h2>
+          </div>
+          <span class="badge badge--gated">Gated compliance check</span>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <h3 class="detail-col-label">What happens</h3>
+            <p class="detail-text">
+              Verifies documented outreach consent, checks the configured quiet-hours schedule, and confirms the contact has not sent a STOP or opt-out signal.
+            </p>
+          </div>
+          <div>
+            <h3 class="detail-col-label">Controls &amp; safeguards</h3>
+            <div class="guardrail-box guardrail-box--gated">
+              No outbound message proceeds without all three checks passing. Missing <strong>consent</strong>, active <strong>quiet hours</strong>, or a recorded <strong>STOP</strong> halts dispatch on this branch.
+            </div>
+          </div>
+          <div class="detail-col--meta">
+            <h3 class="detail-col-label">Gate checks</h3>
+            <ul class="tag-list">
+              <li>Consent flag</li>
+              <li>Quiet hours</li>
+              <li>STOP / opt-out</li>
+            </ul>
+            <p class="detail-outcome"><strong>Next:</strong> Eligible records enter the <code>testMode</code> gate.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Stage 5 -->
+      <article class="detail-panel" id="detail-5" aria-labelledby="stage-btn-5" hidden>
+        <div class="detail-header">
+          <div class="detail-heading-wrap">
+            <span class="detail-step-tag">Stage 05 of 06</span>
+            <h2 class="detail-title">testMode preview vs live send</h2>
+          </div>
+          <span class="badge badge--stop"><span class="stop-icon" aria-hidden="true"></span>Human approval / hard stop</span>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <h3 class="detail-col-label">What happens</h3>
+            <p class="detail-text">
+              Branches outbound delivery on the <code>testMode</code> setting. By default, <code>testMode</code> is on: the workflow generates <code>[TEST]</code> previews internally and never messages the lead.
+            </p>
+          </div>
+          <div>
+            <h3 class="detail-col-label">Controls &amp; safeguards</h3>
+            <div class="guardrail-box guardrail-box--stop">
+              <strong>Hard stop before the first live message to a real lead.</strong> Turning off <code>testMode</code> is an explicit human go-live decision after reviewing <code>[TEST]</code> previews and consent, quiet hours, and STOP gates.
+            </div>
+          </div>
+          <div class="detail-col--meta">
+            <h3 class="detail-col-label">Default state</h3>
+            <ul class="tag-list">
+              <li>Imported inactive</li>
+              <li>testMode: on</li>
+              <li>[TEST] previews</li>
+            </ul>
+            <p class="detail-outcome"><strong>Next:</strong> Live send only after human go-live.</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Stage 6 -->
+      <article class="detail-panel" id="detail-6" aria-labelledby="stage-btn-6" hidden>
+        <div class="detail-header">
+          <div class="detail-heading-wrap">
+            <span class="detail-step-tag">Stage 06 of 06</span>
+            <h2 class="detail-title">First reply and follow-ups</h2>
+          </div>
+          <span class="badge badge--gated">Gated external send</span>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <h3 class="detail-col-label">What happens</h3>
+            <p class="detail-text">
+              Dispatches the initial response to the lead and runs configured follow-up steps while logging activity back to the contact record.
+            </p>
+          </div>
+          <div>
+            <h3 class="detail-col-label">Controls &amp; safeguards</h3>
+            <div class="guardrail-box guardrail-box--gated">
+              Reached only after the workflow is activated from <strong>imported inactive</strong>, cleared past the <strong>hard stop</strong> (<code>testMode</code> off), and approved by <strong>consent, quiet hours, and STOP</strong> gates.
+            </div>
+          </div>
+          <div class="detail-col--meta">
+            <h3 class="detail-col-label">Interfaces</h3>
+            <ul class="tag-list">
+              <li>Gmail / Email</li>
+              <li>SMS (if enabled)</li>
+              <li>Follow-up cadence</li>
+            </ul>
+            <p class="detail-outcome"><strong>Stop condition:</strong> Reply or STOP halts follow-ups.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <footer class="footer-bar">
+      <div class="footer-defaults">
+        <span>Defaults: <code>imported inactive</code> &middot; <code>testMode = true</code> ([TEST] preview) &middot; hard stop before first live message</span>
+      </div>
+      <div>Use Tab or arrow keys to inspect stages</div>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var buttons = Array.prototype.slice.call(document.querySelectorAll('.stage-card'));
+      var panels = Array.prototype.slice.call(document.querySelectorAll('.detail-panel'));
+
+      function selectStage(stageId, moveFocus) {
+        buttons.forEach(function (btn) {
+          var isSelected = btn.getAttribute('data-stage') === stageId;
+          btn.setAttribute('aria-expanded', isSelected ? 'true' : 'false');
+          if (isSelected && moveFocus) {
+            btn.focus();
+          }
+        });
+
+        panels.forEach(function (panel) {
+          var isTarget = panel.id === 'detail-' + stageId;
+          panel.hidden = !isTarget;
+        });
+      }
+
+      buttons.forEach(function (btn, index) {
+        btn.addEventListener('click', function () {
+          selectStage(btn.getAttribute('data-stage'), false);
+        });
+
+        btn.addEventListener('keydown', function (event) {
+          var nextIndex = null;
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            nextIndex = (index + 1) % buttons.length;
+          } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            nextIndex = (index - 1 + buttons.length) % buttons.length;
+          } else if (event.key === 'Home') {
+            nextIndex = 0;
+          } else if (event.key === 'End') {
+            nextIndex = buttons.length - 1;
+          }
+
+          if (nextIndex !== null) {
+            event.preventDefault();
+            selectStage(buttons[nextIndex].getAttribute('data-stage'), true);
+          }
+        });
+      });
+    })();
+  </script>
+
+<script>
+  (function () {
+    var TYPE = "prewired-diagram-height";
+    function report() {
+      var shell = document.querySelector(".diagram-shell") || document.body;
+      var h = Math.ceil((shell.getBoundingClientRect && shell.getBoundingClientRect().height) || shell.scrollHeight || 0);
+      if (h && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: TYPE, height: h }, "*");
+      }
+    }
+    window.addEventListener("load", report);
+    window.addEventListener("resize", report);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(report).catch(function () {});
+    }
+    setTimeout(report, 50);
+    setTimeout(report, 300);
+  })();
+</script>
+
+</body>
+</html>

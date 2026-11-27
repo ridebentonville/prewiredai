@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manager Digest — workflow</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --surface-subtle: #f5f5f4;
+      --border: #e7e5e4;
+      --border-strong: #d6d3d1;
+      --text: #1c1917;
+      --text-muted: #57534e;
+      --text-subtle: #78716c;
+
+      /* Risk palette: editorial, restrained */
+      --accent: #1f4d3a;
+      --accent-soft: #eef5f1;
+      --accent-border: #b8d3c5;
+
+      --gated: #854d0e;
+      --gated-soft: #fcf7ec;
+      --gated-border: #e2cfa8;
+
+      --approval: #7c2d12;
+      --approval-soft: #fbf3ee;
+      --approval-border: #dfb9a8;
+
+      --radius: 16px;
+      --radius-sm: 10px;
+      --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --transition: 140ms ease;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :root {
+        --transition: 0ms;
+      }
+      *, *::before, *::after {
+        animation-duration: 0ms !important;
+        transition-duration: 0ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .diagram-shell {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 20px 24px 24px;
+    }
+
+    /* Header */
+    .diagram-header {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px 16px;
+    }
+
+    .diagram-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .pack-meta {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 12px;
+      white-space: nowrap;
+    }
+
+    .diagram-caption {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-subtle);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 18px;
+      padding-top: 2px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      border: 1.5px solid transparent;
+    }
+
+    .legend-swatch--readonly {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .legend-swatch--gated {
+      background: var(--gated-soft);
+      border-color: var(--gated);
+    }
+
+    .legend-swatch--approval {
+      background: var(--approval-soft);
+      border-color: var(--approval);
+      border-radius: 999px;
+    }
+
+    /* Workflow track */
+    .workflow-track {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+
+    .stage-slot {
+      position: relative;
+      display: flex;
+    }
+
+    /* Horizontal connector between stage cards on desktop */
+    .stage-slot:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -18px;
+      width: 18px;
+      height: 1.5px;
+      background: var(--border-strong);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .stage-slot:not(:last-child)::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -15px;
+      width: 6px;
+      height: 6px;
+      border-top: 1.5px solid var(--text-subtle);
+      border-right: 1.5px solid var(--text-subtle);
+      transform: translateY(-50%) rotate(45deg);
+      pointer-events: none;
+    }
+
+    /* Stage button card */
+    .stage-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 13px 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      transition: border-color var(--transition), background-color var(--transition), box-shadow var(--transition), transform var(--transition);
+    }
+
+    .stage-btn::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 14px;
+      right: 14px;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--accent);
+      opacity: 0.35;
+      transition: opacity var(--transition);
+    }
+
+    .stage-btn[data-risk="readonly"]::before {
+      background: var(--accent);
+    }
+
+    .stage-btn[data-risk="gated"]::before {
+      background: var(--gated);
+    }
+
+    .stage-btn[data-risk="approval"]::before {
+      background: var(--approval);
+    }
+
+    .stage-btn[data-risk="gated-approval"]::before {
+      background: linear-gradient(90deg, var(--gated) 0 50%, var(--approval) 50% 100%);
+    }
+
+    .stage-btn:hover {
+      border-color: var(--border-strong);
+      background: #ffffff;
+    }
+
+    .stage-btn:hover::before {
+      opacity: 0.75;
+    }
+
+    .stage-btn:focus-visible {
+      outline: 2.5px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .stage-btn[aria-expanded="true"] {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+      background: var(--surface);
+    }
+
+    .stage-btn[aria-expanded="true"]::before {
+      opacity: 1;
+    }
+
+    .stage-btn[data-risk="gated"][aria-expanded="true"] {
+      border-color: var(--gated);
+      box-shadow: 0 0 0 1px var(--gated), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+    }
+
+    .stage-btn[data-risk="approval"][aria-expanded="true"],
+    .stage-btn[data-risk="gated-approval"][aria-expanded="true"] {
+      border-color: var(--approval);
+      box-shadow: 0 0 0 1px var(--approval), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+    }
+
+    .stage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .stage-index {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      letter-spacing: 0.04em;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1.2;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .badge--readonly {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+    }
+
+    .badge--gated {
+      color: var(--gated);
+      background: var(--gated-soft);
+      border-color: var(--gated-border);
+    }
+
+    .badge--approval {
+      color: var(--approval);
+      background: var(--approval-soft);
+      border-color: var(--approval-border);
+    }
+
+    .stage-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--text);
+    }
+
+    .stage-summary {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      margin-top: auto;
+    }
+
+    /* Detail Panel */
+    .detail-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .detail-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detail-title-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .detail-step {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 9px;
+    }
+
+    .detail-heading {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .detail-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .detail-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      font: inherit;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: border-color var(--transition), color var(--transition), background-color var(--transition);
+    }
+
+    .nav-btn:hover:not(:disabled) {
+      border-color: var(--border-strong);
+      color: var(--text);
+      background: var(--surface);
+    }
+
+    .nav-btn:focus-visible {
+      outline: 2.5px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .detail-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .detail-label {
+      margin: 0;
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-subtle);
+    }
+
+    .detail-copy {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .detail-list {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .detail-list li + li {
+      margin-top: 4px;
+    }
+
+    .detail-footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .footer-label {
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .footer-sep {
+      color: var(--border-strong);
+      user-select: none;
+    }
+
+    /* Medium screens: 3x2 grid */
+    @media (max-width: 1020px) {
+      .workflow-track {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .stage-slot:nth-child(3n)::after,
+      .stage-slot:nth-child(3n)::before {
+        display: none;
+      }
+
+      .stage-slot:not(:nth-child(3n))::after {
+        right: -16px;
+        width: 16px;
+      }
+
+      .stage-slot:not(:nth-child(3n))::before {
+        right: -13px;
+      }
+
+      .detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .detail-block:last-child {
+        grid-column: 1 / -1;
+      }
+    }
+
+    /* Small screens: stack vertically down to 360px */
+    @media (max-width: 680px) {
+      .diagram-shell {
+        padding: 16px 14px 20px;
+      }
+
+      .pack-meta {
+        white-space: normal;
+        border-radius: 10px;
+      }
+
+      .workflow-track {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .stage-slot:not(:last-child)::after {
+        display: block;
+        top: auto;
+        bottom: -16px;
+        left: 24px;
+        right: auto;
+        width: 1.5px;
+        height: 16px;
+        transform: none;
+      }
+
+      .stage-slot:not(:last-child)::before {
+        display: block;
+        top: auto;
+        bottom: -13px;
+        left: 21.75px;
+        right: auto;
+        width: 6px;
+        height: 6px;
+        transform: rotate(135deg);
+      }
+
+      .stage-slot:nth-child(3n)::after,
+      .stage-slot:nth-child(3n)::before {
+        display: block;
+      }
+
+      .stage-slot:last-child::after,
+      .stage-slot:last-child::before {
+        display: none;
+      }
+
+      .detail-panel {
+        padding: 16px;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
+      .detail-block:last-child {
+        grid-column: auto;
+      }
+
+      .footer-sep {
+        display: none;
+      }
+
+      .detail-footer {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="diagram-shell" aria-label="Manager Digest workflow diagram">
+    <header class="diagram-header">
+      <div class="header-top">
+        <h1 class="diagram-title">Manager Digest — workflow</h1>
+        <div class="pack-meta">Manager Digest v0.1.2 (free, draft) · 1 n8n workflow · 27 executable nodes</div>
+      </div>
+      <p class="diagram-caption">Architecture diagram of the draft pack, not a live product screenshot. Select any stage to inspect its role and guardrails.</p>
+      <div class="legend" aria-label="Risk color legend">
+        <span class="legend-item">
+          <span class="legend-swatch legend-swatch--readonly" aria-hidden="true"></span>
+          <span>Read-only / owner-only</span>
+        </span>
+        <span class="legend-item">
+          <span class="legend-swatch legend-swatch--gated" aria-hidden="true"></span>
+          <span>Gated write-or-send</span>
+        </span>
+        <span class="legend-item">
+          <span class="legend-swatch legend-swatch--approval" aria-hidden="true"></span>
+          <span>Human approval</span>
+        </span>
+      </div>
+    </header>
+
+    <section class="workflow-track" aria-label="Workflow stages">
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-0"
+          data-stage="0"
+          data-risk="approval"
+          aria-expanded="true"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">01</span>
+            <span class="badge-row">
+              <span class="badge badge--approval">human approval</span>
+            </span>
+          </span>
+          <span class="stage-name">Start (inactive on import)</span>
+          <span class="stage-summary">Manual test run, or Schedule switched OFF.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-1"
+          data-stage="1"
+          data-risk="readonly"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">02</span>
+            <span class="badge-row">
+              <span class="badge badge--readonly">read-only</span>
+            </span>
+          </span>
+          <span class="stage-name">Config</span>
+          <span class="stage-summary">Cadence, sources, delivery, stale-deal days, lookback.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-2"
+          data-stage="2"
+          data-risk="readonly"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">03</span>
+            <span class="badge-row">
+              <span class="badge badge--readonly">read-only</span>
+            </span>
+          </span>
+          <span class="stage-name">Read sources (read-only)</span>
+          <span class="stage-summary">HubSpot records and/or a Google Sheet. No CRM writes.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-3"
+          data-stage="3"
+          data-risk="readonly"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">04</span>
+            <span class="badge-row">
+              <span class="badge badge--readonly">read-only</span>
+            </span>
+          </span>
+          <span class="stage-name">Assemble the digest</span>
+          <span class="stage-summary">New leads, overdue tasks, stale deals, pipeline snapshot.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-4"
+          data-stage="4"
+          data-risk="gated"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">05</span>
+            <span class="badge-row">
+              <span class="badge badge--gated">gated</span>
+            </span>
+          </span>
+          <span class="stage-name">Optional AI briefing</span>
+          <span class="stage-summary">OFF by default; may only restate given counts.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-5"
+          data-stage="5"
+          data-risk="gated-approval"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">06</span>
+            <span class="badge-row">
+              <span class="badge badge--gated">gated</span>
+              <span class="badge badge--approval">approval</span>
+            </span>
+          </span>
+          <span class="stage-name">Deliver to the owner</span>
+          <span class="stage-summary">Gmail/SMTP and/or Slack. [TEST] preview in testMode.</span>
+        </button>
+      </div>
+    </section>
+
+    <section
+      id="stage-detail-panel"
+      class="detail-panel"
+      aria-live="polite"
+      aria-labelledby="detail-heading"
+    >
+      <div class="detail-header">
+        <div class="detail-title-group">
+          <span class="detail-step" id="detail-step">Stage 01 / 06</span>
+          <h2 class="detail-heading" id="detail-heading">Start (inactive on import)</h2>
+          <div class="detail-badges" id="detail-badges">
+            <span class="badge badge--approval">human approval</span>
+          </div>
+        </div>
+        <div class="detail-nav" aria-label="Stage navigation">
+          <button type="button" class="nav-btn" id="prev-stage-btn" disabled>Prev</button>
+          <button type="button" class="nav-btn" id="next-stage-btn">Next</button>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-block">
+          <h3 class="detail-label">What happens</h3>
+          <p class="detail-copy" id="detail-what"></p>
+        </div>
+        <div class="detail-block">
+          <h3 class="detail-label" id="detail-inputs-label">Inputs &amp; controls</h3>
+          <ul class="detail-list" id="detail-inputs"></ul>
+        </div>
+        <div class="detail-block">
+          <h3 class="detail-label">Guardrails</h3>
+          <ul class="detail-list" id="detail-guardrails"></ul>
+        </div>
+      </div>
+
+      <div class="detail-footer" aria-label="Pack safety defaults">
+        <span class="footer-label">Pack defaults:</span>
+        <span>Imported inactive</span>
+        <span class="footer-sep" aria-hidden="true">/</span>
+        <span>Schedule off</span>
+        <span class="footer-sep" aria-hidden="true">/</span>
+        <span>testMode default</span>
+        <span class="footer-sep" aria-hidden="true">/</span>
+        <span>Read-only (does not email clients or change CRM records)</span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var stages = [
+        {
+          step: "Stage 01 / 06",
+          title: "Start (inactive on import)",
+          badges: [
+            { label: "human approval", cls: "badge--approval" }
+          ],
+          what: "Entry point for the single 27-node n8n workflow. The pack is imported inactive so nothing executes automatically after setup.",
+          inputsLabel: "Triggers",
+          inputs: [
+            "Manual test run for verifying credentials and preview output.",
+            "Schedule trigger ships switched OFF until you turn it on."
+          ],
+          guardrails: [
+            "Imported inactive; requires a deliberate manual run or activation.",
+            "Runs in testMode by default before any live schedule is enabled."
+          ]
+        },
+        {
+          step: "Stage 02 / 06",
+          title: "Config",
+          badges: [
+            { label: "read-only", cls: "badge--readonly" }
+          ],
+          what: "Central settings node that controls scope, thresholds, and delivery channels for the entire run.",
+          inputsLabel: "Parameters",
+          inputs: [
+            "Business name, timezone, and daily or weekly cadence.",
+            "Source: HubSpot, Google Sheets, or both.",
+            "Delivery: email (Gmail/SMTP), Slack, or both.",
+            "Stale-deal days threshold and lookback window."
+          ],
+          guardrails: [
+            "Stores configuration only; makes no external calls.",
+            "testMode is enabled by default so previews stay labeled [TEST]."
+          ]
+        },
+        {
+          step: "Stage 03 / 06",
+          title: "Read sources (read-only)",
+          badges: [
+            { label: "read-only", cls: "badge--readonly" }
+          ],
+          what: "Fetches current operational records from the selected data source(s) within the configured lookback window.",
+          inputsLabel: "Data read",
+          inputs: [
+            "HubSpot deals, contacts, owners, and tasks.",
+            "And/or rows from a configured Google Sheet."
+          ],
+          guardrails: [
+            "Strictly read-only: does not change CRM records or update sheets.",
+            "Never sends messages to contacts or clients."
+          ]
+        },
+        {
+          step: "Stage 04 / 06",
+          title: "Assemble the digest",
+          badges: [
+            { label: "read-only", cls: "badge--readonly" }
+          ],
+          what: "Normalizes and groups the fetched records into a structured owner summary inside n8n.",
+          inputsLabel: "Digest sections",
+          inputs: [
+            "New leads, with unowned leads listed first.",
+            "Overdue tasks and stale deals past the configured threshold.",
+            "Pipeline snapshot built from the fetched counts."
+          ],
+          guardrails: [
+            "Deterministic local assembly inside the workflow.",
+            "Read-only processing; does not write back to HubSpot or Sheets."
+          ]
+        },
+        {
+          step: "Stage 05 / 06",
+          title: "Optional AI briefing",
+          badges: [
+            { label: "gated", cls: "badge--gated" }
+          ],
+          what: "Optional short briefing block that ships switched OFF by default. When enabled, it only summarizes the numbers already assembled.",
+          inputsLabel: "Scope",
+          inputs: [
+            "Receives only the structured counts prepared in Stage 04.",
+            "May only restate the counts it is given."
+          ],
+          guardrails: [
+            "Gated and OFF by default; skipped unless explicitly enabled.",
+            "Cannot query external tools, modify CRM records, or email clients."
+          ]
+        },
+        {
+          step: "Stage 06 / 06",
+          title: "Deliver to the owner",
+          badges: [
+            { label: "gated", cls: "badge--gated" },
+            { label: "human approval", cls: "badge--approval" }
+          ],
+          what: "Sends the assembled digest to the owner only via the configured channel(s). Moving from preview to live delivery is a conscious go-live step.",
+          inputsLabel: "Delivery channels",
+          inputs: [
+            "Gmail/SMTP email and/or Slack message to the owner.",
+            "In testMode (default), output is sent as a [TEST] preview."
+          ],
+          guardrails: [
+            "Owner-only delivery; never emails clients or changes CRM records.",
+            "First live digest requires deliberately disabling testMode and enabling the Schedule."
+          ]
+        }
+      ];
+
+      var buttons = Array.prototype.slice.call(document.querySelectorAll(".stage-btn"));
+      var stepEl = document.getElementById("detail-step");
+      var headingEl = document.getElementById("detail-heading");
+      var badgesEl = document.getElementById("detail-badges");
+      var whatEl = document.getElementById("detail-what");
+      var inputsLabelEl = document.getElementById("detail-inputs-label");
+      var inputsEl = document.getElementById("detail-inputs");
+      var guardrailsEl = document.getElementById("detail-guardrails");
+      var prevBtn = document.getElementById("prev-stage-btn");
+      var nextBtn = document.getElementById("next-stage-btn");
+      var activeIndex = 0;
+
+      function renderList(target, items) {
+        target.textContent = "";
+        items.forEach(function (text) {
+          var li = document.createElement("li");
+          li.textContent = text;
+          target.appendChild(li);
+        });
+      }
+
+      function selectStage(index) {
+        if (index < 0 || index >= stages.length) return;
+        activeIndex = index;
+        var stage = stages[index];
+
+        buttons.forEach(function (btn, idx) {
+          btn.setAttribute("aria-expanded", idx === index ? "true" : "false");
+        });
+
+        stepEl.textContent = stage.step;
+        headingEl.textContent = stage.title;
+
+        badgesEl.textContent = "";
+        stage.badges.forEach(function (b) {
+          var span = document.createElement("span");
+          span.className = "badge " + b.cls;
+          span.textContent = b.label;
+          badgesEl.appendChild(span);
+        });
+
+        whatEl.textContent = stage.what;
+        inputsLabelEl.textContent = stage.inputsLabel;
+        renderList(inputsEl, stage.inputs);
+        renderList(guardrailsEl, stage.guardrails);
+
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === stages.length - 1;
+      }
+
+      buttons.forEach(function (btn, idx) {
+        btn.addEventListener("click", function () {
+          selectStage(idx);
+        });
+
+        btn.addEventListener("keydown", function (event) {
+          if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            event.preventDefault();
+            var next = (idx + 1) % stages.length;
+            selectStage(next);
+            buttons[next].focus();
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            event.preventDefault();
+            var prev = (idx - 1 + stages.length) % stages.length;
+            selectStage(prev);
+            buttons[prev].focus();
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            selectStage(0);
+            buttons[0].focus();
+          } else if (event.key === "End") {
+            event.preventDefault();
+            var last = stages.length - 1;
+            selectStage(last);
+            buttons[last].focus();
+          }
+        });
+      });
+
+      prevBtn.addEventListener("click", function () {
+        if (activeIndex > 0) selectStage(activeIndex - 1);
+      });
+
+      nextBtn.addEventListener("click", function () {
+        if (activeIndex < stages.length - 1) selectStage(activeIndex + 1);
+      });
+
+      selectStage(0);
+    })();
+  </script>
+
+<script>
+  (function () {
+    var TYPE = "prewired-diagram-height";
+    function report() {
+      var shell = document.querySelector(".diagram-shell") || document.body;
+      var h = Math.ceil((shell.getBoundingClientRect && shell.getBoundingClientRect().height) || shell.scrollHeight || 0);
+      if (h && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: TYPE, height: h }, "*");
+      }
+    }
+    window.addEventListener("load", report);
+    window.addEventListener("resize", report);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(report).catch(function () {});
+    }
+    setTimeout(report, 50);
+    setTimeout(report, 300);
+  })();
+</script>
+
+</body>
+</html>

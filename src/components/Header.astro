@@ -19,6 +19,10 @@ const links = [
   hasExperience ? { href: "/#experience", label: "Experience" } : null,
   hasEducation ? { href: "/#education", label: "Education" } : null,
 ].filter((link) => link !== null);
+
+const path = Astro.url.pathname.replace(/\/$/, "") || "/";
+const isCurrent = (href: string) =>
+  !href.includes("#") && (path === href || path.startsWith(`${href}/`));
 ---
 
 <header class="sticky top-0 z-40 border-b border-stone-200 bg-[#fafaf9]/90 backdrop-blur-sm">
@@ -32,7 +36,13 @@ const links = [
           <li>
             <a
               href={link.href}
-              class="text-sm text-stone-600 underline-offset-4 hover:text-[var(--accent)] hover:underline"
+              aria-current={isCurrent(link.href) ? "page" : undefined}
+              class:list={[
+                "text-sm underline-offset-4 hover:text-[var(--accent)] hover:underline",
+                isCurrent(link.href)
+                  ? "font-medium text-[var(--accent)] underline"
+                  : "text-stone-600",
+              ]}
             >
               {link.label}
             </a>

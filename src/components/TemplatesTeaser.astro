@@ -24,7 +24,22 @@ import { templatePacks, templatesTeaser } from "../templates";
             {templatePacks.map((pack) => (
               <li class="flex gap-2">
                 <span aria-hidden="true" style={`color: ${siteConfig.accentColor}`}>—</span>
-                <span>{pack.name}</span>
+                <span>
+                  <a
+                    href={`/templates/${pack.slug}`}
+                    class="underline decoration-stone-300 underline-offset-4 hover:decoration-[var(--accent)]"
+                  >
+                    {pack.name}
+                  </a>
+                  {pack.free && (
+                    <span
+                      class="ml-2 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-white"
+                      style={`background-color: ${siteConfig.accentColor}`}
+                    >
+                      Free
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
