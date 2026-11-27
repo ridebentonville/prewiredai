@@ -6,6 +6,7 @@ import Footer from "../../components/Footer.astro";
 import PageHead from "../../components/PageHead.astro";
 import TierTable from "../../components/TierTable.astro";
 import ServiceTitanLivePreview from "../../components/ServiceTitanLivePreview.astro";
+import DispatchRoiCalculator from "../../components/DispatchRoiCalculator.astro";
 import { siteConfig } from "../../config";
 import {
   categoryLabel,
@@ -158,6 +159,7 @@ const schedulingUrl = siteConfig.schedulingUrl?.trim();
       }
 
       {pack.slug === "servicetitan-dispatch-copilot" && <ServiceTitanLivePreview />}
+      {pack.slug === "servicetitan-dispatch-copilot" && <DispatchRoiCalculator />}
 
       <section class="border-b border-stone-200" aria-labelledby="does-heading">
         <div class="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-6 py-12 sm:px-10 lg:grid-cols-12 lg:gap-16">

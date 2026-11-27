@@ -1,0 +1,463 @@
+---
+/**
+ * Interactive Dispatch ROI / missed-capacity calculator for the
+ * ServiceTitan Dispatch & Capacity Copilot pack page.
+ * All figures are editable assumptions supplied by the visitor.
+ * No invented industry averages or promised customer results.
+ * Vanilla HTML + JS, no runtime dependencies.
+ */
+import { siteConfig } from "../config";
+
+const accent = siteConfig.accentColor;
+const schedulingUrl = siteConfig.schedulingUrl?.trim();
+
+const defaults = {
+  trucks: 10,
+  ticket: 425,
+  missedJobs: 3,
+  hoursSaved: 4,
+  rate: 32,
+  weeks: 50,
+};
+
+const weeklyRevenue = defaults.missedJobs * defaults.ticket;
+const annualRevenue = weeklyRevenue * defaults.weeks;
+const annualTime = defaults.hoursSaved * defaults.rate * defaults.weeks;
+const combined = annualRevenue + annualTime;
+const jobsPerTruck = defaults.missedJobs / defaults.trucks;
+
+const usd = (n: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(n);
+
+const qty = (n: number, digits = 1) =>
+  new Intl.NumberFormat("en-US", { maximumFractionDigits: digits }).format(n);
+
+const fields = [
+  {
+    key: "trucks",
+    label: "Service trucks",
+    min: 3,
+    max: 30,
+    step: 1,
+    value: defaults.trucks,
+    prefix: "",
+    minLabel: "3",
+    maxLabel: "30",
+    help: "Shop size, for context. Recovered jobs below are already counted across the whole fleet, not multiplied again by truck count.",
+  },
+  {
+    key: "ticket",
+    label: "Average service ticket",
+    min: 150,
+    max: 1500,
+    step: 1,
+    value: defaults.ticket,
+    prefix: "$",
+    minLabel: "$150",
+    maxLabel: "$1,500",
+    help: "",
+  },
+  {
+    key: "missedJobs",
+    label: "Unfilled / missed jobs recovered per week",
+    min: 0,
+    max: 15,
+    step: 1,
+    value: defaults.missedJobs,
+    prefix: "",
+    minLabel: "0",
+    maxLabel: "15",
+    help: "Jobs across the fleet you believe a tighter morning triage could recover each week.",
+  },
+  {
+    key: "hoursSaved",
+    label: "Dispatcher hours saved per week",
+    min: 0,
+    max: 15,
+    step: 1,
+    value: defaults.hoursSaved,
+    prefix: "",
+    minLabel: "0",
+    maxLabel: "15",
+    help: "Time on morning triage and board cleanup you think the digest and aging alerts could give back.",
+  },
+  {
+    key: "rate",
+    label: "Dispatcher hourly loaded rate",
+    min: 20,
+    max: 60,
+    step: 1,
+    value: defaults.rate,
+    prefix: "$",
+    minLabel: "$20",
+    maxLabel: "$60",
+    help: "",
+  },
+] as const;
+---
+
+<section id="dispatch-roi" class="anchor border-b border-stone-200" aria-labelledby="roi-heading" data-weeks={defaults.weeks}>
+  <div class="mx-auto max-w-6xl px-6 py-12 sm:px-10">
+    <h2 id="roi-heading" class="text-xl font-medium tracking-tight text-stone-950">
+      Estimate missed dispatch capacity
+    </h2>
+    <div class="mt-3 h-1 w-10 rounded-full" style={`background-color: ${accent}`}></div>
+    <p class="mt-4 max-w-3xl text-sm leading-relaxed text-stone-600">
+      Estimate with your own shop numbers. Every input is an assumption you control — not an industry
+      average, and not a promised result. The formulas update as you type. Starting values describe a
+      10-truck HVAC or plumbing shop so you have somewhere to begin.
+    </p>
+    <noscript>
+      <p class="mt-3 text-sm text-stone-700">
+        Enable JavaScript to change the inputs. The figures below use the starting values shown.
+      </p>
+    </noscript>
+
+    <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
+      <div class="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6 lg:col-span-6">
+        <div class="space-y-6">
+          {
+            fields.map((field) => (
+              <div class="roi-field" data-roi-field={field.key}>
+                <div class="flex items-baseline justify-between gap-3">
+                  <label for={`roi-${field.key}`} class="text-sm font-medium text-stone-950">{field.label}</label>
+                  <div class="flex items-center gap-1">
+                    {field.prefix && (
+                      <span class="text-sm text-stone-500" aria-hidden="true">
+                        {field.prefix}
+                      </span>
+                    )}
+                    <input
+                      id={`roi-${field.key}`}
+                      class="roi-number w-20 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-right text-sm text-stone-950 tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                      type="number"
+                      inputmode="numeric"
+                      min={field.min}
+                      max={field.max}
+                      step="1"
+                      value={field.value}
+                      data-roi-number={field.key}
+                    />
+                  </div>
+                </div>
+                <input
+                  id={`roi-${field.key}-range`}
+                  class="roi-range mt-3"
+                  type="range"
+                  min={field.min}
+                  max={field.max}
+                  step={field.step}
+                  value={field.value}
+                  aria-label={field.label}
+                  data-roi-range={field.key}
+                />
+                <div class="mt-1.5 flex justify-between text-xs text-stone-500">
+                  <span>{field.minLabel}</span>
+                  <span>{field.maxLabel}</span>
+                </div>
+                {field.help && <p class="mt-2 text-xs leading-relaxed text-stone-500">{field.help}</p>}
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-stone-200 p-5 sm:p-6 lg:col-span-6" style="background-color: #f0f4f1">
+        <p id="roi-live" class="sr-only" aria-live="polite" aria-atomic="true">
+          Combined estimated annual impact {usd(combined)}.
+        </p>
+
+        <p class="text-sm text-stone-600">Combined estimated annual impact</p>
+        <p id="roi-combined" class="mt-1 text-4xl font-medium tracking-tight text-stone-950 tabular-nums">
+          {usd(combined)}
+        </p>
+
+        <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div class="rounded-xl border border-stone-200 bg-white p-3">
+            <dt class="text-xs leading-snug text-stone-500">Weekly recovered revenue</dt>
+            <dd id="roi-weekly" class="mt-1 text-lg font-medium text-stone-950 tabular-nums">{usd(weeklyRevenue)}</dd>
+          </div>
+          <div class="rounded-xl border border-stone-200 bg-white p-3">
+            <dt class="text-xs leading-snug text-stone-500">Annual recovered revenue</dt>
+            <dd id="roi-annual-revenue" class="mt-1 text-lg font-medium text-stone-950 tabular-nums">
+              {usd(annualRevenue)}
+            </dd>
+          </div>
+          <div class="rounded-xl border border-stone-200 bg-white p-3">
+            <dt class="text-xs leading-snug text-stone-500">Annual dispatcher time reclaimed</dt>
+            <dd id="roi-annual-time" class="mt-1 text-lg font-medium text-stone-950 tabular-nums">{usd(annualTime)}</dd>
+          </div>
+        </dl>
+
+        <div class="mt-6 rounded-xl border border-stone-200 bg-white p-4 text-sm leading-relaxed text-stone-700">
+          <p class="font-medium text-stone-950">Your math</p>
+          <ul id="roi-formulas" class="mt-2 space-y-2">
+            <li id="roi-formula-weekly">
+              Weekly recovered revenue = {qty(defaults.missedJobs, 0)} missed jobs × {usd(defaults.ticket)} ticket = {usd(weeklyRevenue)}
+            </li>
+            <li id="roi-formula-annual">
+              Annual recovered revenue = {usd(weeklyRevenue)} × {defaults.weeks} weeks = {usd(annualRevenue)}
+            </li>
+            <li id="roi-formula-time">
+              Annual dispatcher time reclaimed = {qty(defaults.hoursSaved, 0)} hours × {usd(defaults.rate)}/hr × {defaults.weeks} weeks = {usd(annualTime)}
+            </li>
+            <li id="roi-formula-combined">
+              Combined estimated annual impact = {usd(annualRevenue)} + {usd(annualTime)} = {usd(combined)}
+            </li>
+          </ul>
+          <p id="roi-fleet-note" class="mt-3 text-stone-600">
+            Across {qty(defaults.trucks, 0)} trucks, {qty(defaults.missedJobs, 0)} recovered jobs/week is {qty(jobsPerTruck, 2)} jobs per truck per week. Truck count is context only and is not multiplied into the dollar totals.
+          </p>
+          <p class="mt-3 text-stone-600">
+            Annualized over {defaults.weeks} working weeks — a conservative year that leaves room for holidays and slower weeks.
+          </p>
+        </div>
+
+        <p class="mt-5 text-sm leading-relaxed text-stone-700">
+          This pack is offered as a fixed-price install rather than a per-seat subscription. Pricing is coming soon — book a walkthrough to talk through scope for your shop.
+        </p>
+
+        {
+          schedulingUrl && (
+            <a
+              href={schedulingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-5 inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={`background-color: ${accent}; outline-color: ${accent}`}
+            >
+              Book a 15-min walkthrough
+            </a>
+          )
+        }
+
+        <p class="mt-5 text-xs leading-relaxed text-stone-500">
+          Illustrative estimate based on your inputs — actual results depend on your call volume, close rate, and dispatch workflow.
+        </p>
+        <p id="roi-status" class="mt-2 text-sm text-stone-700" hidden></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  #dispatch-roi .roi-range {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: #e7e5e4;
+    cursor: pointer;
+  }
+  #dispatch-roi .roi-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 9999px;
+    background: var(--accent, #1f4d3a);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent, #1f4d3a);
+  }
+  #dispatch-roi .roi-range::-moz-range-thumb {
+    width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 9999px;
+    background: var(--accent, #1f4d3a);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent, #1f4d3a);
+  }
+  #dispatch-roi .roi-range::-moz-range-track {
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: transparent;
+  }
+  #dispatch-roi .roi-range:focus-visible {
+    outline: 2px solid var(--accent, #1f4d3a);
+    outline-offset: 3px;
+  }
+  #dispatch-roi .roi-number[aria-invalid="true"] {
+    border-color: #9a3412;
+  }
+</style>
+
+<script>
+  const root = document.querySelector("#dispatch-roi");
+  if (root) {
+    const weeks = Number(root.getAttribute("data-weeks")) || 50;
+    const accent =
+      getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#1f4d3a";
+    const keys = ["trucks", "ticket", "missedJobs", "hoursSaved", "rate"] as const;
+
+    const currency = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    });
+    const qty = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+    const qtyWhole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+    const numberInputs = new Map<string, HTMLInputElement>();
+    const rangeInputs = new Map<string, HTMLInputElement>();
+    for (const key of keys) {
+      const number = root.querySelector<HTMLInputElement>(`[data-roi-number="${key}"]`);
+      const range = root.querySelector<HTMLInputElement>(`[data-roi-range="${key}"]`);
+      if (number && range) {
+        numberInputs.set(key, number);
+        rangeInputs.set(key, range);
+      }
+    }
+
+    const combinedEl = root.querySelector("#roi-combined");
+    const weeklyEl = root.querySelector("#roi-weekly");
+    const annualRevenueEl = root.querySelector("#roi-annual-revenue");
+    const annualTimeEl = root.querySelector("#roi-annual-time");
+    const formulaWeekly = root.querySelector("#roi-formula-weekly");
+    const formulaAnnual = root.querySelector("#roi-formula-annual");
+    const formulaTime = root.querySelector("#roi-formula-time");
+    const formulaCombined = root.querySelector("#roi-formula-combined");
+    const fleetNote = root.querySelector("#roi-fleet-note");
+    const live = root.querySelector("#roi-live");
+    const status = root.querySelector<HTMLParagraphElement>("#roi-status");
+
+    const paintRange = (range: HTMLInputElement) => {
+      const min = Number(range.min);
+      const max = Number(range.max);
+      const value = Number(range.value);
+      const pct = max === min ? 0 : ((value - min) / (max - min)) * 100;
+      range.style.background = `linear-gradient(to right, ${accent} 0%, ${accent} ${pct}%, #e7e5e4 ${pct}%, #e7e5e4 100%)`;
+    };
+
+    const readValue = (key: string): number | null => {
+      const input = numberInputs.get(key);
+      if (!input) return null;
+      if (input.value === "" || Number.isNaN(input.valueAsNumber) || !input.validity.valid) return null;
+      const min = Number(input.min);
+      const max = Number(input.max);
+      const value = input.valueAsNumber;
+      if (value < min || value > max) return null;
+      return value;
+    };
+
+    const update = () => {
+      let firstInvalid: HTMLInputElement | undefined;
+      for (const key of keys) {
+        const input = numberInputs.get(key);
+        if (!input) continue;
+        const valid = input.value !== "" && input.validity.valid && readValue(key) !== null;
+        input.setAttribute("aria-invalid", String(!valid));
+        if (!valid && !firstInvalid) firstInvalid = input;
+      }
+
+      const trucks = readValue("trucks");
+      const ticket = readValue("ticket");
+      const missedJobs = readValue("missedJobs");
+      const hoursSaved = readValue("hoursSaved");
+      const rate = readValue("rate");
+      const complete =
+        trucks !== null && ticket !== null && missedJobs !== null && hoursSaved !== null && rate !== null;
+
+      if (status) {
+        if (firstInvalid) {
+          const label = (firstInvalid.labels?.[0]?.textContent ?? "This input").replace(/\s+/g, " ").trim();
+          status.hidden = false;
+          status.textContent = `${label}: enter a number from ${qtyWhole.format(Number(firstInvalid.min))} to ${qtyWhole.format(Number(firstInvalid.max))}.`;
+        } else {
+          status.hidden = true;
+          status.textContent = "";
+        }
+      }
+
+      if (!combinedEl || !weeklyEl || !annualRevenueEl || !annualTimeEl) return;
+
+      if (!complete) {
+        combinedEl.textContent = "—";
+        weeklyEl.textContent = "—";
+        annualRevenueEl.textContent = "—";
+        annualTimeEl.textContent = "—";
+        if (formulaWeekly) formulaWeekly.textContent = "Weekly recovered revenue = —";
+        if (formulaAnnual) formulaAnnual.textContent = "Annual recovered revenue = —";
+        if (formulaTime) formulaTime.textContent = "Annual dispatcher time reclaimed = —";
+        if (formulaCombined) formulaCombined.textContent = "Combined estimated annual impact = —";
+        if (fleetNote) fleetNote.textContent = "Enter valid shop numbers to see the math.";
+        if (live) live.textContent = "Enter valid shop numbers to see an estimate.";
+        return;
+      }
+
+      const weeklyRevenue = missedJobs * ticket;
+      const annualRevenue = weeklyRevenue * weeks;
+      const annualTime = hoursSaved * rate * weeks;
+      const combined = annualRevenue + annualTime;
+      const perTruck = missedJobs / trucks;
+
+      combinedEl.textContent = currency.format(combined);
+      weeklyEl.textContent = currency.format(weeklyRevenue);
+      annualRevenueEl.textContent = currency.format(annualRevenue);
+      annualTimeEl.textContent = currency.format(annualTime);
+
+      if (formulaWeekly) {
+        formulaWeekly.textContent = `Weekly recovered revenue = ${qtyWhole.format(missedJobs)} missed jobs × ${currency.format(ticket)} ticket = ${currency.format(weeklyRevenue)}`;
+      }
+      if (formulaAnnual) {
+        formulaAnnual.textContent = `Annual recovered revenue = ${currency.format(weeklyRevenue)} × ${weeks} weeks = ${currency.format(annualRevenue)}`;
+      }
+      if (formulaTime) {
+        formulaTime.textContent = `Annual dispatcher time reclaimed = ${qtyWhole.format(hoursSaved)} hours × ${currency.format(rate)}/hr × ${weeks} weeks = ${currency.format(annualTime)}`;
+      }
+      if (formulaCombined) {
+        formulaCombined.textContent = `Combined estimated annual impact = ${currency.format(annualRevenue)} + ${currency.format(annualTime)} = ${currency.format(combined)}`;
+      }
+      if (fleetNote) {
+        fleetNote.textContent = `Across ${qtyWhole.format(trucks)} trucks, ${qtyWhole.format(missedJobs)} recovered jobs/week is ${qty.format(perTruck)} jobs per truck per week. Truck count is context only and is not multiplied into the dollar totals.`;
+      }
+      if (live) {
+        live.textContent = `Combined estimated annual impact ${currency.format(combined)}.`;
+      }
+    };
+
+    const syncFromNumber = (key: string, clamp: boolean) => {
+      const number = numberInputs.get(key);
+      const range = rangeInputs.get(key);
+      if (!number || !range) return;
+      if (clamp && number.value !== "" && !Number.isNaN(number.valueAsNumber)) {
+        const min = Number(number.min);
+        const max = Number(number.max);
+        const next = Math.min(max, Math.max(min, number.valueAsNumber));
+        number.value = String(next);
+      }
+      if (readValue(key) !== null) {
+        range.value = String(number.valueAsNumber);
+        paintRange(range);
+      }
+      update();
+    };
+
+    const syncFromRange = (key: string) => {
+      const number = numberInputs.get(key);
+      const range = rangeInputs.get(key);
+      if (!number || !range) return;
+      number.value = range.value;
+      paintRange(range);
+      update();
+    };
+
+    for (const key of keys) {
+      const number = numberInputs.get(key);
+      const range = rangeInputs.get(key);
+      if (!number || !range) continue;
+      paintRange(range);
+      number.addEventListener("input", () => syncFromNumber(key, false));
+      number.addEventListener("change", () => syncFromNumber(key, true));
+      number.addEventListener("blur", () => syncFromNumber(key, true));
+      range.addEventListener("input", () => syncFromRange(key));
+    }
+
+    update();
+  }
+</script>
