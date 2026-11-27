@@ -104,6 +104,13 @@ export interface WorkflowFile {
   description: string;
 }
 
+/** Optional positioning callout rendered on a pack page, after the hero. */
+export interface PackCallout {
+  title: string;
+  body: string;
+  items?: { heading: string; body: string }[];
+}
+
 export interface TemplatePack {
   slug: string;
   name: string;
@@ -146,6 +153,8 @@ export interface TemplatePack {
   /** True for packs with an interactive diagram at /diagrams/<slug>.html. */
   diagram?: boolean;
   related?: string[];
+  /** Optional positioning callouts rendered on the pack page, after the hero. */
+  callouts?: PackCallout[];
 }
 
 export const templatesPage = {
@@ -331,7 +340,7 @@ export const templatePacks: TemplatePack[] = [
     summary:
       "Booking QA and skill-tier routing flags, a draft callback queue for open capacity, a morning Dispatch KPI digest, and an after-hours handoff brief for the Operations Manager.",
     safety:
-      "Read-only and owner-only. The callback queue is a draft list for dispatchers, and nothing is ever sent to a customer. Test mode and sample data are the default.",
+      "Zero board write-back: your dispatcher stays in control. Read-only and owner-only. The callback queue is a draft list for dispatchers, and nothing is ever sent to a customer. Test mode and sample data are the default.",
     whoFor:
       "Operations Managers and owners of HVAC, plumbing, and electrical shops that dispatch in ServiceTitan and want a daily read on thin bookings, open schedule time, and overnight calls.",
     whatItDoes: [
@@ -391,7 +400,7 @@ export const templatePacks: TemplatePack[] = [
       },
       {
         q: "Do I need ServiceTitan API access?",
-        a: "Not to start. You can run it on sample data, then on CSV exports from your own ServiceTitan reports. The live ServiceTitan path needs your own API credentials, and its endpoint paths are unverified.",
+        a: "Not to start, and not on every plan. Shops on The Works or Enterprise can connect live with GET-only Customer-Built App Keys (nothing is written back). Starter and Essentials shops can run the same digest from a CSV export of their own ServiceTitan reports. The live endpoint paths and field mapping are still unverified, so the CSV path is the recommended way to start.",
       },
       {
         q: "Will I get a message just because I imported it?",
@@ -409,6 +418,26 @@ export const templatePacks: TemplatePack[] = [
     testingNote: draftNote("ServiceTitan, Gmail, Slack, or a CSV export"),
     diagram: true,
     related: ["manager-digest", "jobber-connector"],
+    callouts: [
+      {
+        title: "Why Read-Only (Zero Board Write-Back)",
+        body: "Your dispatcher stays 100% in control. This copilot only reads the board and sends you alerts and digests. It never creates, moves, or deletes a job. That is the opposite of Dispatch Pro Auto Mode, which can reshuffle the board every 10 minutes and ping-pong jobs, and of autonomous voice and booking tools that write jobs onto the board for you.",
+      },
+      {
+        title: "Works on Every ServiceTitan Tier",
+        body: "You do not need a Marketplace app to start. Pick the path that matches your ServiceTitan plan.",
+        items: [
+          {
+            heading: "The Works / Enterprise",
+            body: "Live, GET-only connection with your Customer-Built App Keys. Nothing is written back to the board.",
+          },
+          {
+            heading: "Starter / Essentials",
+            body: "Same digest from a CSV export of your ServiceTitan reports. No API key required.",
+          },
+        ],
+      },
+    ],
   },
   {
     slug: "speed-to-lead",
