@@ -111,14 +111,18 @@ function splitIds(v) {
 
 function uniqueIds(list) {
   const out = [];
-  const seen = {};
+  const seen = new Set();
   (list || []).forEach(function (id) {
     const s = String(id || '').trim();
-    if (!s || seen[s]) return;
-    seen[s] = true;
+    if (!s || seen.has(s)) return;
+    seen.add(s);
     out.push(s);
   });
   return out;
+}
+
+function assignedTechIds(job) {
+  return uniqueIds((job.techIds || []).concat(job.techId || []));
 }
 
 // @@SECTION settings
@@ -173,41 +177,55 @@ function parseCsvTable(text) {
   let row = [];
   let field = '';
   let inQuotes = false;
+  let closedQuote = false;
+  let record = 1;
+  const malformed = function (message) {
+    return { headers: rows[0] || [], rows: [], warnings: ['CSV record ' + record + ': ' + message] };
+  };
   const src = String(text === null || text === undefined ? '' : text).replace(/^﻿/, '');
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     if (inQuotes) {
       if (c === '"') {
-        if (src[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+        if (src[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; closedQuote = true; }
       } else { field += c; }
+    } else if (closedQuote && c !== ',' && c !== '\n' && c !== '\r') {
+      if (c === ' ' || c === '\t') continue;
+      return malformed('Unexpected text after a closing quote.');
     } else if (c === '"') {
+      if (field.trim()) return malformed('Unexpected quote inside an unquoted field.');
+      field = '';
       inQuotes = true;
     } else if (c === ',') {
-      row.push(field); field = '';
+      row.push(field); field = ''; closedQuote = false;
     } else if (c === '\n' || c === '\r') {
       if (c === '\r' && src[i + 1] === '\n') i++;
-      row.push(field); field = '';
+      row.push(field); field = ''; closedQuote = false;
       if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);
       row = [];
+      record++;
     } else { field += c; }
   }
   row.push(field);
   if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);
-  if (inQuotes) {
-    warnings.push('A quoted field was never closed. Later jobs in this file may have been swallowed into an earlier row. Re-export the CSV and try again.');
-  }
+  if (inQuotes) return malformed('A quoted field was never closed. Re-export the CSV and try again.');
   if (rows.length === 0) return { headers: [], rows: [], warnings: warnings };
   const header = rows[0].map(function (h) { return h.trim(); });
+  const duplicates = header.filter(function (h, i) { return h && header.indexOf(h) !== i; });
+  if (duplicates.length) {
+    return { headers: header, rows: [], warnings: ['Duplicate CSV headers: ' + duplicates.join(', ') + '.'] };
+  }
   const body = [];
-  rows.slice(1).forEach(function (r) {
+  rows.slice(1).forEach(function (r, idx) {
     if (r.length > header.length) {
-      warnings.push('A row had more columns (' + r.length + ') than the header (' + header.length + '). Extra cells were ignored. Check for a missing quote or an unescaped comma.');
+      warnings.push('CSV data record ' + (idx + 2) + ' has more columns than the header. Check for an unescaped comma.');
+      return;
     }
-    const o = {};
-    header.forEach(function (h, i) { o[h] = r[i] === undefined ? '' : r[i].trim(); });
-    body.push(o);
+    body.push(Object.fromEntries(header.map(function (h, i) {
+      return [h, r[i] === undefined ? '' : r[i].trim()];
+    })));
   });
-  return { headers: header, rows: body, warnings: warnings };
+  return { headers: header, rows: warnings.length ? [] : body, warnings: warnings };
 }
 
 function parseCsv(text) {
@@ -218,12 +236,21 @@ function headerKey(h) {
   return String(h === null || h === undefined ? '' : h).toLowerCase().replace(/#/g, ' number ').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '');
 }
 
-// key = the snake_case column the fixtures use. Aliases are tried in order after the key itself.
+const JOB_WINDOW_PAIRS = {
+  scheduled_start: [['Scheduled Start Date', 'Scheduled Start Time'], ['Appointment Start Date', 'Appointment Start Time'],
+    ['Start Date', 'Start Time'], ['Scheduled Date', 'Scheduled Time'], ['Appointment Date', 'Appointment Time']],
+  scheduled_end: [['Scheduled End Date', 'Scheduled End Time'], ['Appointment End Date', 'Appointment End Time'],
+    ['End Date', 'End Time']],
+};
+
+// key = the snake_case column the fixtures use. Priority aliases can precede it.
 const JOB_COLUMNS = [
-  { key: 'job_id', label: 'Job # (or Job Number / Job ID)', required: true, aliases: ['Job #', 'Job Number', 'Job No', 'Job ID', 'JobId', 'Job Num', 'Job', 'Invoice #', 'Invoice Number'] },
-  { key: 'status', label: 'Status (or Job Status)', required: true, aliases: ['Status', 'Job Status', 'Appointment Status'] },
-  { key: 'scheduled_start', label: 'Scheduled Start (or Start / Appointment Start)', required: true, aliases: ['Scheduled Start', 'Scheduled Start Date', 'Scheduled Start Time', 'Appointment Start', 'Start', 'Start Time', 'Start Date', 'Job Start', 'Scheduled Date'] },
-  { key: 'scheduled_end', label: 'Scheduled End', aliases: ['Scheduled End', 'Scheduled End Date', 'Scheduled End Time', 'Appointment End', 'End', 'End Time', 'End Date', 'Job End'] },
+  { key: 'job_id', label: 'Job # (or Job Number / Job ID)', required: true, priority: ['Job #'], aliases: ['Job No', 'Job Num', 'Job'] },
+  { key: 'status', label: 'Status (or Job Status)', required: true, priority: ['Job Status'], aliases: ['Appointment Status'] },
+  { key: 'scheduled_start', label: 'Scheduled Start (or Start / Appointment Start)', required: true,
+    aliases: ['Appointment Start', 'Start', 'Job Start'].concat(JOB_WINDOW_PAIRS.scheduled_start.flat()) },
+  { key: 'scheduled_end', label: 'Scheduled End',
+    aliases: ['Appointment End', 'End', 'Job End'].concat(JOB_WINDOW_PAIRS.scheduled_end.flat()) },
   { key: 'booked_at', label: 'Created On', aliases: ['Created On', 'Created Date', 'Booked On', 'Date Created', 'Booked At', 'Created', 'Booking Date', 'Job Created Date'] },
   { key: 'unassigned_since', label: 'Unassigned Since', aliases: ['Unassigned Since', 'Unassigned On', 'Unassigned Date', 'Unassigned At'] },
   { key: 'business_unit', label: 'Business Unit', aliases: ['Business Unit', 'Business Unit Name', 'BU'] },
@@ -304,6 +331,16 @@ const TABLE_DATE_KEYS = {
   calls: ['received_at'],
 };
 
+function columnNames(col) {
+  return (col.priority || []).concat(col.key, col.aliases || []);
+}
+
+function matchingHeaders(headers, names) {
+  return Array.from(new Set(names.flatMap(function (name) {
+    return headers.filter(function (h) { return headerKey(h) === headerKey(name); });
+  })));
+}
+
 // Rename a table's columns onto the canonical snake_case names. Every canonical key is present on
 // every output row ('' when the column was not in the export), so downstream code never sees undefined.
 function canonicalizeRows(rows, columns, headersIn) {
@@ -314,10 +351,10 @@ function canonicalizeRows(rows, columns, headersIn) {
     const k = headerKey(h);
     if (k && !Object.prototype.hasOwnProperty.call(byKey, k)) byKey[k] = h;
   });
-  const used = {};
+  const used = Object.create(null);
   const mapped = {};
   columns.forEach(function (col) {
-    const names = [col.key].concat(col.aliases || []);
+    const names = columnNames(col);
     for (let i = 0; i < names.length; i++) {
       const h = Object.prototype.hasOwnProperty.call(byKey, headerKey(names[i])) ? byKey[headerKey(names[i])] : undefined;
       if (h !== undefined && !used[h]) { used[h] = true; mapped[col.key] = h; break; }
@@ -340,15 +377,32 @@ function canonicalizeRows(rows, columns, headersIn) {
   };
 }
 
-function wallToMs(y, mo, d, h, mi, tz) {
-  const target = Date.UTC(y, mo - 1, d, h, mi);
-  let guess = target;
-  for (let i = 0; i < 3; i++) {
-    const p = localParts(guess, tz);
-    const dp = p.date.split('-').map(Number);
-    guess += target - Date.UTC(dp[0], dp[1] - 1, dp[2], p.hour, p.minute);
-  }
-  return guess;
+function wallClockMs(parts, h, mi) {
+  const clock = new Date(0);
+  clock.setUTCFullYear(parts[0], parts[1] - 1, parts[2]);
+  clock.setUTCHours(h, mi, 0, 0);
+  return clock.getTime();
+}
+
+function validCalendarDate(y, mo, d) {
+  const probe = new Date(wallClockMs([y, mo, d], 0, 0));
+  return probe.getUTCFullYear() === y && probe.getUTCMonth() === mo - 1 && probe.getUTCDate() === d;
+}
+
+function localWallMs(ms, tz) {
+  const p = localParts(ms, tz);
+  return wallClockMs(p.date.split('-').map(Number), p.hour, p.minute);
+}
+
+function wallTimeMatches(y, mo, d, h, mi, tz) {
+  const target = wallClockMs([y, mo, d], h, mi);
+  // Sample offsets on both sides of a transition, then round-trip each candidate.
+  const candidates = new Set([-DAY, 0, DAY].map(function (delta) {
+    const sample = target + delta;
+    return target + (sample - localWallMs(sample, tz));
+  }));
+  return Array.from(candidates).filter(function (ms) { return localWallMs(ms, tz) === target; })
+    .sort(function (a, b) { return a - b; });
 }
 
 // ISO values that already carry an offset or Z are kept as-is. Everything else ("3/10/2026 9:50 AM",
@@ -356,12 +410,17 @@ function wallToMs(y, mo, d, h, mi, tz) {
 function toIsoInZone(v, tz) {
   if (isBlank(v)) return { iso: '', bad: false };
   const raw = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}.*(Z|[+-]\d{2}:?\d{2})$/i.test(raw) && parseTime(raw) !== null) return { iso: raw, bad: false };
+  const offset = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i);
+  if (offset) {
+    const valid = validCalendarDate(+offset[1], +offset[2], +offset[3]) &&
+      +offset[4] <= 23 && +offset[5] <= 59 && +(offset[6] || 0) <= 59 && parseTime(raw) !== null;
+    return { iso: valid ? raw : '', bad: !valid };
+  }
   let y; let mo; let d; let h = 0; let mi = 0; let sec = 0; let ap = '';
-  let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?)?$/);
+  let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*([AaPp][Mm])?)?$/);
   if (m) {
     y = +m[1]; mo = +m[2]; d = +m[3];
-    h = m[4] ? +m[4] : 0; mi = m[5] ? +m[5] : 0; sec = m[6] ? +m[6] : 0;
+    h = m[4] ? +m[4] : 0; mi = m[5] ? +m[5] : 0; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : '';
   } else {
     m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?)?$/);
     if (!m) return { iso: '', bad: true };
@@ -372,9 +431,43 @@ function toIsoInZone(v, tz) {
     if (h < 1 || h > 12) return { iso: '', bad: true };
     h = (h % 12) + (ap === 'pm' ? 12 : 0);
   }
-  const probe = new Date(Date.UTC(y, mo - 1, d));
-  if (mo < 1 || mo > 12 || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return { iso: '', bad: true };
-  return { iso: new Date(wallToMs(y, mo, d, h, mi, tz || 'America/Chicago') + sec * 1000).toISOString(), bad: false };
+  if (!validCalendarDate(y, mo, d) || h > 23 || mi > 59 || sec > 59) return { iso: '', bad: true };
+  const matches = wallTimeMatches(y, mo, d, h, mi, tz || 'America/Chicago');
+  if (!matches.length) return { iso: '', bad: true, gap: true };
+  const result = { iso: new Date(matches[0] + sec * 1000).toISOString(), bad: false };
+  // For fall-back folds, use the first occurrence unless the export provides an explicit offset.
+  if (matches.length > 1) result.ambiguous = true;
+  return result;
+}
+
+const CALENDAR_DATE = /^(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}\/\d{2,4})/;
+const TIME_ONLY = /^\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]M)?$/i;
+
+function jobWindowValue(row, headers, pairs) {
+  const values = headers.map(function (h) { return String(row[h] || '').trim(); }).filter(Boolean);
+  const full = values.find(function (v) {
+    const date = v.match(CALENDAR_DATE);
+    return date && /^[T ,]+\d{1,2}:\d{2}/.test(v.slice(date[0].length));
+  });
+  if (full) return full;
+  let malformedPair = '';
+  for (const pair of pairs) {
+    const date = String(row[pair[0]] || '').trim();
+    const time = String(row[pair[1]] || '').trim();
+    const matchedDate = date.match(CALENDAR_DATE);
+    if (!matchedDate || matchedDate[0] !== date || !time) continue;
+    const combined = date + ' ' + time;
+    if (TIME_ONLY.test(time)) return combined;
+    if (!malformedPair) malformedPair = combined;
+  }
+  // A standalone date is supported. A standalone time is passed through for a diagnostic.
+  return malformedPair || values.find(function (v) { return !TIME_ONLY.test(v); }) || values[0] || '';
+}
+
+function localTimeNotice(t, location, tz) {
+  if (t.gap) return location + ' is a nonexistent local time in ' + tz + ' and was left blank.';
+  if (t.ambiguous) return location + ' is an ambiguous local time in ' + tz + '. The earlier occurrence was used. Include an explicit offset to select an occurrence.';
+  return '';
 }
 
 function mapAgingJob(r) {
@@ -414,6 +507,87 @@ function techList(v) {
   return splitIds(v).filter(function (x) { return !NO_TECH_WORDS.test(x); });
 }
 
+// Index the entire snapshot before resolving name-only rows so row order cannot change the match.
+function resolveTechnicians(rows, headsUp) {
+  const idsByName = new Map();
+  const namesById = new Map();
+  const nameOnly = new Map();
+  const assignments = rows.map(function (r) {
+    const ids = uniqueIds(techList(r.tech_id).concat(techList(r.tech_ids)));
+    const names = techList(r.tech_name);
+    if (!ids.length) {
+      names.forEach(function (name) {
+        const key = lc(name);
+        if (!nameOnly.has(key) || name < nameOnly.get(key)) nameOnly.set(key, name);
+      });
+    } else if (names.length && names.length !== ids.length) {
+      headsUp.push('Job ' + r.job_id + ' has different counts of technician names and IDs. Only the IDs were used for this row.');
+    } else {
+      names.forEach(function (name, i) {
+        const key = lc(name);
+        const id = ids[i];
+        if (!idsByName.has(key)) idsByName.set(key, new Set());
+        idsByName.get(key).add(id);
+        if (!namesById.has(id)) namesById.set(id, new Map());
+        const knownNames = namesById.get(id);
+        if (!knownNames.has(key) || name < knownNames.get(key)) knownNames.set(key, name);
+      });
+    }
+    return { ids: ids, names: names };
+  });
+  namesById.forEach(function (names, id) {
+    if (names.size > 1) headsUp.push('Technician ID "' + id + '" has conflicting names: ' + Array.from(names.values()).join(', ') + '.');
+  });
+  idsByName.forEach(function (ids, key) {
+    if (ids.size > 1) {
+      headsUp.push('Technician name "' + key + '" matches multiple IDs (' + Array.from(ids).join(', ') + '). Name-only assignments could not be matched to an ID.');
+    }
+  });
+  const techNames = new Map();
+  const explicitIds = new Set(assignments.flatMap(function (a) { return a.ids; }));
+  const nameIds = new Map();
+  const unmatchedNames = new Set();
+  nameOnly.forEach(function (name, key) {
+    const matches = idsByName.get(key);
+    const match = matches && matches.size === 1 ? matches.values().next().value : '';
+    if (match && namesById.get(match).size === 1) {
+      nameIds.set(key, match);
+      return;
+    }
+    let id = name;
+    if (explicitIds.has(id)) {
+      headsUp.push('Name-only technician "' + name + '" also appears as an explicit ID. The assignments were kept separate.');
+      do { id = 'Name: ' + id; } while (explicitIds.has(id) || techNames.has(id) || nameOnly.has(lc(id)));
+    }
+    nameIds.set(key, id);
+    unmatchedNames.add(id);
+    techNames.set(id, name);
+  });
+  assignments.forEach(function (a, i) {
+    const ids = a.ids.length ? a.ids : uniqueIds(a.names.map(function (name) { return nameIds.get(lc(name)); }));
+    ids.forEach(function (id) {
+      const names = namesById.get(id);
+      if (!techNames.has(id)) techNames.set(id, names && names.size === 1 ? names.values().next().value : id);
+    });
+    rows[i].tech_ids = ids.join(',');
+    rows[i].tech_id = ids[0] || '';
+    delete rows[i].tech_name;
+  });
+  const byJob = new Map();
+  rows.forEach(function (r) {
+    if (!byJob.has(r.job_id)) byJob.set(r.job_id, new Set());
+    splitIds(r.tech_ids).forEach(function (id) { byJob.get(r.job_id).add(id); });
+  });
+  byJob.forEach(function (ids, jobId) {
+    const assigned = Array.from(ids);
+    if (assigned.some(function (id) { return unmatchedNames.has(id); }) &&
+        assigned.some(function (id) { return explicitIds.has(id) && (!namesById.has(id) || namesById.get(id).size > 1); })) {
+      headsUp.push('Job ' + jobId + ' has name-only assignments and IDs without a reliable name. The assignments could not be matched and were kept separate.');
+    }
+  });
+  return Array.from(techNames, function (entry) { return { tech_id: entry[0], name: entry[1], trade: '' }; });
+}
+
 // Minimum for a Jobs/Dispatch export: job id, status, scheduled start. Everything else is optional and
 // a blank skill / zone / technician is reported by the aging watch rather than guessed.
 function prepareJobRows(rowsIn, opts) {
@@ -431,6 +605,11 @@ function prepareJobRows(rowsIn, opts) {
     res.errors.push(label + ' is empty. Export a ServiceTitan Jobs/Dispatch report with a header row and at least one job, then try again.');
     return res;
   }
+  const duplicates = c.headers.filter(function (h, i) { return h && c.headers.indexOf(h) !== i; });
+  if (duplicates.length) {
+    res.errors.push(label + ' has duplicate CSV headers: ' + uniqueIds(duplicates).join(', ') + '. Rename or remove duplicate columns and re-export.');
+    return res;
+  }
   if (c.missing.length) {
     res.errors.push(label + ' is missing required column(s): ' + c.missing.join('; ') + '.' + seen + ' Add the missing column(s) to your ServiceTitan Jobs/Dispatch report and export again.');
     return res;
@@ -439,44 +618,71 @@ function prepareJobRows(rowsIn, opts) {
     res.errors.push(label + ' has a header row but no job rows. Export a report that includes at least one job.');
     return res;
   }
-  const byId = {};
-  const order = [];
-  const techNames = {};
+  const byId = new Map();
+  const validated = [];
+  const identityKeys = ['job_id', 'status', 'tech_id', 'tech_ids', 'tech_name'];
+  const identityColumns = JOB_COLUMNS.filter(function (col) { return identityKeys.includes(col.key); })
+    .map(function (col) { return { key: col.key, headers: matchingHeaders(c.headers, columnNames(col)) }; });
+  const windows = Object.keys(JOB_WINDOW_PAIRS).map(function (key) {
+    const col = JOB_COLUMNS.find(function (column) { return column.key === key; });
+    return {
+      key: key,
+      headers: matchingHeaders(c.headers, columnNames(col)),
+      pairs: JOB_WINDOW_PAIRS[key].flatMap(function (pair) {
+        const dates = matchingHeaders(c.headers, [pair[0]]);
+        const times = matchingHeaders(c.headers, [pair[1]]);
+        return dates.flatMap(function (date) { return times.map(function (time) { return [date, time]; }); });
+      }),
+    };
+  });
   const badDates = [];
   let merged = 0;
   const earlier = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x < y) ? a : b; };
   const later = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x > y) ? a : b; };
   c.rows.forEach(function (r, idx) {
     const line = idx + 2; // row number counting the header as row 1; blank lines are not counted
+    const raw = rows[idx];
+    identityColumns.forEach(function (col) {
+      const supplied = col.headers.filter(function (h) { return !isBlank(raw[h]); });
+      if (!supplied.length) return;
+      const value = String(raw[supplied[0]]).trim();
+      r[col.key] = value;
+      const compare = ['status', 'tech_name'].includes(col.key) ? lc : String;
+      if (supplied.some(function (h) { return compare(String(raw[h]).trim()) !== compare(value); })) {
+        res.headsUp.push('Row ' + line + ' in the ' + label + ' has conflicting ' + col.key + ' headers (' + supplied.join(', ') + '). Used "' + supplied[0] + '" = "' + value + '".');
+      }
+    });
+    windows.forEach(function (w) { r[w.key] = jobWindowValue(raw, w.headers, w.pairs); });
     if (isBlank(r.job_id)) { res.skipped.push({ row: line, reason: 'missing job id' }); return; }
     if (isBlank(r.status) && isBlank(r.scheduled_start)) { res.skipped.push({ row: line, reason: 'no status and no scheduled start (subtotal or footer row?)' }); return; }
     JOB_DATE_KEYS.forEach(function (k) {
       const t = toIsoInZone(r[k], tz);
-      if (t.bad) { badDates.push('job ' + r.job_id + ' ' + k + ' "' + r[k] + '"'); r[k] = ''; } else { r[k] = t.iso; }
+      const location = 'Row ' + line + ' in the ' + label + ', job ' + r.job_id + ' ' + k + ' "' + r[k] + '"';
+      const notice = localTimeNotice(t, location, tz);
+      if (notice) res.headsUp.push(notice);
+      else if (t.bad) badDates.push('row ' + line + ', job ' + r.job_id + ' ' + k + ' "' + r[k] + '"');
+      r[k] = t.iso;
     });
-    const ids = uniqueIds(techList(r.tech_id).concat(techList(r.tech_ids)));
-    const names = techList(r.tech_name);
-    const finalIds = ids.length ? ids : names;
-    finalIds.forEach(function (id, i) {
-      const nm = ids.length ? (names.length === ids.length ? names[i] : '') : id;
-      if (!techNames[id] || (nm && techNames[id] === id)) techNames[id] = nm || techNames[id] || '';
-    });
-    r.tech_ids = finalIds.join(',');
-    r.tech_id = finalIds[0] || '';
-    delete r.tech_name;
     if (lc(r.status) === 'working') r.status = 'In Progress';
-    const prev = byId[r.job_id];
-    if (!prev) { byId[r.job_id] = r; order.push(r.job_id); return; }
+    validated.push(r);
+  });
+  res.technicians = resolveTechnicians(validated, res.headsUp);
+  validated.forEach(function (r) {
+    const prev = byId.get(r.job_id);
+    if (!prev) { byId.set(r.job_id, r); return; }
+    if (r.status && prev.status && lc(r.status) !== lc(prev.status)) {
+      res.headsUp.push('Job ' + r.job_id + ' has conflicting statuses on repeated rows. Used the first status "' + prev.status + '" over "' + r.status + '".');
+    }
     merged++;
-    const all = uniqueIds(splitIds(prev.tech_ids).concat(finalIds));
+    const all = uniqueIds(splitIds(prev.tech_ids).concat(splitIds(r.tech_ids)));
     prev.tech_ids = all.join(',');
     prev.tech_id = all[0] || '';
     prev.scheduled_start = earlier(prev.scheduled_start, r.scheduled_start) || '';
     prev.scheduled_end = later(prev.scheduled_end, r.scheduled_end) || '';
+    if (toBool(r.multi_day, false)) prev.multi_day = r.multi_day;
     Object.keys(r).forEach(function (k) { if (isBlank(prev[k]) && !isBlank(r[k])) prev[k] = r[k]; });
   });
-  res.rows = order.map(function (id) { return byId[id]; });
-  res.technicians = Object.keys(techNames).map(function (id) { return { tech_id: id, name: techNames[id] || id, trade: '' }; });
+  res.rows = Array.from(byId.values());
   res.importedCount = res.rows.length;
   if (res.skipped.length) {
     res.headsUp.push(res.skipped.length + ' ' + plural(res.skipped.length, 'row') + ' in the ' + label + ' ' + plural(res.skipped.length, 'was', 'were') + ' skipped. First: row ' + res.skipped[0].row + ' (' + res.skipped[0].reason + ').');
@@ -513,7 +719,7 @@ function normalizeJobsExport(input, opts) {
     res.headsUp.push(w);
   });
   if (res.errors.length) res.ok = false;
-  const nameById = {};
+  const nameById = Object.create(null);
   res.technicians.forEach(function (t) { nameById[t.tech_id] = t.name; });
   res.jobs = res.rows.map(function (r) {
     const job = mapCsvJob(r);
@@ -528,7 +734,7 @@ function normalizeJobsExport(input, opts) {
 // Canonicalize every table that was supplied. Jobs tables go through prepareJobRows (required-column
 // check, date normalization, duplicate merge). Idempotent for the snake_case fixture files.
 function prepareCsvTables(settings, tables) {
-  const tz = settings && settings.timezone;
+  const tz = (settings && settings.timezone) || 'America/Chicago';
   const out = {};
   const headsUp = [];
   let technicians = [];
@@ -543,7 +749,12 @@ function prepareCsvTables(settings, tables) {
     } else if (TABLE_COLUMNS[name]) {
       const c = canonicalizeRows(rows, TABLE_COLUMNS[name]);
       (TABLE_DATE_KEYS[name] || []).forEach(function (k) {
-        c.rows.forEach(function (r) { const t = toIsoInZone(r[k], tz); r[k] = t.bad ? '' : t.iso; });
+        c.rows.forEach(function (r, idx) {
+          const t = toIsoInZone(r[k], tz);
+          const notice = localTimeNotice(t, 'Row ' + (idx + 2) + ' in ' + name + '.csv, ' + k + ' "' + r[k] + '"', tz);
+          if (notice) headsUp.push('CSV import: ' + notice);
+          r[k] = t.iso;
+        });
       });
       out[name] = c.rows;
     } else {
@@ -571,13 +782,14 @@ function datasetFromTables(settings, tables) {
       return { id: r.tech_id, name: r.name, trade: r.trade, salesCapable: toBool(r.sales_capable, false), shiftHours: numOrNull(r.shift_hours) };
     }),
     jobs: (t.jobs || []).map(function (r) {
-      return {
+      const techIds = splitIds(r.tech_ids);
+      return Object.assign({
         id: r.job_id, bookedAt: r.booked_at, start: r.scheduled_start, end: r.scheduled_end, status: r.status,
         techId: r.tech_id, customerName: r.customer_name, customerPhone: r.customer_phone, customerType: r.customer_type,
         jobType: r.job_type, equipmentType: r.equipment_type, equipmentAgeYears: numOrNull(r.equipment_age_years),
         address: r.address, priority: r.priority, arrivedAt: r.arrived_at, actualMinutes: numOrNull(r.actual_minutes),
         businessUnit: r.business_unit, summary: r.summary || '',
-      };
+      }, techIds.length > 1 ? { techIds: techIds } : {});
     }),
     capacityWindows: (t.capacity || []).map(function (r) {
       return { id: r.window_id, businessUnit: r.business_unit, start: r.window_start, end: r.window_end, openSlots: toNum(r.open_slots, 0) };
@@ -608,14 +820,16 @@ function datasetFromTables(settings, tables) {
 // then the file name, then "the only file is the jobs file" so a bad Jobs export still gets a clear error.
 function classifyCsvTable(fileName, table, fileCount) {
   const has = function (name, key) { return canonicalizeRows([], TABLE_COLUMNS[name], table.headers).mapped[key] !== undefined; };
-  if (has('jobs', 'job_id')) return 'jobs';
+  if (has('jobs', 'job_id') && has('jobs', 'status') && has('jobs', 'scheduled_start')) return 'jobs';
   if (has('calls', 'call_id') || has('calls', 'received_at')) return 'calls';
   if (has('memberships', 'membership_id') || has('memberships', 'next_service_due')) return 'memberships';
   if (has('estimates', 'estimate_id') || has('estimates', 'last_followup_at')) return 'estimates';
   if (has('capacity', 'window_start') && has('capacity', 'open_slots')) return 'capacity';
   if (has('technicians', 'tech_id') && has('technicians', 'name')) return 'technicians';
   const n = String(fileName || '').toLowerCase();
-  if (/job|dispatch|appointment/.test(n)) return 'jobs';
+  const hasInvoice = table.headers.some(function (h) { return ['invoicenumber', 'invoiceid'].includes(headerKey(h)); });
+  if (hasInvoice) return null;
+  if (/job|dispatch|appointment/.test(n) || has('jobs', 'job_id')) return 'jobs';
   if (/tech/.test(n)) return 'technicians';
   if (/capacity/.test(n)) return 'capacity';
   if (/member/.test(n)) return 'memberships';
@@ -649,12 +863,12 @@ function datasetFromCsvFiles(settings, files) {
   // Repeated rows inside a single file are still merged (one row per technician or appointment).
   let jobRows = [];
   let derived = [];
-  if (jobFiles.length) {
-    const chosen = jobFiles[jobFiles.length - 1];
-    if (jobFiles.length > 1) {
-      const ignored = jobFiles.slice(0, -1).map(function (f) { return '"' + f.name + '"'; }).join(', ');
-      notes.push('CSV import: ' + jobFiles.length + ' Jobs/Dispatch exports were received. Only the last one ("' + chosen.name + '") was used so an older snapshot cannot hide the current board. Ignored: ' + ignored + '.');
-    }
+  if (jobFiles.length > 1) {
+    notes.push('CSV import: multiple Jobs/Dispatch exports were received (' + jobFiles.map(function (f) {
+      return '"' + f.name + '"';
+    }).join(', ') + '). Supply one Jobs/Dispatch snapshot.');
+  } else if (jobFiles.length === 1) {
+    const chosen = jobFiles[0];
     const r = prepareJobRows(chosen.table.rows, { timezone: settings.timezone, label: 'Jobs export "' + chosen.name + '"', headers: chosen.table.headers });
     r.errors.concat(r.headsUp).forEach(function (m) { notes.push('CSV import: ' + m); });
     jobRows = r.rows;
@@ -663,11 +877,15 @@ function datasetFromCsvFiles(settings, files) {
   if (list.length === 0) notes.push('CSV import: no CSV file was received. Send or drop a ServiceTitan Jobs/Dispatch export.');
   if (jobRows.length) tables.jobs = jobRows;
   const ds = datasetFromTables(Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(notes) }), tables);
-  const norm = jobRows.length ? normalizeJobsExport(jobRows, { timezone: settings.timezone }) : null;
-  if (norm) {
-    const nameById = {};
-    ds.technicians.forEach(function (t) { nameById[t.id] = t.name; });
-    ds.jobs = norm.jobs.map(function (j) {
+  if (jobRows.length) {
+    const derivedNames = new Map(derived.map(function (t) { return [t.tech_id, t.name]; }));
+    const nameById = Object.create(null);
+    ds.technicians.forEach(function (t) {
+      if (!tables.technicians && derivedNames.has(t.id)) t.name = derivedNames.get(t.id);
+      nameById[t.id] = t.name;
+    });
+    ds.jobs = jobRows.map(function (r) {
+      const j = mapCsvJob(r);
       j.assignedTechNames = j.techIds.map(function (id) { return nameById[id] || id; });
       return j;
     });
@@ -683,9 +901,10 @@ function bookingQa(data) {
   const since = asOf - s.bookingLookbackHours * HOUR;
   const jobs = data.jobs || [];
   const techs = data.technicians || [];
-  const techById = {};
+  const techById = Object.create(null);
   techs.forEach(function (t) { techById[t.id] = t; });
   const open = { scheduled: true, dispatched: true };
+  const busy = function (job) { return open[lc(job.status)] === true || lc(job.status) === 'in progress'; };
   const reviewed = jobs.filter(function (j) {
     const b = parseTime(j.bookedAt);
     return b !== null && b >= since && b <= asOf && open[lc(j.status)] === true;
@@ -698,6 +917,7 @@ function bookingQa(data) {
   const flagged = [];
   reviewed.forEach(function (job) {
     const flags = [];
+    const assignedIds = assignedTechIds(job);
     if (isBlank(job.customerType)) flags.push({ code: 'missing_customer_type', text: 'Commercial vs residential not recorded' });
     if (isBlank(job.equipmentType)) flags.push({ code: 'missing_equipment_type', text: 'Equipment type not recorded' });
     if (job.equipmentAgeYears === null || job.equipmentAgeYears === undefined) flags.push({ code: 'missing_equipment_age', text: 'Equipment age not recorded' });
@@ -722,13 +942,12 @@ function bookingQa(data) {
         code: 'replacement_opportunity',
         text: 'Possible replacement opportunity: ' + (job.equipmentType || 'equipment') + ' is ' + job.equipmentAgeYears + ' years old (threshold ' + s.replacementAgeYears + ')',
       });
-      const assigned = techById[job.techId];
-      if (assigned && assigned.salesCapable) {
+      if (assignedIds.some(function (id) { return techById[id] && techById[id].salesCapable; })) {
         routing = { status: 'already_sales_capable', suggested: [] };
       } else {
         const free = techs.filter(function (t) {
-          if (!t.salesCapable || t.id === job.techId || lc(t.trade) !== lc(job.businessUnit)) return false;
-          return !jobs.some(function (o) { return o.techId === t.id && open[lc(o.status)] === true && overlaps(o, job); });
+          if (!t.salesCapable || assignedIds.includes(t.id) || lc(t.trade) !== lc(job.businessUnit)) return false;
+          return !jobs.some(function (o) { return busy(o) && overlaps(o, job) && assignedTechIds(o).includes(t.id); });
         }).map(function (t) { return { id: t.id, name: t.name }; });
         routing = { status: free.length > 0 ? 'suggested' : 'none_free', suggested: free };
       }
@@ -741,7 +960,7 @@ function bookingQa(data) {
         customerName: job.customerName,
         businessUnit: job.businessUnit,
         customerType: isBlank(job.customerType) ? 'unknown' : job.customerType,
-        assignedTech: techById[job.techId] ? techById[job.techId].name : 'unassigned',
+        assignedTech: assignedIds.map(function (id) { return techById[id] ? techById[id].name : id; }).join(', ') || 'unassigned',
         address: job.address,
         flags: flags,
         routing: routing,
@@ -854,16 +1073,30 @@ function kpiDigest(data) {
     return st !== null && localDate(st, tz) === reportDate && lc(j.status) === 'completed';
   });
   let missingMinutes = 0;
-  const perTech = techs.map(function (t) {
-    const mine = onDay.filter(function (j) { return j.techId === t.id; });
-    let minutes = 0;
-    mine.forEach(function (j) {
-      if (j.actualMinutes === null || j.actualMinutes === undefined) missingMinutes++; else minutes += j.actualMinutes;
+  const completedByTech = new Map();
+  const knownTechIds = new Set(techs.map(function (t) { return t.id; }));
+  onDay.forEach(function (j) {
+    const ids = assignedTechIds(j);
+    const hasMinutes = j.actualMinutes !== null && j.actualMinutes !== undefined;
+    const ambiguousMinutes = hasMinutes && ids.length > 1;
+    if (ambiguousMinutes) {
+      headsUp.push('Completed job ' + j.id + ' has job-level on-site minutes and multiple technicians. The minutes were left out of per-technician utilization.');
+    }
+    ids.forEach(function (id) {
+      if (!completedByTech.has(id)) completedByTech.set(id, { jobs: 0, minutes: 0, ambiguous: false });
+      const totals = completedByTech.get(id);
+      totals.jobs++;
+      if (ambiguousMinutes) totals.ambiguous = true;
+      else if (hasMinutes) totals.minutes += j.actualMinutes;
     });
+    if (!hasMinutes && ids.some(function (id) { return knownTechIds.has(id); })) missingMinutes++;
+  });
+  const perTech = techs.map(function (t) {
+    const totals = completedByTech.get(t.id) || { jobs: 0, minutes: 0, ambiguous: false };
     const shiftMinutes = t.shiftHours && t.shiftHours > 0 ? t.shiftHours * 60 : null;
     return {
-      id: t.id, name: t.name, trade: t.trade, jobs: mine.length, minutes: minutes, shiftHours: t.shiftHours,
-      utilizationPct: shiftMinutes === null ? null : round1(minutes / shiftMinutes * 100),
+      id: t.id, name: t.name, trade: t.trade, jobs: totals.jobs, minutes: totals.minutes, shiftHours: t.shiftHours,
+      utilizationPct: shiftMinutes === null || totals.ambiguous ? null : round1(totals.minutes / shiftMinutes * 100),
     };
   });
   const counted = perTech.filter(function (p) { return p.utilizationPct !== null; });
@@ -871,8 +1104,11 @@ function kpiDigest(data) {
   const minutesTotal = counted.reduce(function (a, p) { return a + p.minutes; }, 0);
   const team = shiftTotal > 0 ? { pct: round1(minutesTotal / shiftTotal * 100), minutes: minutesTotal, shiftMinutes: shiftTotal } : null;
   if (techs.length === 0) headsUp.push('Technician utilization could not be computed: no technicians in the data.');
-  else if (team === null) headsUp.push('Technician utilization could not be computed: no technician has shift hours.');
-  perTech.filter(function (p) { return p.utilizationPct === null; }).forEach(function (p) {
+  else if (!techs.some(function (t) { return t.shiftHours > 0; })) headsUp.push('Technician utilization could not be computed: no technician has shift hours.');
+  else if (perTech.some(function (p) { return p.shiftHours > 0 && p.utilizationPct === null; })) {
+    headsUp.push('Technicians with ambiguous on-site minutes are left out of the team utilization figure.');
+  }
+  perTech.filter(function (p) { return !(p.shiftHours > 0); }).forEach(function (p) {
     headsUp.push(p.name + ' has no shift hours in the data, so utilization is not shown for them and they are left out of the team figure.');
   });
   if (missingMinutes > 0) headsUp.push(missingMinutes + ' completed ' + plural(missingMinutes, 'job has', 'jobs have') + ' no on-site minutes recorded and ' + plural(missingMinutes, 'is', 'are') + ' not counted in utilization.');
@@ -1060,6 +1296,7 @@ function renderMessage(data) {
     subject: tag + 'Dispatch KPI Digest: ' + s.businessName + ' (' + fmtDay(asOf, tz) + ')',
     text: text,
     html: '<pre style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap">' + esc(text) + '</pre>',
+    slackText: esc(text),
     emailTo: s.ownerEmail,
     slackChannel: s.ownerSlackChannel,
     sendEmail: wantsEmail && !placeholderEmail,
@@ -1461,6 +1698,7 @@ function renderAgingAlert(data) {
     text: text,
     smsText: smsText,
     html: '<pre style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap">' + esc(text) + '</pre>',
+    slackText: esc(text),
     emailTo: s.ownerEmail,
     slackChannel: s.ownerSlackChannel,
     sendEmail: wantsEmail && !placeholderEmail,

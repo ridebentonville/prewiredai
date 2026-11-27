@@ -1,0 +1,9 @@
+Invoice #,Client name,Status,Issued date,Due date,Total ($),Balance ($),Job #
+2001,Sample Household 5021,Past due,1/30/2026,2/14/2026,"$3,200.00","$3,200.00",990
+2002,Sample Household 5022,Past due,2/16/2026,3/2/2026,$480.00,$480.00,991
+2003,Sample Household 5023,Past due,2/23/2026,3/9/2026,"$1,250.00",$625.00,992
+2004,Sample Household 5024,Awaiting payment,2/24/2026,3/10/2026,$900.00,$900.00,993
+2005,Sample Household 5025,Awaiting payment,3/4/2026,3/25/2026,$350.00,$350.00,994
+2006,Sample Household 5026,Paid,1/20/2026,2/10/2026,$600.00,$0.00,995
+2007,Sample Household 5027,Draft,,,$300.00,$300.00,996
+2008,Sample Household 5028,Bad debt,10/15/2025,11/1/2025,$750.00,$750.00,997

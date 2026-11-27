@@ -160,10 +160,10 @@ export interface TemplatePack {
 export const templatesPage = {
   title: "Templates | Prewired AI automation packs for n8n",
   description:
-    "Draft catalog of 12 Prewired AI automation packs for n8n: lead response, booking reminders, invoice sync, CRM cleanup, Jobber, ServiceTitan field-service dispatch, and draft-first AI agents. Test mode on by default. Manager Digest is free. Not for sale yet.",
+    "Draft catalog of 13 Prewired AI automation packs for n8n: lead response, booking reminders, invoice sync, CRM cleanup, Jobber follow-ups, ServiceTitan dispatch and Jobber morning-ops field-service reporting, and draft-first AI agents. Test mode on by default. Manager Digest is free. Not for sale yet.",
   heading: "Prewired AI automation packs",
   intro:
-    "Twelve n8n automation packs and post-sales AI agents for small sales and service teams, including dispatch reporting for HVAC, plumbing, and electrical shops. Each one imports inactive with test mode on, so nothing reaches a real customer until you test it and sign off.",
+    "Thirteen n8n automation packs and post-sales AI agents for small sales and service teams, including dispatch and morning-ops reporting for field-service shops. Each one imports inactive with test mode on, so nothing reaches a real customer until you test it and sign off.",
   notForSale:
     "Nothing on this page is for sale yet. Every pack is a draft, there is no checkout, and paid prices are coming soon. Manager Digest will be free. Join the waitlist by email and you will hear when a pack is ready.",
   sampleDataNote: "Every pack ships with fictional sample data only.",
@@ -172,7 +172,7 @@ export const templatesPage = {
 export const templatesTeaser = {
   heading: "Templates",
   summary:
-    "Twelve draft n8n automation packs and post-sales AI agents, including ServiceTitan dispatch reporting for field-service shops. Every pack imports inactive with test mode on and a hard stop before the first live action. Not for sale yet; Manager Digest will be free.",
+    "Thirteen draft n8n automation packs and post-sales AI agents, including ServiceTitan and Jobber reporting for field-service shops. Every pack imports inactive with test mode on and a hard stop before the first live action. Not for sale yet; Manager Digest will be free.",
   linkLabel: "See the template packs",
 };
 
@@ -431,7 +431,7 @@ export const templatePacks: TemplatePack[] = [
     ],
     testingNote: draftNote("ServiceTitan, Gmail, Slack, or a CSV export"),
     diagram: true,
-    related: ["manager-digest", "jobber-connector"],
+    related: ["manager-digest", "jobber-connector", "jobber-morning-ops-copilot"],
     callouts: [
       {
         title: "Why Read-Only (Zero Board Write-Back)",
@@ -448,6 +448,131 @@ export const templatePacks: TemplatePack[] = [
           {
             heading: "Starter / Essentials",
             body: "CSV-Fallback Mode: email, upload, or drop in a folder one Jobs/Dispatch report export and get the same digest and aging alert. No API key required, and common ServiceTitan column headers are matched for you.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "jobber-morning-ops-copilot",
+    name: "Jobber Morning Ops Triage Copilot",
+    version: "v0.1.0",
+    category: "field-service",
+    filterTags: ["reporting"],
+    badge: "New",
+    headline:
+      "One read-only morning digest for lawn, landscaping, cleaning, pest, handyman, pressure washing, HVAC, plumbing, and electrical shops that run on Jobber: which jobs are unscheduled, late, or need action, which finished jobs still need an invoice, which invoices are past due, and which big quotes are still waiting on an answer past your configured Jobber follow-up cutoff. Sent to you, never to a customer. Zero write-back.",
+    summary:
+      "Unscheduled, Late, and Action Required jobs, Requires Invoicing jobs and past-due invoices, and high-value quotes still awaiting a response, ranked by dollar value for a human call. A weekday-morning digest for the owner or office manager, with a CSV fallback using the reports available on your Jobber plan.",
+    safety:
+      "Zero write-back: nothing is created, changed, or sent in Jobber. Read-only and owner-only. The stalled-quote list is for a person to call, and nothing is ever sent to a customer. Test mode and sample data are the default.",
+    whoFor:
+      "Owners and office managers of home-service shops that schedule and invoice in Jobber and spend the first part of the day hunting through separate reports for what needs attention.",
+    whatItDoes: [
+      "Unscheduled, Late, and Action Required jobs: one list of the jobs Jobber already marks with those statuses, plus jobs that have a visit with no date. Late jobs show how long ago the visit was due to end. Nothing is rescheduled.",
+      "Requires Invoicing and past-due invoices: finished jobs that still need an invoice, oldest first, and invoices that are past their due date, largest balance first. You set how many days past due counts.",
+      "Stalled high-value quotes: quotes still awaiting a response past the cutoff you set after your last Jobber follow-up, using the actual send date, ranked by dollar value. It is a list for a human call or a personal note. It never sends another automated reminder.",
+      "CSV-Fallback: email, drop in a folder, or upload your Jobs, Invoices, and Quotes report exports and get the same digest. No OAuth and no App Review. Common Jobber column names are matched for you, and anything a report cannot supply becomes a Heads-up line.",
+      "Heads-up lines instead of guesses: if a total, due date, or send date is missing, or a report was not supplied, the digest says so. It does not estimate.",
+    ],
+    workflows: [
+      {
+        name: "Jobber Morning Ops Triage Copilot",
+        nodes: 21,
+        description:
+          "Reads sample data, a CSV export, or Jobber (read-only GraphQL queries), builds the three morning queues, and sends one message to the owner.",
+      },
+      {
+        name: "Jobber CSV-Fallback Triage",
+        nodes: 18,
+        description:
+          "Uses CSV exports without OAuth. Takes your Jobs, Invoices, and Quotes CSV reports by email attachment, watch folder, or upload, and sends the owner the same digest.",
+      },
+    ],
+    totalNodes: 39,
+    totalNodesWithNotes: 52,
+    defaults: [
+      "testMode on: every message is labeled [TEST] and goes only to the owner email or Slack channel you set.",
+      "Source defaults to built-in fictional sample data, so the Jobber steps are skipped.",
+      "Imported inactive, and every Schedule, webhook, and email trigger is switched off on import.",
+    ],
+    testModeWrites:
+      "Nothing is written to Jobber in any mode. In test mode the only output is a [TEST] message to the owner address or channel you set.",
+    included: [
+      "Two importable n8n workflows (saved inactive): the 7:00 AM Jobber digest and the CSV-Fallback Triage",
+      "Plain-English README with a field-by-field Config table and a list of which Jobber fields are unverified",
+      "Fictional lawn, HVAC, and plumbing sample data: sample Jobs, Invoices, and Quotes CSV exports with Jobber-style headers, a mock GraphQL response, and a sample [TEST] digest",
+      "A test script that checks both workflows' safety settings and runs their logic against the sample data",
+      "Changelog",
+    ],
+    guardrails: [
+      "Zero write-back: the Jobber steps send read-only GraphQL queries and nothing else. GraphQL travels over HTTP POST, but there is no mutation in the workflow, so nothing is created, changed, or deleted in Jobber.",
+      "No customer messages: the workflow has no SMS, Twilio, or customer-email step. It does not send quote reminders, invoice reminders, review requests, or On-My-Way texts.",
+      "The stalled-quote list is for a human. A person decides who to call.",
+      "Owner-only: the email address and Slack channel come from the Config node, never from a row in a file you upload.",
+      "Never invents numbers. If something cannot be computed, the digest shows a \"Heads-up\" line instead.",
+      "The complete Jobber GraphQL queries still need verification against a live account. The CSV export path is the recommended way to start.",
+    ],
+    hardStop:
+      "Run the [TEST] digest on the sample data, then on your own CSV exports, and spot-check several numbers by hand against Jobber. Going live is the owner's decision: turn test mode off, switch the Schedule on, and set the workflow Active, after a written sign-off.",
+    willNot: [
+      "Text, call, or email a customer.",
+      "Create, change, schedule, or delete anything in Jobber.",
+      "Send quote or invoice reminders, review requests, or On-My-Way texts.",
+      "Invent numbers.",
+    ],
+    faq: [
+      {
+        q: "Does it contact my customers?",
+        a: "No. It has no step that can message a customer. The quote list is an internal list for you or your office manager to call from, and the only things it sends are one message to your own email and/or Slack.",
+      },
+      {
+        q: "Does it change anything in Jobber?",
+        a: "No. The live path sends read-only GraphQL queries, and the CSV path only reads files.",
+      },
+      {
+        q: "How is this different from Jobber's own quote and invoice follow-ups?",
+        a: "On supported plans, Jobber can send up to two quote follow-ups. This owner digest ranks quotes still awaiting a response past the cutoff you set.",
+      },
+      {
+        q: "Is this the same pack as Jobber Connector?",
+        a: "No. Jobber Connector drafts follow-ups for you to approve. This pack is a read-only morning digest and drafts nothing for customers.",
+      },
+      {
+        q: "Do I need a particular Jobber plan or API access?",
+        a: "Not to start. The CSV-Fallback path uses Jobber report exports without OAuth or App Review. Available reports and columns depend on your plan and permissions. The live GraphQL path needs your own Jobber developer app, and a Draft app can connect to at most 5 paying accounts until Jobber approves it. The complete GraphQL queries still need a live Jobber test, so the CSV path is the recommended way to start.",
+      },
+      {
+        q: "Will I get a message just because I imported it?",
+        a: "No. The workflow is inactive and the Schedule node is off until you switch them on.",
+      },
+      {
+        q: "Is there a pilot?",
+        a: "A pilot is planned for this pack. Use the Book a 15-min ops audit button on this page to talk it through. Pricing coming soon.",
+      },
+      {
+        q: "Has it been tested live?",
+        a: "Not yet. It has only been checked against fictional sample data. It has not been tested against a live Jobber, Gmail, or Slack account.",
+      },
+    ],
+    testingNote: draftNote("Jobber, Gmail, Slack, or a CSV export"),
+    related: ["servicetitan-dispatch-copilot", "jobber-connector", "manager-digest"],
+    callouts: [
+      {
+        title: "Why Read-Only",
+        body: "Your dispatcher stays in control. This copilot only reads your Jobber reports and sends you a digest. It never schedules, reschedules, or deletes a job, and it never messages a customer. It ranks unanswered quotes past your configured follow-up cutoff so a person can call.",
+      },
+      {
+        title: "Choose How to Connect Jobber",
+        body: "Start with the reports and columns available on your plan.",
+        items: [
+          {
+            heading: "OAuth Draft app / App Review",
+            body: "A live, read-only connection through Jobber's GraphQL API with your own developer app. A Draft app can connect to up to 5 paying accounts until Jobber approves it. The complete GraphQL queries still need a live Jobber test.",
+          },
+          {
+            heading: "CSV fallback (recommended start)",
+            body: "Email, upload, or drop in a folder your Jobs, Invoices, and Quotes report exports and get the same digest. This path uses CSV exports without OAuth or App Review. Common Jobber column names are matched for you.",
           },
         ],
       },

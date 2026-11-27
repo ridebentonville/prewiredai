@@ -138,19 +138,22 @@ code('Normalize ServiceTitan', [1060 + live.length * 240, 280], ['common', 'sett
   `const settings = ${PS};\nconst raw = {\n    jobs: $('ServiceTitan: Jobs').first().json,\n    appointments: $('ServiceTitan: Appointments').first().json,\n    assignments: $('ServiceTitan: Appointment Assignments').first().json,\n    technicians: $('ServiceTitan: Technicians').first().json,\n};\nreturn [{ json: normalizeAgingServiceTitan(settings, raw) }];`);
 
 add('Read CSV Exports', 'n8n-nodes-base.readWriteFile', 1, [1320, 680],
-  { operation: 'read', fileSelector: `={{ ${PS}.csvFolder }}/*.csv`, options: {} });
+  { operation: 'read', fileSelector: `={{ ${PS}.csvFolder }}/*.csv`, options: {} }, { alwaysOutputData: true });
 code('Parse CSV Exports', [1580, 680], ['common', 'csv', 'settings', 'aging'], [
   `const settings = ${PS};`,
   'const tables = {};',
+  'const notes = [];',
   'const items = $input.all();',
   'for (let i = 0; i < items.length; i++) {',
   '  const bin = items[i].binary && items[i].binary.data;',
   '  if (!bin) continue;',
   "  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');",
   "  const name = String(bin.fileName || '').toLowerCase().replace(/\\.csv$/, '');",
-  "  tables[name] = parseCsv(buf.toString('utf8'));",
+  "  const table = parseCsvTable(buf.toString('utf8'));",
+  "  for (const warning of table.warnings) notes.push('CSV import: ' + bin.fileName + ': ' + warning);",
+  "  if (!table.warnings.length) tables[name] = table.rows;",
   '}',
-  'return [{ json: datasetFromAgingTables(settings, tables) }];',
+  'return [{ json: datasetFromAgingTables(Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(notes) }), tables) }];',
 ].join('\n'));
 code('Load Built-in Test Data', [1320, 860], ['common', 'settings', 'aging'],
   `const DATASET = ${JSON.stringify(builtinAgingDataset())};\nconst settings = ${PS};\nreturn [{ json: loadAgingTestData(settings, DATASET) }];`);
@@ -169,7 +172,8 @@ add('Email owner (Gmail)', 'n8n-nodes-base.gmail', 2.1, [X + 840, 420], {
 add('Post to owner Slack', 'n8n-nodes-base.slack', 2.3, [X + 840, 640], {
   resource: 'message', operation: 'post', select: 'channel',
   channelId: { __rl: true, value: "={{ $json.slackChannel.replace(/^#/, '') }}", mode: 'name' },
-  text: '={{ $json.text }}', otherOptions: { includeLinkToWorkflow: false },
+  messageType: 'text', text: '={{ $json.slackText }}',
+  otherOptions: { includeLinkToWorkflow: false, link_names: false, mrkdwn: false, unfurl_links: false, unfurl_media: false },
 }, { credentials: { slackApi: { id: 'PLACEHOLDER_SLACK', name: 'Slack account (PLACEHOLDER)' } } });
 
 note('Note: Start here', [-40, 80], 620, 330, 4,

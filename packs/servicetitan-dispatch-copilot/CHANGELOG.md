@@ -8,7 +8,8 @@
 - The existing digest and Aging Watch workflows now accept the same human headers in their CSV path (rebuilt; fixture snake_case headers and all existing outputs are unchanged). `splitIds`, `uniqueIds`, and `mapAgingJob` moved into shared sections. The KPI list no longer prints `()` for a technician with no trade.
 - Added `fixtures/sample-servicetitan-export.csv` (fictional shop, 16 jobs), `fixtures/sample_export_reference_time.txt`, and a generated `sample_csv_fallback_digest.md`.
 - Expanded `mock_servicetitan_test.cjs` (header aliases, dates, malformed / empty / missing-column input, snake_case regression, aging thresholds from the sample, the new workflow's safety and end-to-end runs).
-- After review: an unterminated CSV quote is reported as an error so a partial file cannot look complete; a batch with more than one Jobs export uses only the last snapshot so an older Completed row cannot hide a current Unassigned job; an empty watch folder still produces a Heads-up.
+- Review hardening: explicit job ID and status headers take priority, split schedule date and time fields are combined, and invalid calendar times and DST transitions produce diagnostics. Booking QA checks all assignees, and utilization omits job-level minutes shared by multiple technicians.
+- The CSV companion requires one Jobs/Dispatch snapshot per batch. Malformed quoting and excess cells reject the report, and an empty watch folder still produces a Heads-up.
 - Still NOT tested against a live ServiceTitan, Gmail, or Slack account.
 
 ## v0.2.0 (draft)

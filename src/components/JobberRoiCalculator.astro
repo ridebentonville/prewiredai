@@ -1,0 +1,392 @@
+---
+/**
+ * Interactive morning-ops leak calculator for the Jobber Morning Ops Triage Copilot pack page.
+ * Every figure is an assumption the visitor types in. No industry averages, no promised results.
+ * Vanilla HTML + JS, no runtime dependencies.
+ */
+import { siteConfig } from "../config";
+
+const accent = siteConfig.accentColor;
+const schedulingUrl = siteConfig.schedulingUrl?.trim();
+
+const defaults = {
+  unscheduledLate: 0,
+  uninvoiced: 0,
+  stalledQuotes: 0,
+  ticket: 0,
+  quoteValue: 0,
+  recovery: 0,
+  hoursSaved: 0,
+  rate: 0,
+  weeks: 50,
+};
+
+const compute = (v: typeof defaults) => {
+  const jobsWeekly = (v.unscheduledLate + v.uninvoiced) * v.ticket;
+  const quotesWeekly = v.stalledQuotes * v.quoteValue;
+  const queueWeekly = jobsWeekly + quotesWeekly;
+  const recoveredWeekly = (queueWeekly * v.recovery) / 100;
+  const annualRecovered = recoveredWeekly * v.weeks;
+  const annualTime = v.hoursSaved * v.rate * v.weeks;
+  return { jobsWeekly, quotesWeekly, queueWeekly, recoveredWeekly, annualRecovered, annualTime, combined: annualRecovered + annualTime };
+};
+const r = compute(defaults);
+
+const usd = (n: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+const qty = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+
+const fields = [
+  { key: "unscheduledLate", label: "Unscheduled or late jobs per week", min: 0, max: 50, value: defaults.unscheduledLate, prefix: "", suffix: "", minLabel: "0", maxLabel: "50", help: "Jobs that sit in Unscheduled or Late before someone catches them." },
+  { key: "uninvoiced", label: "Finished jobs waiting to be invoiced per week", min: 0, max: 50, value: defaults.uninvoiced, prefix: "", suffix: "", minLabel: "0", maxLabel: "50", help: "Jobs that reach Requires Invoicing and wait." },
+  { key: "stalledQuotes", label: "High-value quotes that stall per week", min: 0, max: 20, value: defaults.stalledQuotes, prefix: "", suffix: "", minLabel: "0", maxLabel: "20", help: "Quotes still unanswered after Jobber's own follow-ups." },
+  { key: "ticket", label: "Average job / invoice value", min: 0, max: 5000, value: defaults.ticket, prefix: "$", suffix: "", minLabel: "$0", maxLabel: "$5,000", help: "" },
+  { key: "quoteValue", label: "Average high-value quote", min: 0, max: 25000, value: defaults.quoteValue, prefix: "$", suffix: "", minLabel: "$0", maxLabel: "$25,000", help: "" },
+  { key: "recovery", label: "Share you expect to catch or win back", min: 0, max: 100, value: defaults.recovery, prefix: "", suffix: "%", minLabel: "0%", maxLabel: "100%", help: "Your own guess. Set 0 to see the value passing through the queues with no recovery assumed." },
+  { key: "hoursSaved", label: "Office hours saved per week", min: 0, max: 15, value: defaults.hoursSaved, prefix: "", suffix: "", minLabel: "0", maxLabel: "15", help: "Time you now spend hunting across reports for what needs attention." },
+  { key: "rate", label: "Office hourly loaded rate", min: 0, max: 60, value: defaults.rate, prefix: "$", suffix: "", minLabel: "$0", maxLabel: "$60", help: "" },
+] as const;
+---
+
+<section id="jobber-roi" class="anchor border-b border-stone-200" aria-labelledby="jb-roi-heading" data-weeks={defaults.weeks}>
+  <div class="mx-auto max-w-6xl px-6 py-12 sm:px-10">
+    <h2 id="jb-roi-heading" class="text-xl font-medium tracking-tight text-stone-950">
+      Estimate what your morning queues hold
+    </h2>
+    <div class="mt-3 h-1 w-10 rounded-full" style={`background-color: ${accent}`}></div>
+    <p class="mt-4 max-w-3xl text-sm leading-relaxed text-stone-600">
+      Estimate with your own shop numbers. The estimates start at zero and update as you enter your own shop assumptions. Count a job in only one queue.
+    </p>
+    <noscript>
+      <p class="mt-3 text-sm text-stone-700">
+        Enable JavaScript to calculate an estimate from your inputs.
+      </p>
+    </noscript>
+
+    <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start lg:gap-8">
+      <div class="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6 lg:col-span-6">
+        <div class="space-y-6">
+          {
+            fields.map((field) => (
+              <div class="roi-field" data-roi-field={field.key}>
+                <div class="flex items-baseline justify-between gap-3">
+                  <label for={`jb-roi-${field.key}`} class="text-sm font-medium text-stone-950">{field.label}</label>
+                  <div class="flex items-center gap-1">
+                    {field.prefix && (
+                      <span class="text-sm text-stone-500" aria-hidden="true">
+                        {field.prefix}
+                      </span>
+                    )}
+                    <input
+                      id={`jb-roi-${field.key}`}
+                      class="roi-number w-20 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-right text-sm text-stone-950 tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                      type="number"
+                      inputmode="numeric"
+                      min={field.min}
+                      max={field.max}
+                      step="1"
+                      value={field.value}
+                      data-roi-number={field.key}
+                    />
+                    {field.suffix && (
+                      <span class="text-sm text-stone-500" aria-hidden="true">
+                        {field.suffix}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <input
+                  id={`jb-roi-${field.key}-range`}
+                  class="roi-range mt-3"
+                  type="range"
+                  min={field.min}
+                  max={field.max}
+                  step="1"
+                  value={field.value}
+                  aria-label={field.label}
+                  data-roi-range={field.key}
+                />
+                <div class="mt-1.5 flex justify-between text-xs text-stone-500">
+                  <span>{field.minLabel}</span>
+                  <span>{field.maxLabel}</span>
+                </div>
+                {field.help && <p class="mt-2 text-xs leading-relaxed text-stone-500">{field.help}</p>}
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-stone-200 p-5 sm:p-6 lg:col-span-6" style="background-color: #f0f4f1">
+        <p id="jb-roi-live" class="sr-only" aria-live="polite" aria-atomic="true">
+          Combined estimated annual impact {usd(r.combined)}.
+        </p>
+
+        <p class="text-sm text-stone-600">Combined estimated annual impact</p>
+        <p id="jb-roi-combined" class="mt-1 text-4xl font-medium tracking-tight text-stone-950 tabular-nums">
+          {usd(r.combined)}
+        </p>
+
+        <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div class="rounded-xl border border-stone-200 bg-white p-3">
+            <dt class="text-xs leading-snug text-stone-500">Weekly value passing through the three queues</dt>
+            <dd id="jb-roi-queue" class="mt-1 text-lg font-medium text-stone-950 tabular-nums">{usd(r.queueWeekly)}</dd>
+          </div>
+          <div class="rounded-xl border border-stone-200 bg-white p-3">
+            <dt class="text-xs leading-snug text-stone-500">Weekly value you expect to recover</dt>
+            <dd id="jb-roi-weekly" class="mt-1 text-lg font-medium text-stone-950 tabular-nums">{usd(r.recoveredWeekly)}</dd>
+          </div>
+          <div class="rounded-xl border border-stone-200 bg-white p-3">
+            <dt class="text-xs leading-snug text-stone-500">Annual value you expect to recover</dt>
+            <dd id="jb-roi-annual-recovered" class="mt-1 text-lg font-medium text-stone-950 tabular-nums">{usd(r.annualRecovered)}</dd>
+          </div>
+          <div class="rounded-xl border border-stone-200 bg-white p-3">
+            <dt class="text-xs leading-snug text-stone-500">Annual office time reclaimed</dt>
+            <dd id="jb-roi-annual-time" class="mt-1 text-lg font-medium text-stone-950 tabular-nums">{usd(r.annualTime)}</dd>
+          </div>
+        </dl>
+
+        <div class="mt-6 rounded-xl border border-stone-200 bg-white p-4 text-sm leading-relaxed text-stone-700">
+          <p class="font-medium text-stone-950">Your math</p>
+          <ul id="jb-roi-formulas" class="mt-2 space-y-2">
+            <li id="jb-roi-formula-queue">
+              Weekly queue value = ({qty(defaults.unscheduledLate)} unscheduled/late + {qty(defaults.uninvoiced)} uninvoiced) × {usd(defaults.ticket)} + {qty(defaults.stalledQuotes)} quotes × {usd(defaults.quoteValue)} = {usd(r.queueWeekly)}
+            </li>
+            <li id="jb-roi-formula-weekly">
+              Weekly value you expect to recover = {usd(r.queueWeekly)} × {qty(defaults.recovery)}% = {usd(r.recoveredWeekly)}
+            </li>
+            <li id="jb-roi-formula-annual">
+              Annual value you expect to recover = {usd(r.recoveredWeekly)} × {defaults.weeks} weeks = {usd(r.annualRecovered)}
+            </li>
+            <li id="jb-roi-formula-time">
+              Annual office time reclaimed = {qty(defaults.hoursSaved)} hours × {usd(defaults.rate)}/hr × {defaults.weeks} weeks = {usd(r.annualTime)}
+            </li>
+            <li id="jb-roi-formula-combined">
+              Combined estimated annual impact = {usd(r.annualRecovered)} + {usd(r.annualTime)} = {usd(r.combined)}
+            </li>
+          </ul>
+          <p class="mt-3 text-stone-600">
+            &ldquo;Passing through the queues&rdquo; is the dollar value of the work you say lands in them, not lost revenue. Only the share you enter is counted as recovered. Annualized over {defaults.weeks} working weeks.
+          </p>
+        </div>
+
+        <p class="mt-5 text-sm leading-relaxed text-stone-700">
+          This pack is planned as a fixed-price install rather than a per-seat subscription. Pricing is coming soon &mdash; book a call to talk through scope for your shop.
+        </p>
+
+        {
+          schedulingUrl && (
+            <a
+              href={schedulingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-5 inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={`background-color: ${accent}; outline-color: ${accent}`}
+            >
+              Book a 15-min ops audit
+            </a>
+          )
+        }
+
+        <p class="mt-5 text-xs leading-relaxed text-stone-500">
+          Illustrative estimate based on your inputs &mdash; actual results depend on your jobs, your quotes, and how you follow up.
+        </p>
+        <p id="jb-roi-status" class="mt-2 text-sm text-stone-700" hidden></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  #jobber-roi .roi-range {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: #e7e5e4;
+    cursor: pointer;
+  }
+  #jobber-roi .roi-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 9999px;
+    background: var(--accent, #1f4d3a);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent, #1f4d3a);
+  }
+  #jobber-roi .roi-range::-moz-range-thumb {
+    width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 9999px;
+    background: var(--accent, #1f4d3a);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--accent, #1f4d3a);
+  }
+  #jobber-roi .roi-range::-moz-range-track {
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: transparent;
+  }
+  #jobber-roi .roi-range:focus-visible {
+    outline: 2px solid var(--accent, #1f4d3a);
+    outline-offset: 3px;
+  }
+  #jobber-roi .roi-number[aria-invalid="true"] {
+    border-color: #9a3412;
+  }
+</style>
+
+<script>
+  const root = document.querySelector("#jobber-roi");
+  if (root) {
+    const weeks = Number(root.getAttribute("data-weeks")) || 50;
+    const accent = getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#1f4d3a";
+    const keys = ["unscheduledLate", "uninvoiced", "stalledQuotes", "ticket", "quoteValue", "recovery", "hoursSaved", "rate"] as const;
+
+    const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    const whole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+    const numberInputs = new Map<string, HTMLInputElement>();
+    const rangeInputs = new Map<string, HTMLInputElement>();
+    for (const key of keys) {
+      const number = root.querySelector<HTMLInputElement>(`[data-roi-number="${key}"]`);
+      const range = root.querySelector<HTMLInputElement>(`[data-roi-range="${key}"]`);
+      if (number && range) {
+        numberInputs.set(key, number);
+        rangeInputs.set(key, range);
+      }
+    }
+
+    const el = (id: string) => root.querySelector<HTMLElement>(`#${id}`);
+    const combinedEl = el("jb-roi-combined");
+    const queueEl = el("jb-roi-queue");
+    const weeklyEl = el("jb-roi-weekly");
+    const annualRecoveredEl = el("jb-roi-annual-recovered");
+    const annualTimeEl = el("jb-roi-annual-time");
+    const fQueue = el("jb-roi-formula-queue");
+    const fWeekly = el("jb-roi-formula-weekly");
+    const fAnnual = el("jb-roi-formula-annual");
+    const fTime = el("jb-roi-formula-time");
+    const fCombined = el("jb-roi-formula-combined");
+    const live = el("jb-roi-live");
+    const status = el("jb-roi-status");
+
+    const paintRange = (range: HTMLInputElement) => {
+      const min = Number(range.min);
+      const max = Number(range.max);
+      const pct = max === min ? 0 : ((Number(range.value) - min) / (max - min)) * 100;
+      range.style.background = `linear-gradient(to right, ${accent} 0%, ${accent} ${pct}%, #e7e5e4 ${pct}%, #e7e5e4 100%)`;
+    };
+
+    const readValue = (key: string): number | null => {
+      const input = numberInputs.get(key);
+      if (!input) return null;
+      if (input.value === "" || Number.isNaN(input.valueAsNumber) || !input.validity.valid) return null;
+      const value = input.valueAsNumber;
+      if (value < Number(input.min) || value > Number(input.max)) return null;
+      return value;
+    };
+
+    const setText = (node: HTMLElement | null, text: string) => {
+      if (node) node.textContent = text;
+    };
+
+    const update = () => {
+      let firstInvalid: HTMLInputElement | undefined;
+      const v: Record<string, number> = {};
+      let complete = true;
+      for (const key of keys) {
+        const input = numberInputs.get(key);
+        if (!input) continue;
+        const value = readValue(key);
+        input.setAttribute("aria-invalid", String(value === null));
+        if (value === null) {
+          complete = false;
+          if (!firstInvalid) firstInvalid = input;
+        } else {
+          v[key] = value;
+        }
+      }
+
+      if (status) {
+        if (firstInvalid) {
+          const label = (firstInvalid.labels?.[0]?.textContent ?? "This input").replace(/\s+/g, " ").trim();
+          status.hidden = false;
+          status.textContent = `${label}: enter a number from ${whole.format(Number(firstInvalid.min))} to ${whole.format(Number(firstInvalid.max))}.`;
+        } else {
+          status.hidden = true;
+          status.textContent = "";
+        }
+      }
+
+      if (!complete) {
+        for (const node of [combinedEl, queueEl, weeklyEl, annualRecoveredEl, annualTimeEl]) setText(node, "—");
+        setText(fQueue, "Weekly queue value = —");
+        setText(fWeekly, "Weekly value you expect to recover = —");
+        setText(fAnnual, "Annual value you expect to recover = —");
+        setText(fTime, "Annual office time reclaimed = —");
+        setText(fCombined, "Combined estimated annual impact = —");
+        setText(live, "Enter valid shop numbers to see an estimate.");
+        return;
+      }
+
+      const queueWeekly = (v.unscheduledLate + v.uninvoiced) * v.ticket + v.stalledQuotes * v.quoteValue;
+      const recoveredWeekly = (queueWeekly * v.recovery) / 100;
+      const annualRecovered = recoveredWeekly * weeks;
+      const annualTime = v.hoursSaved * v.rate * weeks;
+      const combined = annualRecovered + annualTime;
+
+      setText(combinedEl, currency.format(combined));
+      setText(queueEl, currency.format(queueWeekly));
+      setText(weeklyEl, currency.format(recoveredWeekly));
+      setText(annualRecoveredEl, currency.format(annualRecovered));
+      setText(annualTimeEl, currency.format(annualTime));
+      setText(fQueue, `Weekly queue value = (${whole.format(v.unscheduledLate)} unscheduled/late + ${whole.format(v.uninvoiced)} uninvoiced) × ${currency.format(v.ticket)} + ${whole.format(v.stalledQuotes)} quotes × ${currency.format(v.quoteValue)} = ${currency.format(queueWeekly)}`);
+      setText(fWeekly, `Weekly value you expect to recover = ${currency.format(queueWeekly)} × ${whole.format(v.recovery)}% = ${currency.format(recoveredWeekly)}`);
+      setText(fAnnual, `Annual value you expect to recover = ${currency.format(recoveredWeekly)} × ${weeks} weeks = ${currency.format(annualRecovered)}`);
+      setText(fTime, `Annual office time reclaimed = ${whole.format(v.hoursSaved)} hours × ${currency.format(v.rate)}/hr × ${weeks} weeks = ${currency.format(annualTime)}`);
+      setText(fCombined, `Combined estimated annual impact = ${currency.format(annualRecovered)} + ${currency.format(annualTime)} = ${currency.format(combined)}`);
+      setText(live, `Combined estimated annual impact ${currency.format(combined)}.`);
+    };
+
+    const syncFromNumber = (key: string, clamp: boolean) => {
+      const number = numberInputs.get(key);
+      const range = rangeInputs.get(key);
+      if (!number || !range) return;
+      if (clamp && number.value !== "" && !Number.isNaN(number.valueAsNumber)) {
+        number.value = String(Math.min(Number(number.max), Math.max(Number(number.min), number.valueAsNumber)));
+      }
+      if (readValue(key) !== null) {
+        range.value = String(number.valueAsNumber);
+        paintRange(range);
+      }
+      update();
+    };
+
+    const syncFromRange = (key: string) => {
+      const number = numberInputs.get(key);
+      const range = rangeInputs.get(key);
+      if (!number || !range) return;
+      number.value = range.value;
+      paintRange(range);
+      update();
+    };
+
+    for (const key of keys) {
+      const number = numberInputs.get(key);
+      const range = rangeInputs.get(key);
+      if (!number || !range) continue;
+      paintRange(range);
+      number.addEventListener("input", () => syncFromNumber(key, false));
+      number.addEventListener("change", () => syncFromNumber(key, true));
+      number.addEventListener("blur", () => syncFromNumber(key, true));
+      range.addEventListener("input", () => syncFromRange(key));
+    }
+
+    update();
+  }
+</script>

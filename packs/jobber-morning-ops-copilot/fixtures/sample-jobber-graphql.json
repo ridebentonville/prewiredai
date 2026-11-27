@@ -1,0 +1,547 @@
+{
+  "_comment": "FICTIONAL MOCK of three Jobber GraphQL responses (\"Bluestem Home Services\" sample). Field names are UNVERIFIED against a live Jobber account. Not real data.",
+  "jobs": {
+    "data": {
+      "jobs": {
+        "nodes": [
+          {
+            "id": "job_1001",
+            "jobNumber": 1001,
+            "title": "Weekly lawn mowing",
+            "jobStatus": "late",
+            "createdAt": "2026-02-20T09:00:00-06:00",
+            "completedAt": null,
+            "total": 85,
+            "client": {
+              "name": "Sample Household 5001"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-09T08:00:00-05:00",
+                  "endAt": "2026-03-09T10:00:00-05:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1002",
+            "jobNumber": 1002,
+            "title": "Furnace no heat repair",
+            "jobStatus": "late",
+            "createdAt": "2026-03-05T16:40:00-06:00",
+            "completedAt": null,
+            "total": 420,
+            "client": {
+              "name": "Sample Household 5002"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-06T13:00:00-06:00",
+                  "endAt": "2026-03-06T15:00:00-06:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1003",
+            "jobNumber": 1003,
+            "title": "Water heater swap",
+            "jobStatus": "action_required",
+            "createdAt": "2026-03-01T10:15:00-06:00",
+            "completedAt": null,
+            "total": 1850,
+            "client": {
+              "name": "Sample Household 5003"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-12T09:00:00-05:00",
+                  "endAt": "2026-03-12T13:00:00-05:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1004",
+            "jobNumber": 1004,
+            "title": "Spring cleanup and mulch",
+            "jobStatus": "unscheduled",
+            "createdAt": "2026-03-02T15:10:00-06:00",
+            "completedAt": null,
+            "total": 640,
+            "client": {
+              "name": "Sample Household 5004"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": null,
+                  "endAt": null
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1005",
+            "jobNumber": 1005,
+            "title": "AC tune-up",
+            "jobStatus": "unscheduled",
+            "createdAt": "2026-03-09T16:30:00-05:00",
+            "completedAt": null,
+            "total": 189,
+            "client": {
+              "name": "Sample Household 5005"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": null,
+                  "endAt": null
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1006",
+            "jobNumber": 1006,
+            "title": "Drain clearing",
+            "jobStatus": "requires_invoicing",
+            "createdAt": "2026-03-03T08:00:00-06:00",
+            "completedAt": "2026-03-05T16:15:00-06:00",
+            "total": 275,
+            "client": {
+              "name": "Sample Household 5006"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-05T13:00:00-06:00",
+                  "endAt": "2026-03-05T15:00:00-06:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1007",
+            "jobNumber": 1007,
+            "title": "Lawn aeration",
+            "jobStatus": "requires_invoicing",
+            "createdAt": "2026-02-25T14:00:00-06:00",
+            "completedAt": "2026-03-09T11:00:00-05:00",
+            "total": 160,
+            "client": {
+              "name": "Sample Household 5007"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-09T09:00:00-05:00",
+                  "endAt": "2026-03-09T11:00:00-05:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1008",
+            "jobNumber": 1008,
+            "title": "Mini-split install",
+            "jobStatus": "requires_invoicing",
+            "createdAt": "2026-02-10T11:00:00-06:00",
+            "completedAt": "2026-03-02T16:30:00-06:00",
+            "total": null,
+            "client": {
+              "name": "Sample Household 5008"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-02-27T08:00:00-06:00",
+                  "endAt": "2026-03-02T16:00:00-06:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1009",
+            "jobNumber": 1009,
+            "title": "Irrigation repair",
+            "jobStatus": "active",
+            "createdAt": "2026-03-08T09:30:00-05:00",
+            "completedAt": null,
+            "total": 310,
+            "client": {
+              "name": "Sample Household 5009"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-10T10:00:00-05:00",
+                  "endAt": "2026-03-10T12:00:00-05:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1010",
+            "jobNumber": 1010,
+            "title": "Drain camera inspection",
+            "jobStatus": "upcoming",
+            "createdAt": "2026-03-09T13:00:00-05:00",
+            "completedAt": null,
+            "total": 225,
+            "client": {
+              "name": "Sample Household 5010"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-11T14:00:00-05:00",
+                  "endAt": "2026-03-11T16:00:00-05:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1011",
+            "jobNumber": 1011,
+            "title": "Thermostat replacement",
+            "jobStatus": "completed",
+            "createdAt": "2026-03-06T08:20:00-06:00",
+            "completedAt": "2026-03-08T10:05:00-05:00",
+            "total": 240,
+            "client": {
+              "name": "Sample Household 5011"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-08T09:00:00-05:00",
+                  "endAt": "2026-03-08T10:00:00-05:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1012",
+            "jobNumber": 1012,
+            "title": "Sod repair",
+            "jobStatus": "active",
+            "createdAt": "2026-03-03T12:00:00-06:00",
+            "completedAt": null,
+            "total": 520,
+            "client": {
+              "name": "Sample Household 5012"
+            },
+            "visits": {
+              "nodes": []
+            }
+          },
+          {
+            "id": "job_1013",
+            "jobNumber": 1013,
+            "title": "Gutter cleaning",
+            "jobStatus": "archived",
+            "createdAt": "2026-02-01T09:00:00-06:00",
+            "completedAt": "2026-02-10T11:30:00-06:00",
+            "total": 150,
+            "client": {
+              "name": "Sample Household 5013"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-02-10T09:00:00-06:00",
+                  "endAt": "2026-02-10T11:00:00-06:00"
+                }
+              ]
+            }
+          },
+          {
+            "id": "job_1014",
+            "jobNumber": 1014,
+            "title": "Patio drain re-pipe",
+            "jobStatus": "active",
+            "createdAt": "2026-03-04T15:00:00-06:00",
+            "completedAt": null,
+            "total": 2200,
+            "client": {
+              "name": "Sample Household 5014"
+            },
+            "visits": {
+              "nodes": [
+                {
+                  "startAt": "2026-03-11T08:00:00-05:00",
+                  "endAt": "2026-03-11T12:00:00-05:00"
+                },
+                {
+                  "startAt": null,
+                  "endAt": null
+                }
+              ]
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  },
+  "invoices": {
+    "data": {
+      "invoices": {
+        "nodes": [
+          {
+            "id": "inv_2001",
+            "invoiceNumber": 2001,
+            "invoiceStatus": "past_due",
+            "issuedDate": "2026-01-30T09:00:00-06:00",
+            "dueDate": "2026-02-14",
+            "amounts": {
+              "total": 3200,
+              "invoiceBalance": 3200
+            },
+            "client": {
+              "name": "Sample Household 5021"
+            }
+          },
+          {
+            "id": "inv_2002",
+            "invoiceNumber": 2002,
+            "invoiceStatus": "past_due",
+            "issuedDate": "2026-02-16T09:00:00-06:00",
+            "dueDate": "2026-03-02",
+            "amounts": {
+              "total": 480,
+              "invoiceBalance": 480
+            },
+            "client": {
+              "name": "Sample Household 5022"
+            }
+          },
+          {
+            "id": "inv_2003",
+            "invoiceNumber": 2003,
+            "invoiceStatus": "past_due",
+            "issuedDate": "2026-02-23T09:00:00-06:00",
+            "dueDate": "2026-03-09",
+            "amounts": {
+              "total": 1250,
+              "invoiceBalance": 625
+            },
+            "client": {
+              "name": "Sample Household 5023"
+            }
+          },
+          {
+            "id": "inv_2004",
+            "invoiceNumber": 2004,
+            "invoiceStatus": "awaiting_payment",
+            "issuedDate": "2026-02-24T09:00:00-06:00",
+            "dueDate": "2026-03-10",
+            "amounts": {
+              "total": 900,
+              "invoiceBalance": 900
+            },
+            "client": {
+              "name": "Sample Household 5024"
+            }
+          },
+          {
+            "id": "inv_2005",
+            "invoiceNumber": 2005,
+            "invoiceStatus": "awaiting_payment",
+            "issuedDate": "2026-03-04T09:00:00-06:00",
+            "dueDate": "2026-03-25",
+            "amounts": {
+              "total": 350,
+              "invoiceBalance": 350
+            },
+            "client": {
+              "name": "Sample Household 5025"
+            }
+          },
+          {
+            "id": "inv_2006",
+            "invoiceNumber": 2006,
+            "invoiceStatus": "paid",
+            "issuedDate": "2026-01-20T09:00:00-06:00",
+            "dueDate": "2026-02-10",
+            "amounts": {
+              "total": 600,
+              "invoiceBalance": 0
+            },
+            "client": {
+              "name": "Sample Household 5026"
+            }
+          },
+          {
+            "id": "inv_2007",
+            "invoiceNumber": 2007,
+            "invoiceStatus": "draft",
+            "issuedDate": null,
+            "dueDate": null,
+            "amounts": {
+              "total": 300,
+              "invoiceBalance": 300
+            },
+            "client": {
+              "name": "Sample Household 5027"
+            }
+          },
+          {
+            "id": "inv_2008",
+            "invoiceNumber": 2008,
+            "invoiceStatus": "bad_debt",
+            "issuedDate": "2025-10-15T09:00:00-06:00",
+            "dueDate": "2025-11-01",
+            "amounts": {
+              "total": 750,
+              "invoiceBalance": 750
+            },
+            "client": {
+              "name": "Sample Household 5028"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  },
+  "quotes": {
+    "data": {
+      "quotes": {
+        "nodes": [
+          {
+            "id": "quote_3001",
+            "quoteNumber": 3001,
+            "title": "Full HVAC system replacement",
+            "quoteStatus": "awaiting_response",
+            "sentAt": "2026-02-10T09:00:00-06:00",
+            "amounts": {
+              "total": 14800
+            },
+            "client": {
+              "name": "Sample Household 5031"
+            }
+          },
+          {
+            "id": "quote_3002",
+            "quoteNumber": 3002,
+            "title": "Backyard drainage and sod",
+            "quoteStatus": "awaiting_response",
+            "sentAt": "2026-02-24T09:00:00-06:00",
+            "amounts": {
+              "total": 6200
+            },
+            "client": {
+              "name": "Sample Household 5032"
+            }
+          },
+          {
+            "id": "quote_3003",
+            "quoteNumber": 3003,
+            "title": "Whole-home repipe",
+            "quoteStatus": "awaiting_response",
+            "sentAt": "2026-02-25T09:00:00-06:00",
+            "amounts": {
+              "total": 9500
+            },
+            "client": {
+              "name": "Sample Household 5033"
+            }
+          },
+          {
+            "id": "quote_3004",
+            "quoteNumber": 3004,
+            "title": "Patio and walkway lighting",
+            "quoteStatus": "awaiting_response",
+            "sentAt": "2026-02-03T09:00:00-06:00",
+            "amounts": {
+              "total": 1000
+            },
+            "client": {
+              "name": "Sample Household 5034"
+            }
+          },
+          {
+            "id": "quote_3005",
+            "quoteNumber": 3005,
+            "title": "Water softener install",
+            "quoteStatus": "awaiting_response",
+            "sentAt": "2026-02-03T09:00:00-06:00",
+            "amounts": {
+              "total": 950
+            },
+            "client": {
+              "name": "Sample Household 5035"
+            }
+          },
+          {
+            "id": "quote_3006",
+            "quoteNumber": 3006,
+            "title": "Ductless mini-split (2 zones)",
+            "quoteStatus": "approved",
+            "sentAt": "2026-02-01T09:00:00-06:00",
+            "amounts": {
+              "total": 12000
+            },
+            "client": {
+              "name": "Sample Household 5036"
+            }
+          },
+          {
+            "id": "quote_3007",
+            "quoteNumber": 3007,
+            "title": "Landscape redesign",
+            "quoteStatus": "draft",
+            "sentAt": "2026-03-09T09:00:00-05:00",
+            "amounts": {
+              "total": 7500
+            },
+            "client": {
+              "name": "Sample Household 5037"
+            }
+          },
+          {
+            "id": "quote_3008",
+            "quoteNumber": 3008,
+            "title": "Tankless water heater",
+            "quoteStatus": "changes_requested",
+            "sentAt": "2026-02-01T09:00:00-06:00",
+            "amounts": {
+              "total": 5400
+            },
+            "client": {
+              "name": "Sample Household 5038"
+            }
+          },
+          {
+            "id": "quote_3009",
+            "quoteNumber": 3009,
+            "title": "Irrigation system install",
+            "quoteStatus": "awaiting_response",
+            "sentAt": "2026-01-20T09:00:00-06:00",
+            "amounts": {
+              "total": 3300
+            },
+            "client": {
+              "name": "Sample Household 5039"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  }
+}

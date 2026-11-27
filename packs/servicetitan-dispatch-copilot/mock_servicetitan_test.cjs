@@ -384,7 +384,7 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
   });
   check('Message never contains the app key, tenant id, or any customer-send field', () => {
     assert.ok(!msg.text.includes('PASTE_APP_KEY_HERE') && !msg.text.includes('PASTE_TENANT_ID_HERE'));
-    assert.deepStrictEqual(Object.keys(msg).sort(), ['deliveryNotes', 'emailTo', 'html', 'sendEmail', 'sendSlack', 'slackChannel', 'subject', 'testMode', 'text']);
+    assert.deepStrictEqual(Object.keys(msg).sort(), ['deliveryNotes', 'emailTo', 'html', 'sendEmail', 'sendSlack', 'slackChannel', 'slackText', 'subject', 'testMode', 'text']);
   });
 
   // ---------------- parser + live-path mapper (synthetic data, no network)
@@ -736,7 +736,7 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
   });
   check('csv v0.3: header aliases map to the right internal field', () => {
     const table = {
-      job_id: ['Job #', 'Job Number', 'Job No', 'Job ID', 'JobId', 'job_id', 'Invoice #'],
+      job_id: ['Job #', 'Job Number', 'Job No', 'Job ID', 'JobId', 'job_id'],
       status: ['Status', 'Job Status', 'job_status'],
       scheduled_start: ['Scheduled Start', 'Start', 'Appointment Start', 'scheduled_start'],
       scheduled_end: ['Scheduled End', 'End', 'Appointment End', 'scheduled_end'],
@@ -807,6 +807,156 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.strictEqual(logic.toIsoInZone('3/10/2026 9:50 AM', 'America/Denver').iso, '2026-03-10T15:50:00.000Z');
     ['13/45/2026 9:00 AM', 'tomorrow morning', '2/30/2026 9:00 AM', '3/10/2026 13:00 PM'].forEach((bad) => assert.strictEqual(z(bad).bad, true, bad));
   });
+  check('CSV hardening: explicit Job Status wins in the reproduced split-start row', () => {
+    const r = logic.normalizeJobsExport('Job #,Status,Job Status,Start Date,Start Time\nA1,Done,Scheduled,3/10/2026,9:50 AM', { timezone: TZ });
+    assert.strictEqual(r.ok, true);
+    assert.strictEqual(r.jobs[0].status, 'Scheduled');
+    assert.strictEqual(r.jobs[0].start, '2026-03-10T14:50:00.000Z');
+    assert.ok(r.headsUp.some((h) => /Row 2.*conflicting status headers.*Used "Job Status"/.test(h)));
+  });
+  check('CSV hardening: complete starts win and incomplete starts fall back to their split date and time', () => {
+    const r = logic.normalizeJobsExport([
+      'Job #,Status,Scheduled Start,Appointment Start,Scheduled Date,Scheduled Time,End Date,End Time',
+      'A1,Scheduled,9:00 AM,3/10/2026 11:00 AM,3/10/2026,9:50 AM,3/10/2026,2:00 PM',
+      'A2,Scheduled,2026-03-10,,2026-03-10,9:50 AM,2026-03-10,2:00 PM',
+      'A3,Scheduled,,,3/10/2026,bad clock,,',
+    ].join('\n'), { timezone: TZ });
+    assert.deepStrictEqual(r.jobs.map((j) => [j.start, j.end]), [
+      ['2026-03-10T16:00:00.000Z', '2026-03-10T19:00:00.000Z'],
+      ['2026-03-10T14:50:00.000Z', '2026-03-10T19:00:00.000Z'],
+      ['', ''],
+    ]);
+    assert.ok(r.headsUp.some((h) => /row 4, job A3.*3\/10\/2026 bad clock/.test(h)));
+  });
+  check('CSV hardening: explicit job identity wins and competing identity or status headers surface conflicts', () => {
+    const r = logic.normalizeJobsExport([
+      'Invoice #,Job Number,Job #,Job ID,Status,Job-Status,JOB_STATUS,Scheduled Start',
+      'I01,A1,A2,ST1,Done,Scheduled,Dispatched,3/10/2026 9:50 AM',
+    ].join('\n'), { timezone: TZ });
+    assert.strictEqual(r.jobs[0].id, 'A1');
+    assert.strictEqual(r.jobs[0].status, 'Scheduled');
+    assert.ok(r.headsUp.some((h) => /conflicting job_id headers.*Job Number.*Job #.*Job ID/.test(h)));
+    assert.ok(r.headsUp.some((h) => /conflicting status headers.*Job-Status.*JOB_STATUS.*Status/.test(h)));
+  });
+  check('CSV hardening: exact duplicate headers reject the snapshot before values can overwrite', () => {
+    const text = 'Job #,Status,Status,Scheduled Start\nA1,Done,Scheduled,3/10/2026 9:50 AM';
+    const r = logic.normalizeJobsExport(text);
+    assert.strictEqual(r.ok, false);
+    assert.deepStrictEqual(r.jobs, []);
+    assert.match(r.message, /duplicate CSV headers.*Status/i);
+    const ds = logic.datasetFromCsvFiles(logic.prepareSettings({ source: 'csv' }, 0), [{ name: 'jobs.csv', text }]);
+    assert.deepStrictEqual(ds.jobs, []);
+    assert.ok(ds.settings.headsUp.some((h) => /duplicate CSV headers.*Status/i.test(h)));
+  });
+  check('CSV hardening: invoice numbers cannot key Jobs rows or mask a Jobs snapshot in a batch', () => {
+    const invoice = 'Invoice Number,Status,Scheduled Start\nI01,Open,3/10/2026 9:50 AM';
+    const r = logic.normalizeJobsExport(invoice);
+    assert.strictEqual(r.ok, false);
+    assert.match(r.message, /missing required column.*Job #/);
+    const ds = logic.datasetFromCsvFiles(logic.prepareSettings({ source: 'csv' }, 0), [
+      { name: 'board.csv', text: 'Job #,Status,Scheduled Start\nA1,Scheduled,3/10/2026 9:50 AM' },
+      { name: 'jobs-invoice.csv', text: invoice },
+      { name: 'invoice-with-job-reference.csv', text: 'Invoice ID,Job Number,Status\nI02,A1,Open' },
+    ]);
+    assert.deepStrictEqual(ds.jobs.map((j) => j.id), ['A1']);
+    assert.ok(ds.settings.headsUp.some((h) => /jobs-invoice\.csv.*was not recognized/.test(h)));
+  });
+  check('CSV hardening: a related Job Number in an invoice report does not replace the board', () => {
+    const settings = logic.prepareSettings({ source: 'csv' }, 0);
+    const ds = logic.datasetFromCsvFiles(settings, [{ name: 'report.csv', text: 'Invoice #,Job Number,Status\nI02,A1,Open' }]);
+    assert.deepStrictEqual(ds.jobs, []);
+    assert.match(ds.settings.headsUp.join(' '), /was not recognized/);
+  });
+  check('CSV hardening: DST gap is blanked and fold uses the earlier occurrence with a row Heads-up', () => {
+    const ds = logic.datasetFromCsvFiles(logic.prepareSettings({ source: 'csv', timezone: TZ }, 0), [{
+      name: 'board.csv',
+      text: [
+        'Job #,Status,Start Date,Start Time,Scheduled End',
+        'Gap,Scheduled,3/8/2026,2:30 AM,',
+        'Fold,Scheduled,11/1/2026,1:30 AM,2026-11-01T01:45:00-06:00',
+      ].join('\n'),
+    }]);
+    assert.strictEqual(ds.jobs[0].start, '');
+    assert.strictEqual(ds.jobs[1].start, '2026-11-01T06:30:00.000Z');
+    assert.strictEqual(ds.jobs[1].end, '2026-11-01T01:45:00-06:00');
+    assert.ok(ds.settings.headsUp.some((h) => /Row 2.*Gap.*3\/8\/2026 2:30 AM.*nonexistent.*left blank/.test(h)));
+    assert.ok(ds.settings.headsUp.some((h) => /Row 3.*Fold.*11\/1\/2026 1:30 AM.*ambiguous.*earlier occurrence/.test(h)));
+  });
+  check('CSV hardening: offset timestamps are calendar-validated before parsing', () => {
+    const r = logic.normalizeJobsExport('Job #,Status,Scheduled Start\nA1,Scheduled,2026-02-30T09:00:00Z');
+    assert.strictEqual(r.jobs[0].start, '');
+    assert.ok(r.headsUp.some((h) => /row 2, job A1.*2026-02-30T09:00:00Z/.test(h)));
+    assert.strictEqual(logic.toIsoInZone('2026-02-29T09:00:00-06:00', TZ).bad, true);
+    assert.strictEqual(logic.toIsoInZone('2028-02-29T09:00:00Z', TZ).iso, '2028-02-29T09:00:00Z');
+  });
+  check('CSV hardening: QA sees a sales-capable co-assignee and excludes a second assignee on overlapping work', () => {
+    const settings = logic.prepareSettings({ source: 'csv', timezone: TZ, asOfOverride: '2026-03-11T07:00:00-05:00' }, 0);
+    const ds = logic.datasetFromCsvFiles(settings, [
+      { name: 'jobs.csv', text: [
+        'Job #,Job Status,Scheduled Start,Scheduled End,Created On,Technician ID,Job Type,Equipment Age,Business Unit',
+        'Covered,Scheduled,3/11/2026 9:00 AM,3/11/2026 11:00 AM,3/11/2026 6:00 AM,T1,Repair,15,HVAC',
+        'Covered,Scheduled,3/11/2026 9:00 AM,3/11/2026 11:00 AM,3/11/2026 6:00 AM,T2,Repair,15,HVAC',
+        'NeedsSales,Scheduled,3/11/2026 10:00 AM,3/11/2026 11:00 AM,3/11/2026 6:00 AM,T1,Repair,15,HVAC',
+        'Busy,Working,3/11/2026 9:00 AM,3/11/2026 12:00 PM,,T1,Maintenance,,HVAC',
+        'Busy,Working,3/11/2026 9:00 AM,3/11/2026 12:00 PM,,T3,Maintenance,,HVAC',
+      ].join('\n') },
+      { name: 'technicians.csv', text: [
+        'Technician ID,Name,Trade,Shift Hours,Sales Capable',
+        'T1,Dana,HVAC,8,No', 'T2,Avery,HVAC,8,Yes', 'T3,Ren,HVAC,8,Yes', 'T4,Sol,HVAC,8,Yes',
+      ].join('\n') },
+    ]);
+    const flagged = logic.bookingQa(ds).flagged;
+    assert.strictEqual(flagged.find((j) => j.jobId === 'Covered').routing.status, 'already_sales_capable');
+    assert.deepStrictEqual(flagged.find((j) => j.jobId === 'NeedsSales').routing.suggested.map((t) => t.id), ['T4']);
+  });
+  check('CSV hardening: utilization excludes multi-tech job-level minutes in either row order', () => {
+    const settings = logic.prepareSettings({ source: 'csv', timezone: TZ, asOfOverride: '2026-03-11T07:00:00-05:00' }, 0);
+    const shared = [
+      'Shared,Completed,3/10/2026 9:00 AM,T1,90',
+      'Shared,Completed,3/10/2026 9:00 AM,T2,90',
+    ];
+    for (const rows of [shared, shared.slice().reverse()]) {
+      const ds = logic.datasetFromCsvFiles(settings, [
+        { name: 'jobs.csv', text: ['Job #,Status,Scheduled Start,Technician ID,Actual Minutes',
+          ...rows, 'Solo,Completed,3/10/2026 9:00 AM,T3,60'].join('\n') },
+        { name: 'techs.csv', text: 'Technician ID,Name,Trade,Shift Hours\nT1,Dana,Plumbing,8\nT2,Avery,Plumbing,8\nT3,Ren,Plumbing,8' },
+      ]);
+      const kpis = logic.kpiDigest(ds);
+      assert.deepStrictEqual(kpis.utilization.perTech.map((p) => [p.jobs, p.minutes, p.utilizationPct]),
+        [[1, 0, null], [1, 0, null], [1, 60, 12.5]]);
+      assert.deepStrictEqual(kpis.utilization.team, { pct: 12.5, minutes: 60, shiftMinutes: 480 });
+      assert.ok(kpis.headsUp.some((h) => /Shared.*job-level.*multiple technicians.*left out/.test(h)));
+    }
+  });
+  check('CSV hardening: explicit multi-day Yes and case-insensitive name-to-ID matching survive either row order', () => {
+    const rows = ['A1,Scheduled,3/10/2026 9:00 AM,Dana Whitfield,,No', 'A1,Scheduled,3/10/2026 9:00 AM,DANA WHITFIELD,T1,Yes'];
+    for (const pair of [rows, rows.slice().reverse()]) {
+      const r = logic.normalizeJobsExport(['Job #,Status,Scheduled Start,Technician,Technician ID,Multi-Day',
+        ...pair, 'A2,Scheduled,3/10/2026 10:00 AM,dana whitfield,,'].join('\n'));
+      assert.deepStrictEqual(r.jobs.map((j) => j.techIds), [['T1'], ['T1']]);
+      assert.strictEqual(r.jobs[0].multiDay, true);
+      assert.deepStrictEqual(r.technicians, [{ tech_id: 'T1', name: 'DANA WHITFIELD', trade: '' }]);
+    }
+  });
+  check('CSV hardening: an ambiguous technician name is flagged without choosing either ID', () => {
+    const r = logic.normalizeJobsExport([
+      'Job #,Status,Scheduled Start,Technician,Technician ID',
+      'A1,Scheduled,3/10/2026 9:00 AM,Dana,T1',
+      'A2,Scheduled,3/10/2026 9:00 AM,Dana,T2',
+      'A3,Scheduled,3/10/2026 9:00 AM,Dana,',
+    ].join('\n'));
+    assert.deepStrictEqual(r.jobs.map((j) => j.techIds), [['T1'], ['T2'], ['Dana']]);
+    assert.ok(r.headsUp.some((h) => /dana.*matches multiple IDs.*T1.*T2/.test(h)));
+  });
+  check('CSV hardening: name-only and unlabeled ID-only assignments on the same job surface uncertainty', () => {
+    const r = logic.normalizeJobsExport([
+      'Job #,Status,Scheduled Start,Technician,Technician ID',
+      'A1,Scheduled,3/10/2026 9:00 AM,Dana,',
+      'A1,Scheduled,3/10/2026 9:00 AM,,T1',
+    ].join('\n'));
+    assert.deepStrictEqual(r.jobs[0].techIds, ['Dana', 'T1']);
+    assert.ok(r.headsUp.some((h) => /Job A1.*name-only.*IDs without a reliable name.*could not be matched/.test(h)));
+  });
   check('csv v0.3: malformed rows are skipped or blanked and counted in a Heads-up, never thrown', () => {
     const txt = [
       'Job #,Status,Scheduled Start,Scheduled End,Zone',
@@ -842,24 +992,26 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     const t = logic.parseCsvTable(txt);
     assert.ok(t.warnings.some((w) => /never closed|swallowed/i.test(w)), t.warnings.join('|'));
   });
-  check('csv v0.3: two Jobs exports in one batch use only the last snapshot so an older Completed row cannot hide a current Unassigned job', () => {
-    const older = 'Job #,Status,Scheduled Start,Technician\nJ1,Completed,3/10/2026 9:00 AM,Avery\n';
-    const newer = 'Job #,Status,Scheduled Start,Technician\nJ1,Unassigned,3/12/2026 9:00 AM,\n';
+  check('CSV hardening: competing Jobs snapshots do not produce a board in either input order', () => {
+    const files = [
+      { name: 'older.csv', text: 'Job #,Status,Scheduled Start,Technician\nJ1,Completed,3/10/2026 9:00 AM,Avery\n' },
+      { name: 'newer.csv', text: 'Job #,Status,Scheduled Start,Technician\nJ1,Unassigned,3/12/2026 9:00 AM,\n' },
+    ];
     const s = logic.prepareAgingSettings({ source: 'csv', asOfOverride: '2026-03-12T07:00:00-05:00' }, 0);
-    const lastWins = logic.datasetFromCsvFiles(s, [
-      { name: 'older.csv', text: older },
-      { name: 'newer.csv', text: newer },
-    ]);
-    assert.strictEqual(lastWins.jobs.length, 1);
-    assert.strictEqual(lastWins.jobs[0].status, 'Unassigned');
-    assert.ok(!lastWins.jobs[0].techId && lastWins.jobs[0].techIds.length === 0);
-    assert.ok(lastWins.settings.headsUp.some((h) => /Only the last one \("newer\.csv"\) was used/.test(h) && /older\.csv/.test(h)), lastWins.settings.headsUp.join('|'));
-    const reversed = logic.datasetFromCsvFiles(s, [
-      { name: 'newer.csv', text: newer },
-      { name: 'older.csv', text: older },
-    ]);
-    assert.strictEqual(reversed.jobs[0].status, 'Completed');
-    assert.ok(reversed.settings.headsUp.some((h) => /Only the last one \("older\.csv"\) was used/.test(h) && /newer\.csv/.test(h)), reversed.settings.headsUp.join('|'));
+    for (const batch of [files, files.slice().reverse()]) {
+      const ds = logic.datasetFromCsvFiles(s, batch);
+      assert.ok(!ds.jobs || ds.jobs.length === 0);
+      assert.match(ds.settings.headsUp.join(' '), /Supply one Jobs\/Dispatch snapshot/);
+    }
+  });
+  check('CSV hardening: malformed quoting or record widths reject the whole Jobs snapshot', () => {
+    for (const record of ['1,Scheduled,2026-03-11,a"b"', '1,Scheduled,2026-03-11,"a"b',
+      '1,Scheduled,2026-03-11,"unclosed', '1,Scheduled,2026-03-11,a,b']) {
+      const csv = 'Job #,Status,Scheduled Start,Summary\n2,Scheduled,2026-03-11,ok\n' + record;
+      const ds = logic.datasetFromCsvFiles({ timezone: TZ, headsUp: [] }, [{ name: 'jobs.csv', text: csv }]);
+      assert.ok(!ds.jobs || ds.jobs.length === 0);
+      assert.match(ds.settings.headsUp.join(' '), /CSV (?:data )?record 3/i);
+    }
   });
   check('csv v0.3: repeated job rows (one per technician or appointment) merge into one job', () => {
     const txt = [
@@ -1271,7 +1423,25 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.strictEqual(cwInbound.msgs[1].text, logic.renderAgingAlert(Object.assign({}, sampleDs, { agingWatch: sw })).text);
   });
 
+  check('owner Slack payload escapes Slack control text in both renderers', () => {
+    for (const message of [sampleDigest.msg, cwInbound.msgs[1]]) {
+      const escaped = message.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      assert.strictEqual(message.slackText, escaped);
+    }
+  });
+
   // existing workflows now accept human headers in the csv path too
+  await checkAsync('legacy CSV workflows surface malformed file diagnostics from their Code nodes', async () => {
+    for (const [run, config] of [[runNode, cfgVals], [runAgingNode, agingCfgVals]]) {
+      const prep = await run('Prepare Settings', { input: Object.assign({}, config, { source: 'csv', asOfOverride: SAMPLE_REF }) });
+      const ds = await run('Parse CSV Exports', {
+        input: [{ json: {}, binary: { data: { fileName: 'jobs.csv' } } }],
+        named: { 'Prepare Settings': prep },
+        buffers: [Buffer.from('Job #,Status,Scheduled Start,Summary\n1,Scheduled,2026-03-11,"unclosed')],
+      });
+      assert.match(ds.settings.headsUp.join(' '), /jobs\.csv.*never closed/);
+    }
+  });
   await checkAsync('existing aging workflow Parse CSV Exports now accepts a human-header Jobs export', async () => {
     const prep = await runAgingNode('Prepare Settings', { input: Object.assign({}, agingCfgVals, { source: 'csv', asOfOverride: SAMPLE_REF }) });
     const ds = await runAgingNode('Parse CSV Exports', {
@@ -1365,9 +1535,9 @@ const loadCsv = (prep) => runNode('Parse CSV Exports', {
     assert.ok(!BANNED.test(entry));
     assert.ok(entry.includes('draftNote("ServiceTitan, Gmail, Slack, or a CSV export")'));
   });
-  check('templates.ts: no stale 11-pack copy', () => {
-    assert.ok(!/Eleven|11 Prewired|11 packs/.test(tsText));
-    assert.strictEqual((tsText.match(/^    slug: "/gm) || []).length, 12);
+  check('templates.ts: no stale 12-pack copy', () => {
+    assert.ok(!/Eleven|11 Prewired|11 packs|Twelve|12 Prewired|12 packs/.test(tsText));
+    assert.strictEqual((tsText.match(/^    slug: "/gm) || []).length, 13);
   });
   report();
 })();

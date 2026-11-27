@@ -203,7 +203,8 @@ add('Email owner (Gmail)', 'n8n-nodes-base.gmail', 2.1, [X + 1120, 420], {
 add('Post to owner Slack', 'n8n-nodes-base.slack', 2.3, [X + 1120, 640], {
   resource: 'message', operation: 'post', select: 'channel',
   channelId: { __rl: true, value: "={{ $json.slackChannel.replace(/^#/, '') }}", mode: 'name' },
-  text: '={{ $json.text }}', otherOptions: { includeLinkToWorkflow: false },
+  messageType: 'text', text: '={{ $json.slackText }}',
+  otherOptions: { includeLinkToWorkflow: false, link_names: false, mrkdwn: false, unfurl_links: false, unfurl_media: false },
 }, { credentials: { slackApi: { id: 'PLACEHOLDER_SLACK', name: 'Slack account (PLACEHOLDER)' } } });
 
 // ---- sticky notes (not counted as executable nodes)

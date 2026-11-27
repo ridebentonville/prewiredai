@@ -83,9 +83,9 @@ ServiceTitan's Starter and Essentials tiers do not get Customer-Built App Keys, 
 
 | Needed | Accepted headers (examples) |
 | --- | --- |
-| Job id | `Job #`, `Job Number`, `Job No`, `Job ID`, `Invoice #` |
-| Status | `Status`, `Job Status` |
-| Scheduled start | `Scheduled Start`, `Start`, `Appointment Start` |
+| Job id | `Job #`, `Job Number`, `Job No`, `Job ID` |
+| Status | `Job Status`, `Status` |
+| Scheduled start | `Scheduled Start`, `Appointment Start`, `Start`, or `Start Date` + `Start Time` |
 
 **Optional columns** (more columns means fewer Heads-up lines and better flags):
 
@@ -104,11 +104,13 @@ ServiceTitan's Starter and Essentials tiers do not get Customer-Built App Keys, 
 | Multi-day | `Multi-Day`, `Multi Day` (a job whose start and end fall on different days is also treated as multi-day) |
 | Equipment, arrival | `Equipment Type`, `Equipment Age`, `Arrived At`, `Actual Minutes` |
 
-Matching ignores capitalization, extra spaces, punctuation (`#` and `Number` are the same), and whether words are separated by spaces, underscores, or hyphens. The original snake_case fixture headers (`job_id`, `scheduled_start`, ...) still work. Dates like `3/10/2026 9:50 AM` or `2026-03-10 09:50` are read as local time in your `timezone`; ISO dates with an offset are kept as they are.
+Matching ignores capitalization, extra spaces, punctuation (`#` and `Number` are the same), and whether words are separated by spaces, underscores, or hyphens. The original snake_case fixture headers (`job_id`, `scheduled_start`, ...) still work. The importer prefers `Job Status` over `Status` and reports conflicting job IDs or statuses. A complete scheduled or appointment timestamp takes priority over a split date and time. Dates like `3/10/2026 9:50 AM` or `2026-03-10 09:50` use your configured timezone. Invalid calendar dates and nonexistent spring-forward times are left blank with a Heads-up. An ambiguous fall-back time uses the earlier occurrence and logs a Heads-up. A valid ISO timestamp with an explicit offset selects its own occurrence.
 
-**What a single Jobs export gives you.** The Aging Watch runs fully. The Morning Digest runs partially: Booking QA, the report-day job counts, and response time (when Arrived At is present) work. Technician names are taken from the Technician column. Capacity, memberships, estimates, calls, and technician shift hours are not in a jobs export, so each missing piece becomes a "Heads-up" line. Nothing is estimated or invented. If you also export any of those reports (same CSV rules, same header matching), drop them in alongside the jobs file and they are used. File names do not matter; each file is recognized by its columns.
+For a job with multiple technicians, Booking QA checks every assignment. Job-level on-site minutes on those jobs are excluded from per-technician utilization and the affected technicians are excluded from the team utilization figure.
 
-**Messy rows.** A row with no job id is skipped. A footer or subtotal row (no status and no start) is skipped. An unreadable date is left blank. Several rows for the same job number (one per technician or appointment) are merged, with technicians combined. Every one of these is counted in a Heads-up. An empty file or a header-only file produces a Heads-up and no crash.
+**What a single Jobs export gives you.** The Aging Watch uses the status, aging clock, and dispatch columns present in the export. The Morning Digest runs partially: Booking QA, the report-day job counts, and response time (when Arrived At is present) work. Technician names are taken from the Technician column. Capacity, memberships, estimates, calls, and technician shift hours are not in a jobs export, so each missing piece becomes a "Heads-up" line. Nothing is estimated or invented. If you also export any of those reports (same CSV rules, same header matching), drop them in alongside the jobs file and they are used. File names do not matter; each file is recognized by its columns.
+
+**Messy rows.** A row with no job id is skipped. A footer or subtotal row (no status and no start) is skipped. An unreadable date is left blank. Several rows for the same job number (one per technician or appointment) are merged, with technicians combined. Every one of these is counted in a Heads-up. An empty or header-only file produces a Heads-up. Malformed quoting and rows wider than their header reject the report. Use exactly one Jobs/Dispatch snapshot per batch.
 
 **Three ways to get the CSV in** (each trigger is disabled on import):
 

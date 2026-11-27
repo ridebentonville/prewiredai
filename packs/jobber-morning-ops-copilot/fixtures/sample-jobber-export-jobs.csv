@@ -1,0 +1,16 @@
+Job #,Status,Client name,Title,Property,Schedule start date,Schedule end date,Created date,Closed date,Total ($),Assigned to
+1001,Late,Sample Household 5001,Weekly lawn mowing,"11 Sample Meadow Ln, Testville",3/9/2026 8:00 AM,3/9/2026 10:00 AM,2/20/2026 9:00 AM,,$85.00,Crew A
+1002,Late,Sample Household 5002,Furnace no heat repair,"12 Sample Meadow Ln, Testville",3/6/2026 1:00 PM,3/6/2026 3:00 PM,3/5/2026 4:40 PM,,$420.00,Tech Rowan
+1003,Action Required,Sample Household 5003,Water heater swap,"13 Sample Meadow Ln, Testville",3/12/2026 9:00 AM,3/12/2026 1:00 PM,3/1/2026 10:15 AM,,"$1,850.00",Tech Imani
+1004,Unscheduled,Sample Household 5004,Spring cleanup and mulch,"14 Sample Meadow Ln, Testville",,,3/2/2026 3:10 PM,,$640.00,
+1005,Unscheduled,Sample Household 5005,AC tune-up,"15 Sample Meadow Ln, Testville",,,3/9/2026 4:30 PM,,$189.00,
+1006,Requires Invoicing,Sample Household 5006,Drain clearing,"16 Sample Meadow Ln, Testville",3/5/2026 1:00 PM,3/5/2026 3:00 PM,3/3/2026 8:00 AM,3/5/2026 4:15 PM,$275.00,Tech Imani
+1007,Requires Invoicing,Sample Household 5007,Lawn aeration,"17 Sample Meadow Ln, Testville",3/9/2026 9:00 AM,3/9/2026 11:00 AM,2/25/2026 2:00 PM,3/9/2026 11:00 AM,$160.00,Crew A
+1008,Requires Invoicing,Sample Household 5008,Mini-split install,"18 Sample Meadow Ln, Testville",2/27/2026 8:00 AM,3/2/2026 4:00 PM,2/10/2026 11:00 AM,3/2/2026 4:30 PM,,Tech Rowan
+1009,Active,Sample Household 5009,Irrigation repair,"19 Sample Meadow Ln, Testville",3/10/2026 10:00 AM,3/10/2026 12:00 PM,3/8/2026 9:30 AM,,$310.00,Crew B
+1010,Upcoming,Sample Household 5010,Drain camera inspection,"20 Sample Meadow Ln, Testville",3/11/2026 2:00 PM,3/11/2026 4:00 PM,3/9/2026 1:00 PM,,$225.00,Tech Imani
+1011,Completed,Sample Household 5011,Thermostat replacement,"21 Sample Meadow Ln, Testville",3/8/2026 9:00 AM,3/8/2026 10:00 AM,3/6/2026 8:20 AM,3/8/2026 10:05 AM,$240.00,Tech Rowan
+1012,Active,Sample Household 5012,Sod repair,"22 Sample Meadow Ln, Testville",,,3/3/2026 12:00 PM,,$520.00,Crew B
+1013,Archived,Sample Household 5013,Gutter cleaning,"23 Sample Meadow Ln, Testville",2/10/2026 9:00 AM,2/10/2026 11:00 AM,2/1/2026 9:00 AM,2/10/2026 11:30 AM,$150.00,Crew A
+1014,Active,Sample Household 5014,Patio drain re-pipe,"24 Sample Meadow Ln, Testville",3/11/2026 8:00 AM,3/11/2026 12:00 PM,3/4/2026 3:00 PM,,"$2,200.00",Tech Rowan
+1014,Active,Sample Household 5014,Patio drain re-pipe,"24 Sample Meadow Ln, Testville",,,3/4/2026 3:00 PM,,"$2,200.00",

@@ -1,0 +1,781 @@
+{
+  "name": "Jobber CSV-Fallback Triage (DRAFT): Prewired AI",
+  "nodes": [
+    {
+      "id": "17893f5b-f263-543d-ab49-7034d7934d49",
+      "name": "Manual Test Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "fe620724-53ad-5180-a0b9-d91c8b9ff193",
+      "name": "Schedule 7:00 AM: watch folder (disabled until you are ready)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        720
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1-5"
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "c1e58d9f-4d35-5b86-a570-41318a2575b0",
+      "name": "Webhook: upload a Jobber CSV (disabled until you are ready)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        960
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobber-reports-csv",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "disabled": true,
+      "webhookId": "c564a51d-d12e-51f0-a22a-54dc756176d3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER_WEBHOOK_HEADER_AUTH",
+          "name": "Webhook header auth (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "507841e8-43f3-5e64-acf9-04e47928489b",
+      "name": "Email attachment: inbound Jobber CSV (disabled until you are ready)",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1200
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 15,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "has:attachment filename:csv from:PASTE_ALLOWED_SENDER_HERE",
+          "readStatus": "unread"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "disabled": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PLACEHOLDER_GMAIL",
+          "name": "Gmail account (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "0b9e501f-2507-5165-a318-6437387d9109",
+      "name": "Gather Inbound CSV",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        1080
+      ],
+      "parameters": {
+        "jsCode": "// Generated from jobber_logic.cjs by build_csv_fallback_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  pastDueMinDays: 1,\n  quoteStalledDays: 14,\n  quoteMinValue: 1000,\n  maxItemsPerSection: 10,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].indexOf(s) !== -1) return true;\n  if (['false', 'no', 'n', '0'].indexOf(s) !== -1) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtDateOnly(dateStr) {\n  // dateStr is YYYY-MM-DD; formatted in UTC so the day never shifts.\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(dayMs(dateStr))));\n}\nfunction fmtMoney(n) {\n  if (n === null || n === undefined || !Number.isFinite(Number(n))) return 'n/a';\n  const v = Number(n);\n  const whole = Math.abs(v - Math.round(v)) < 0.005;\n  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\nfunction uniqueList(list) {\n  const out = [];\n  const seen = Object.create(null);\n  (list || []).forEach(function (x) {\n    const s = String(x === null || x === undefined ? '' : x);\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\nfunction statusWord(raw) {\n  return String(raw === null || raw === undefined ? '' : raw).toLowerCase().replace(/[^a-z0-9]+/g, '');\n}\nfunction jobStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    unscheduled: 'unscheduled', late: 'late', actionrequired: 'action_required', requiresinvoicing: 'requires_invoicing',\n    active: 'active', inprogress: 'active', upcoming: 'upcoming', today: 'today', completed: 'completed', complete: 'completed',\n    closed: 'completed', archived: 'archived', cancelled: 'cancelled', canceled: 'cancelled', endingwithin30days: 'active',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction invoiceStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    pastdue: 'past_due', overdue: 'past_due', awaitingpayment: 'awaiting_payment', unpaid: 'awaiting_payment', sent: 'awaiting_payment',\n    outstanding: 'awaiting_payment', paid: 'paid', draft: 'draft', baddebt: 'bad_debt', void: 'void', voided: 'void',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction quoteStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    awaitingresponse: 'awaiting_response', draft: 'draft', drafted: 'draft',\n    approved: 'approved', accepted: 'approved', won: 'approved', converted: 'converted', declined: 'declined', rejected: 'declined',\n    lost: 'declined', changesrequested: 'changes_requested', archived: 'archived',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\n\nconst files = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const bins = items[i].binary || {};\n  for (const key of Object.keys(bins)) {\n    const bin = bins[key];\n    const name = String((bin && bin.fileName) || key);\n    if (!(/\\.csv$/i.test(name) || /csv/i.test(String((bin && bin.mimeType) || '')))) continue;\n    const buf = await this.helpers.getBinaryDataBuffer(i, key);\n    files.push({ name: name, text: buf.toString('utf8') });\n  }\n  const j = items[i].json || {};\n  if (typeof j.csv === 'string') files.push({ name: 'upload.csv', text: j.csv });\n  else if (j.body && typeof j.body.csv === 'string') files.push({ name: 'upload.csv', text: j.body.csv });\n}\nreturn [{ json: { inbound: true, inboundFiles: files } }];\n"
+      }
+    },
+    {
+      "id": "88cd90b9-13b2-53d6-ae7a-53aa0b85e49e",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        560,
+        520
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "78fc78cd-db16-5008-aff1-e290187f48e2",
+              "name": "businessName",
+              "value": "Your Business Name",
+              "type": "string"
+            },
+            {
+              "id": "e55bef44-66b7-58f4-a7a4-cabb9c69738d",
+              "name": "timezone",
+              "value": "America/Chicago",
+              "type": "string"
+            },
+            {
+              "id": "d453f736-928f-5f12-a9a5-e2de58a33a7d",
+              "name": "source",
+              "value": "test",
+              "type": "string"
+            },
+            {
+              "id": "f368e72a-8043-529d-a388-823803ed9796",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "f847e00c-efcc-51bb-a4ec-f01635a8d7ac",
+              "name": "delivery",
+              "value": "email",
+              "type": "string"
+            },
+            {
+              "id": "dd42a6ca-1073-5967-a1a3-d8202c918cc6",
+              "name": "ownerEmail",
+              "value": "owner@example.com",
+              "type": "string"
+            },
+            {
+              "id": "1d018da2-eaa1-531b-a18f-d4f02c1a7991",
+              "name": "ownerSlackChannel",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "9917e182-69cb-5d31-a26a-2a9c3bbd25f3",
+              "name": "csvFolder",
+              "value": "/home/node/.n8n-files/jobber-exports",
+              "type": "string"
+            },
+            {
+              "id": "534c1dac-0dda-5c49-ab9a-045a1a41fa04",
+              "name": "asOfOverride",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "75d0c3a0-af79-5442-ad98-3a0d0852cf75",
+              "name": "pastDueMinDays",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "f9f00575-afa3-548c-a6d8-7c7ed68e27a1",
+              "name": "quoteStalledDays",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "81439ef1-0c81-592d-abb9-c13f20f401cc",
+              "name": "quoteMinValue",
+              "value": 1000,
+              "type": "number"
+            },
+            {
+              "id": "0664d5f3-f420-5aa1-a993-e940b1257eb5",
+              "name": "maxItemsPerSection",
+              "value": 10,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "a6f217c3-0fef-5520-ab46-9d636e0f2d55",
+      "name": "Prepare Settings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from jobber_logic.cjs by build_csv_fallback_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  pastDueMinDays: 1,\n  quoteStalledDays: 14,\n  quoteMinValue: 1000,\n  maxItemsPerSection: 10,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].indexOf(s) !== -1) return true;\n  if (['false', 'no', 'n', '0'].indexOf(s) !== -1) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtDateOnly(dateStr) {\n  // dateStr is YYYY-MM-DD; formatted in UTC so the day never shifts.\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(dayMs(dateStr))));\n}\nfunction fmtMoney(n) {\n  if (n === null || n === undefined || !Number.isFinite(Number(n))) return 'n/a';\n  const v = Number(n);\n  const whole = Math.abs(v - Math.round(v)) < 0.005;\n  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\nfunction uniqueList(list) {\n  const out = [];\n  const seen = Object.create(null);\n  (list || []).forEach(function (x) {\n    const s = String(x === null || x === undefined ? '' : x);\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\nfunction statusWord(raw) {\n  return String(raw === null || raw === undefined ? '' : raw).toLowerCase().replace(/[^a-z0-9]+/g, '');\n}\nfunction jobStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    unscheduled: 'unscheduled', late: 'late', actionrequired: 'action_required', requiresinvoicing: 'requires_invoicing',\n    active: 'active', inprogress: 'active', upcoming: 'upcoming', today: 'today', completed: 'completed', complete: 'completed',\n    closed: 'completed', archived: 'archived', cancelled: 'cancelled', canceled: 'cancelled', endingwithin30days: 'active',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction invoiceStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    pastdue: 'past_due', overdue: 'past_due', awaitingpayment: 'awaiting_payment', unpaid: 'awaiting_payment', sent: 'awaiting_payment',\n    outstanding: 'awaiting_payment', paid: 'paid', draft: 'draft', baddebt: 'bad_debt', void: 'void', voided: 'void',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction quoteStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    awaitingresponse: 'awaiting_response', draft: 'draft', drafted: 'draft',\n    approved: 'approved', accepted: 'approved', won: 'approved', converted: 'converted', declined: 'declined', rejected: 'declined',\n    lost: 'declined', changesrequested: 'changes_requested', archived: 'archived',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\n\n// Offset of `tz` at instant `ms`, in ms (local wall clock minus UTC), minute precision.\nfunction zoneOffsetMs(ms, tz) {\n  const floor = Math.floor(ms / 60000) * 60000;\n  const p = localParts(floor, tz);\n  const dp = p.date.split('-').map(Number);\n  return Date.UTC(dp[0], dp[1] - 1, dp[2], p.hour, p.minute) - floor;\n}\n\n// Resolve a wall-clock time in `tz` to an instant. kind is 'ok', 'gap' (time does not exist; moved forward\n// by the gap), or 'ambiguous' (time occurs twice; the first, daylight-time occurrence is used).\nfunction resolveWall(y, mo, d, h, mi, tz) {\n  const target = Date.UTC(y, mo - 1, d, h, mi);\n  const before = zoneOffsetMs(target - DAY, tz);\n  const after = zoneOffsetMs(target + DAY, tz);\n  const cands = uniqueList([before, after]).map(Number);\n  const valid = cands.map(function (o) { return target - o; }).filter(function (u, i) { return zoneOffsetMs(u, tz) === cands[i]; }).sort(function (a, b) { return a - b; });\n  if (valid.length === 0) return { ms: target - before, kind: 'gap' };\n  if (valid.length === 1) return { ms: valid[0], kind: 'ok' };\n  return { ms: valid[0], kind: 'ambiguous' };\n}\n\nconst MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12, january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };\n\n// Split a human date/time into parts. Returns null when the shape is not recognized, or { bad: true }\n// when it is recognized but impossible (2026-02-30, month 13, hour 25).\nfunction parseDateParts(raw) {\n  let y; let mo; let d; let h = 0; let mi = 0; let sec = 0; let ap = ''; let hasTime = false;\n  let m = raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})(?:[ T]+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?:\\.\\d+)?)?$/);\n  if (m) {\n    y = +m[1]; mo = +m[2]; d = +m[3];\n    if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; }\n  } else {\n    m = raw.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})(?:[ T,]+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*([AaPp][Mm])?)?$/);\n    if (m) {\n      mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000;\n      if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : ''; }\n    } else {\n      m = raw.match(/^([A-Za-z]{3,9})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})(?:[ T,]+(?:at\\s+)?(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*([AaPp][Mm])?)?$/);\n      if (!m || !MONTHS[m[1].toLowerCase()]) return null;\n      mo = MONTHS[m[1].toLowerCase()]; d = +m[2]; y = +m[3];\n      if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : ''; }\n    }\n  }\n  if (ap) {\n    if (h < 1 || h > 12) return { bad: true };\n    h = (h % 12) + (ap === 'pm' ? 12 : 0);\n  }\n  const probe = new Date(Date.UTC(y, mo - 1, d));\n  if (mo < 1 || mo > 12 || d < 1 || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return { bad: true };\n  return { y: y, mo: mo, d: d, h: h, mi: mi, sec: sec, hasTime: hasTime };\n}\n\n// ISO values that already carry an offset or Z are kept (after a calendar check). Everything else is read as\n// shop-local wall time in `tz`. Returns { iso, bad, note } where note is 'gap' or 'ambiguous' when the DST policy applied.\nfunction toIsoInZone(v, tz) {\n  if (isBlank(v)) return { iso: '', bad: false, note: '' };\n  const raw = String(v).trim();\n  const withOffset = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})[T ](\\d{2}):(\\d{2})(?::\\d{2}(?:\\.\\d+)?)?\\s*(Z|[+-]\\d{2}:?\\d{2})$/i);\n  if (withOffset) {\n    const probe = new Date(Date.UTC(+withOffset[1], +withOffset[2] - 1, +withOffset[3]));\n    if (probe.getUTCMonth() !== +withOffset[2] - 1 || probe.getUTCDate() !== +withOffset[3] || +withOffset[4] > 23 || +withOffset[5] > 59) return { iso: '', bad: true, note: '' };\n    const t = parseTime(raw.replace(' ', 'T'));\n    return t === null ? { iso: '', bad: true, note: '' } : { iso: raw, bad: false, note: '' };\n  }\n  const p = parseDateParts(raw);\n  if (!p || p.bad) return { iso: '', bad: true, note: '' };\n  const r = resolveWall(p.y, p.mo, p.d, p.h, p.mi, tz || 'America/Chicago');\n  return { iso: new Date(r.ms + p.sec * 1000).toISOString(), bad: false, note: r.kind === 'ok' ? '' : r.kind };\n}\n\n// Calendar day (YYYY-MM-DD) for due dates and similar. A bare date stays that date; a date with a time is\n// converted to its shop-local day.\nfunction toLocalDate(v, tz) {\n  if (isBlank(v)) return { date: '', bad: false };\n  const raw = String(v).trim();\n  const p = parseDateParts(raw);\n  if (p && !p.bad) {\n    const pad = function (n) { return (n < 10 ? '0' : '') + n; };\n    return { date: p.y + '-' + pad(p.mo) + '-' + pad(p.d), bad: false };\n  }\n  const t = toIsoInZone(raw, tz);\n  if (t.bad) return { date: '', bad: true };\n  const ms = parseTime(t.iso);\n  return ms === null ? { date: '', bad: true } : { date: localDate(ms, tz || 'America/Chicago'), bad: false };\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'jobber'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or jobber. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); } catch (e) { throw new Error('Config timezone \"' + tz + '\" is not a valid time zone name. Use a name like America/Chicago.'); }\n  const override = toIsoInZone(cfg.asOfOverride, tz);\n  if (override.bad) throw new Error('Config asOfOverride must be a valid date and time.');\n  if (override.note) notes.push('Config asOfOverride used the shop-local daylight-saving policy (' + override.note + ').');\n  const asOfMs = parseTime(override.iso) ?? nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    jobberGraphqlVersion: isBlank(cfg.jobberGraphqlVersion) ? '' : String(cfg.jobberGraphqlVersion).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).filter(function (k) { return k !== 'quoteStalledDays'; }).forEach(function (k) {\n    let n = toNum(cfg[k], DEFAULTS[k]);\n    if (n < 0) { notes.push('Config ' + k + ' cannot be negative. Using ' + DEFAULTS[k] + '.'); n = DEFAULTS[k]; }\n    s[k] = n;\n  });\n  const quoteDays = toNum(cfg.quoteStalledDays, null);\n  s.quoteStalledDays = source === 'test' ? DEFAULTS.quoteStalledDays :\n    Number.isInteger(quoteDays) && quoteDays >= 1 ? quoteDays : null;\n  s.pastDueMinDays = Math.max(1, Math.ceil(s.pastDueMinDays));\n  s.maxItemsPerSection = Math.max(1, Math.floor(s.maxItemsPerSection));\n  return s;\n}\n\nconst cfg = Object.assign({}, $input.first().json);\nconst inbound = cfg.inbound === true;\nconst inboundFiles = Array.isArray(cfg.inboundFiles) ? cfg.inboundFiles : [];\ndelete cfg.inboundFiles;\ndelete cfg.inbound;\nconst extra = [];\nif (inbound) cfg.source = 'csv';\nif (String(cfg.source || '').trim().toLowerCase() === 'jobber') {\n  cfg.source = 'test';\n  extra.push('This CSV-fallback workflow has no Jobber API path (no OAuth needed). source \"jobber\" is not available here, so test was used.');\n}\nconst settings = prepareSettings(cfg, Date.now());\nsettings.headsUp = settings.headsUp.concat(extra);\nreturn [{ json: { settings: settings, inbound: inbound, inboundFiles: inboundFiles } }];\n"
+      }
+    },
+    {
+      "id": "76c2e333-1a4f-5928-a3a5-780415c46ea6",
+      "name": "Source is CSV?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1080,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "5c782974-db60-5a03-af94-66a8eadf98dd",
+              "leftValue": "={{ $json.settings.source }}",
+              "rightValue": "csv",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "103f41db-a941-5ed5-a070-16800c8c8f0d",
+      "name": "Upload just arrived?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "deefe95b-0dc2-568d-ad9d-04451c43a4c3",
+              "leftValue": "={{ $json.inbound }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "45902cb0-0a7c-5e8f-a570-509bd0fb7bc5",
+      "name": "Read CSV Exports",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        600
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "={{ $('Prepare Settings').first().json.settings.csvFolder }}/*.csv",
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "53c3c443-582f-5587-a22c-73dd33b25a10",
+      "name": "Parse CSV Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        480
+      ],
+      "parameters": {
+        "jsCode": "// Generated from jobber_logic.cjs by build_csv_fallback_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  pastDueMinDays: 1,\n  quoteStalledDays: 14,\n  quoteMinValue: 1000,\n  maxItemsPerSection: 10,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].indexOf(s) !== -1) return true;\n  if (['false', 'no', 'n', '0'].indexOf(s) !== -1) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtDateOnly(dateStr) {\n  // dateStr is YYYY-MM-DD; formatted in UTC so the day never shifts.\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(dayMs(dateStr))));\n}\nfunction fmtMoney(n) {\n  if (n === null || n === undefined || !Number.isFinite(Number(n))) return 'n/a';\n  const v = Number(n);\n  const whole = Math.abs(v - Math.round(v)) < 0.005;\n  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\nfunction uniqueList(list) {\n  const out = [];\n  const seen = Object.create(null);\n  (list || []).forEach(function (x) {\n    const s = String(x === null || x === undefined ? '' : x);\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\nfunction statusWord(raw) {\n  return String(raw === null || raw === undefined ? '' : raw).toLowerCase().replace(/[^a-z0-9]+/g, '');\n}\nfunction jobStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    unscheduled: 'unscheduled', late: 'late', actionrequired: 'action_required', requiresinvoicing: 'requires_invoicing',\n    active: 'active', inprogress: 'active', upcoming: 'upcoming', today: 'today', completed: 'completed', complete: 'completed',\n    closed: 'completed', archived: 'archived', cancelled: 'cancelled', canceled: 'cancelled', endingwithin30days: 'active',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction invoiceStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    pastdue: 'past_due', overdue: 'past_due', awaitingpayment: 'awaiting_payment', unpaid: 'awaiting_payment', sent: 'awaiting_payment',\n    outstanding: 'awaiting_payment', paid: 'paid', draft: 'draft', baddebt: 'bad_debt', void: 'void', voided: 'void',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction quoteStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    awaitingresponse: 'awaiting_response', draft: 'draft', drafted: 'draft',\n    approved: 'approved', accepted: 'approved', won: 'approved', converted: 'converted', declined: 'declined', rejected: 'declined',\n    lost: 'declined', changesrequested: 'changes_requested', archived: 'archived',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\n\n// CSV parsing, header-alias mapping, and the Jobs / Invoices / Quotes export normalizers.\n// Header aliases come from the column names Jobber's help center lists for its reports plus common\n// variants. The exact header text of a real export has NOT been checked against a live account.\nfunction parseCsvTable(text) {\n  const rows = [];\n  const warnings = [];\n  let row = [];\n  let field = '';\n  let inQuotes = false;\n  let closedQuote = false;\n  let record = 1;\n  const malformed = function (message) {\n    return { headers: rows[0] || [], rows: [], warnings: ['CSV record ' + record + ': ' + message] };\n  };\n  const src = String(text === null || text === undefined ? '' : text).replace(/^﻿/, '');\n  for (let i = 0; i < src.length; i++) {\n    const c = src[i];\n    if (inQuotes) {\n      if (c === '\"') {\n        if (src[i + 1] === '\"') { field += '\"'; i++; } else { inQuotes = false; closedQuote = true; }\n      } else { field += c; }\n    } else if (closedQuote && c !== ',' && c !== '\\n' && c !== '\\r') {\n      if (c === ' ' || c === '\\t') continue;\n      return malformed('Unexpected text after a closing quote.');\n    } else if (c === '\"') {\n      if (field.trim()) return malformed('Unexpected quote inside an unquoted field.');\n      field = '';\n      inQuotes = true;\n    } else if (c === ',') {\n      row.push(field); field = ''; closedQuote = false;\n    } else if (c === '\\n' || c === '\\r') {\n      if (c === '\\r' && src[i + 1] === '\\n') i++;\n      row.push(field); field = ''; closedQuote = false;\n      if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);\n      row = [];\n      record++;\n    } else { field += c; }\n  }\n  row.push(field);\n  if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);\n  if (inQuotes) return malformed('A quoted field was never closed. Re-export the CSV and try again.');\n  if (rows.length === 0) return { headers: [], rows: [], warnings: warnings };\n  const header = rows[0].map(function (h) { return h.trim(); });\n  const duplicates = header.filter(function (h, i) { return h && header.indexOf(h) !== i; });\n  if (duplicates.length) {\n    return { headers: header, rows: [], warnings: ['Duplicate CSV headers: ' + duplicates.join(', ') + '.'] };\n  }\n  const body = [];\n  rows.slice(1).forEach(function (r, idx) {\n    if (r.length > header.length) {\n      warnings.push('CSV data record ' + (idx + 2) + ' has more columns than the header. Check for an unescaped comma.');\n      return;\n    }\n    body.push(Object.fromEntries(header.map(function (h, i) {\n      return [h, r[i] === undefined ? '' : r[i].trim()];\n    })));\n  });\n  return { headers: header, rows: warnings.length ? [] : body, warnings: warnings };\n}\n\nfunction parseCsv(text) {\n  return parseCsvTable(text).rows;\n}\n\nfunction headerKey(h) {\n  return String(h === null || h === undefined ? '' : h).toLowerCase().replace(/#/g, ' number ').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '');\n}\n\n// key = internal snake_case name. Aliases are tried in order after the key itself.\nconst JOB_COLUMNS = [\n  { key: 'job_id', label: 'Job # (or Job Number / Job ID)', required: true, aliases: ['Job #', 'Job Number', 'Job No', 'Job ID', 'JobId', 'Job'] },\n  { key: 'status', label: 'Status (or Job Status)', required: true, aliases: ['Job Status', 'Status'] },\n  { key: 'client', label: 'Client name', aliases: ['Client name', 'Client', 'Customer', 'Customer name', 'Name'] },\n  { key: 'title', label: 'Title', aliases: ['Title', 'Job Title', 'Description', 'Job Description', 'Summary', 'Service'] },\n  { key: 'address', label: 'Property', aliases: ['Property', 'Property Address', 'Service Address', 'Address', 'Location'] },\n  { key: 'scheduled_start', label: 'Schedule start date', aliases: ['Schedule start date', 'Scheduled Start', 'Schedule Start', 'Start', 'Start Date', 'Start Time', 'Next Visit', 'Next Visit Date', 'Visit Date'] },\n  { key: 'scheduled_end', label: 'Schedule end date', aliases: ['Schedule end date', 'Scheduled End', 'Schedule End', 'End', 'End Date', 'End Time'] },\n  { key: 'created_at', label: 'Created date', aliases: ['Created date', 'Created', 'Date Created', 'Created On', 'Created At'] },\n  { key: 'completed_at', label: 'Closed date', aliases: ['Closed date', 'Completed date', 'Completed', 'Date Completed', 'Completed On', 'Completed At', 'Closed'] },\n  { key: 'total', label: 'Total ($)', aliases: ['Total ($)', 'Total', 'Job Total', 'Job Revenue ($)', 'Amount', 'Value'] },\n  { key: 'assigned', label: 'Assigned to', aliases: ['Assigned To', 'Assigned', 'Crew', 'Team Member', 'Team Members', 'Technician'] },\n];\nconst INVOICE_COLUMNS = [\n  { key: 'invoice_id', label: 'Invoice # (or Invoice Number)', required: true, aliases: ['Invoice #', 'Invoice Number', 'Invoice No', 'Invoice ID', 'Invoice'] },\n  { key: 'due_date', label: 'Due date', required: true, aliases: ['Due date', 'Due', 'Due On', 'Payment Due', 'Due By'] },\n  { key: 'balance', label: 'Balance ($) (or Balance Due / Outstanding)', required: true, aliases: ['Balance ($)', 'Balance', 'Balance Due', 'Outstanding', 'Outstanding Balance', 'Amount Due', 'Amount Outstanding'] },\n  { key: 'status', label: 'Status', required: true, aliases: ['Invoice Status', 'Status'] },\n  { key: 'client', label: 'Client name', aliases: ['Client name', 'Client', 'Customer', 'Customer name'] },\n  { key: 'total', label: 'Total ($)', aliases: ['Total ($)', 'Total', 'Invoice Total', 'Amount'] },\n  { key: 'issued_at', label: 'Issued date', aliases: ['Issued date', 'Issued', 'Date Issued', 'Sent date', 'Created date'] },\n  { key: 'job_ref', label: 'Job #', aliases: ['Job #', 'Job Number', 'Job No'] },\n];\nconst QUOTE_COLUMNS = [\n  { key: 'quote_id', label: 'Quote # (or Quote Number)', required: true, aliases: ['Quote #', 'Quote Number', 'Quote No', 'Quote ID', 'Quote'] },\n  { key: 'status', label: 'Status (or Quote Status)', required: true, aliases: ['Quote Status', 'Status'] },\n  { key: 'total', label: 'Total ($)', required: true, aliases: ['Total ($)', 'Total', 'Quote Total', 'Amount', 'Value'] },\n  { key: 'sent_at', label: 'Sent date', aliases: ['Sent date', 'Sent', 'Date Sent', 'Sent On', 'Sent At'] },\n  { key: 'created_at', label: 'Drafted date (or Created date)', aliases: ['Drafted date', 'Created date', 'Created', 'Date Created', 'Created On'] },\n  { key: 'client', label: 'Client name', aliases: ['Client name', 'Client', 'Customer', 'Customer name'] },\n  { key: 'title', label: 'Title', aliases: ['Title', 'Quote Title', 'Description', 'Summary'] },\n];\nconst REPORTS = {\n  jobs: { label: 'Jobs', idKey: 'job_id', columns: JOB_COLUMNS, dateKeys: ['scheduled_start', 'scheduled_end', 'created_at', 'completed_at'], dayKeys: [], moneyKeys: ['total'], idWord: 'job number', hint: 'Export Jobs from Jobber (Insights > Reports > One-off jobs) with a header row.' },\n  invoices: { label: 'Invoices', idKey: 'invoice_id', columns: INVOICE_COLUMNS, dateKeys: ['issued_at'], dayKeys: ['due_date'], moneyKeys: ['total', 'balance'], idWord: 'invoice number', hint: 'Export the Invoices report from Jobber with a header row.' },\n  quotes: { label: 'Quotes', idKey: 'quote_id', columns: QUOTE_COLUMNS, dateKeys: ['sent_at', 'created_at'], dayKeys: [], moneyKeys: ['total'], idWord: 'quote number', hint: 'Export the Quotes report from Jobber with a header row.' },\n};\n\n// Rename a table's columns onto the internal names. Every key is present on every output row ('' when the\n// column was not in the export), so downstream code never sees undefined.\nfunction canonicalizeRows(rows, columns, headersIn) {\n  const list = Array.isArray(rows) ? rows : [];\n  const headers = headersIn && headersIn.length ? headersIn : (list.length ? Object.keys(list[0]) : []);\n  const used = new Set();\n  const conflicts = [];\n  const candidates = {};\n  const mapped = {};\n  columns.forEach(function (col) {\n    const names = col.key === 'status' ? col.aliases : [col.key].concat(col.aliases || []);\n    const matching = Array.from(new Set(names.flatMap(function (name) {\n      return headers.filter(function (h) { return headerKey(h) === headerKey(name) && !used.has(h); });\n    })));\n    if (matching.length) mapped[col.key] = matching[0];\n    candidates[col.key] = matching;\n    matching.forEach(function (h) { used.add(h); });\n  });\n  const out = list.map(function (r, idx) {\n    const o = {};\n    columns.forEach(function (col) {\n      const values = candidates[col.key].filter(function (h) { return !isBlank(r[h]); });\n      const h = values[0];\n      o[col.key] = h === undefined ? '' : String(r[h]).trim();\n      if (values.some(function (other) { return lc(r[other]) !== lc(o[col.key]); })) {\n        conflicts.push('Row ' + (idx + 2) + ' has conflicting ' + col.key + ' columns. Used \"' + h + '\".');\n      }\n    });\n    return o;\n  });\n  return {\n    rows: out,\n    mapped: mapped,\n    headers: headers,\n    missing: columns.filter(function (c) { return c.required && mapped[c.key] === undefined; }).map(function (c) { return c.label; }),\n    conflicts: conflicts,\n    unmapped: headers.filter(function (h) { return !used.has(h); }),\n  };\n}\n\n// Offset of `tz` at instant `ms`, in ms (local wall clock minus UTC), minute precision.\nfunction zoneOffsetMs(ms, tz) {\n  const floor = Math.floor(ms / 60000) * 60000;\n  const p = localParts(floor, tz);\n  const dp = p.date.split('-').map(Number);\n  return Date.UTC(dp[0], dp[1] - 1, dp[2], p.hour, p.minute) - floor;\n}\n\n// Resolve a wall-clock time in `tz` to an instant. kind is 'ok', 'gap' (time does not exist; moved forward\n// by the gap), or 'ambiguous' (time occurs twice; the first, daylight-time occurrence is used).\nfunction resolveWall(y, mo, d, h, mi, tz) {\n  const target = Date.UTC(y, mo - 1, d, h, mi);\n  const before = zoneOffsetMs(target - DAY, tz);\n  const after = zoneOffsetMs(target + DAY, tz);\n  const cands = uniqueList([before, after]).map(Number);\n  const valid = cands.map(function (o) { return target - o; }).filter(function (u, i) { return zoneOffsetMs(u, tz) === cands[i]; }).sort(function (a, b) { return a - b; });\n  if (valid.length === 0) return { ms: target - before, kind: 'gap' };\n  if (valid.length === 1) return { ms: valid[0], kind: 'ok' };\n  return { ms: valid[0], kind: 'ambiguous' };\n}\n\nconst MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12, january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };\n\n// Split a human date/time into parts. Returns null when the shape is not recognized, or { bad: true }\n// when it is recognized but impossible (2026-02-30, month 13, hour 25).\nfunction parseDateParts(raw) {\n  let y; let mo; let d; let h = 0; let mi = 0; let sec = 0; let ap = ''; let hasTime = false;\n  let m = raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})(?:[ T]+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?:\\.\\d+)?)?$/);\n  if (m) {\n    y = +m[1]; mo = +m[2]; d = +m[3];\n    if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; }\n  } else {\n    m = raw.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})(?:[ T,]+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*([AaPp][Mm])?)?$/);\n    if (m) {\n      mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000;\n      if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : ''; }\n    } else {\n      m = raw.match(/^([A-Za-z]{3,9})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})(?:[ T,]+(?:at\\s+)?(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*([AaPp][Mm])?)?$/);\n      if (!m || !MONTHS[m[1].toLowerCase()]) return null;\n      mo = MONTHS[m[1].toLowerCase()]; d = +m[2]; y = +m[3];\n      if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : ''; }\n    }\n  }\n  if (ap) {\n    if (h < 1 || h > 12) return { bad: true };\n    h = (h % 12) + (ap === 'pm' ? 12 : 0);\n  }\n  const probe = new Date(Date.UTC(y, mo - 1, d));\n  if (mo < 1 || mo > 12 || d < 1 || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return { bad: true };\n  return { y: y, mo: mo, d: d, h: h, mi: mi, sec: sec, hasTime: hasTime };\n}\n\n// ISO values that already carry an offset or Z are kept (after a calendar check). Everything else is read as\n// shop-local wall time in `tz`. Returns { iso, bad, note } where note is 'gap' or 'ambiguous' when the DST policy applied.\nfunction toIsoInZone(v, tz) {\n  if (isBlank(v)) return { iso: '', bad: false, note: '' };\n  const raw = String(v).trim();\n  const withOffset = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})[T ](\\d{2}):(\\d{2})(?::\\d{2}(?:\\.\\d+)?)?\\s*(Z|[+-]\\d{2}:?\\d{2})$/i);\n  if (withOffset) {\n    const probe = new Date(Date.UTC(+withOffset[1], +withOffset[2] - 1, +withOffset[3]));\n    if (probe.getUTCMonth() !== +withOffset[2] - 1 || probe.getUTCDate() !== +withOffset[3] || +withOffset[4] > 23 || +withOffset[5] > 59) return { iso: '', bad: true, note: '' };\n    const t = parseTime(raw.replace(' ', 'T'));\n    return t === null ? { iso: '', bad: true, note: '' } : { iso: raw, bad: false, note: '' };\n  }\n  const p = parseDateParts(raw);\n  if (!p || p.bad) return { iso: '', bad: true, note: '' };\n  const r = resolveWall(p.y, p.mo, p.d, p.h, p.mi, tz || 'America/Chicago');\n  return { iso: new Date(r.ms + p.sec * 1000).toISOString(), bad: false, note: r.kind === 'ok' ? '' : r.kind };\n}\n\n// Calendar day (YYYY-MM-DD) for due dates and similar. A bare date stays that date; a date with a time is\n// converted to its shop-local day.\nfunction toLocalDate(v, tz) {\n  if (isBlank(v)) return { date: '', bad: false };\n  const raw = String(v).trim();\n  const p = parseDateParts(raw);\n  if (p && !p.bad) {\n    const pad = function (n) { return (n < 10 ? '0' : '') + n; };\n    return { date: p.y + '-' + pad(p.mo) + '-' + pad(p.d), bad: false };\n  }\n  const t = toIsoInZone(raw, tz);\n  if (t.bad) return { date: '', bad: true };\n  const ms = parseTime(t.iso);\n  return ms === null ? { date: '', bad: true } : { date: localDate(ms, tz || 'America/Chicago'), bad: false };\n}\n\n// \"$1,234.50\", \"1234\", \"(500)\" -> number. Anything else is bad (null), never guessed.\nfunction parseMoney(v) {\n  if (isBlank(v)) return { value: null, bad: false };\n  const raw = String(v).trim();\n  const accounting = /^\\(.*\\)$/.test(raw);\n  const s = accounting ? raw.slice(1, -1).trim() : raw;\n  if ((accounting && s.startsWith('-')) || !/^-?\\$?(?:\\d+|\\d{1,3}(?:,\\d{3})+)(?:\\.\\d+)?$/.test(s)) {\n    return { value: null, bad: true };\n  }\n  const n = Number(s.replace(/[$,]/g, '')) * (accounting ? -1 : 1);\n  return Number.isFinite(n) ? { value: n, bad: false } : { value: null, bad: true };\n}\n\nconst SUBTOTAL_ID = /^(total|totals|subtotal|grand total|sum)$/i;\n\n// Generic report preparer for jobs / invoices / quotes. Never throws. res.ok is true only when usable rows exist\n// and nothing in the file looks truncated.\nfunction prepareReport(kind, rowsIn, opts) {\n  const spec = REPORTS[kind];\n  const o = opts || {};\n  const tz = o.timezone || 'America/Chicago';\n  const label = o.label || spec.label + ' export';\n  const rows = Array.isArray(rowsIn) ? rowsIn : [];\n  const c = canonicalizeRows(rows, spec.columns, o.headers);\n  const res = { kind: kind, ok: false, rows: [], headsUp: [], errors: [], missingRequired: c.missing.slice(), headersSeen: c.headers, mapped: c.mapped, rowCount: rows.length, skipped: [] };\n  const seen = c.headers.length ? ' Columns found: ' + c.headers.slice(0, 25).join(', ') + (c.headers.length > 25 ? ', ...' : '') + '.' : '';\n  if (c.headers.length === 0) {\n    res.errors.push(label + ' is empty. ' + spec.hint);\n    return res;\n  }\n  const missing = c.missing.slice();\n  if (kind === 'quotes' && c.mapped.sent_at === undefined) missing.push('Sent date');\n  if (missing.length) {\n    res.missingRequired = missing;\n    res.errors.push(label + ' is missing required column(s): ' + missing.join('; ') + '.' + seen + ' Add the missing column(s) to your Jobber report and export again.');\n    return res;\n  }\n  if (rows.length === 0) {\n    res.errors.push(label + ' has a header row but no data rows. Export a report that includes at least one row.');\n    return res;\n  }\n  const byId = new Map();\n  const conflictingIds = new Set();\n  res.headsUp.push(...c.conflicts);\n  const badDates = [];\n  const badMoney = [];\n  let gaps = 0; let ambiguous = 0; let dupes = 0;\n  let firstDst = '';\n  c.rows.forEach(function (r, idx) {\n    const line = idx + 2; // the header is row 1; blank lines are not counted\n    const id = r[spec.idKey];\n    if (isBlank(id)) { res.skipped.push({ row: line, reason: 'no ' + spec.idWord + ' (footer or subtotal row?)' }); return; }\n    if (SUBTOTAL_ID.test(String(id).trim())) { res.skipped.push({ row: line, reason: 'a totals row' }); return; }\n    if (kind === 'jobs') r._blankStart = isBlank(r.scheduled_start) && isBlank(r.scheduled_end) ? 1 : 0;\n    spec.dateKeys.forEach(function (k) {\n      const t = toIsoInZone(r[k], tz);\n      if (t.bad) { badDates.push(spec.idWord + ' ' + id + ' ' + k + ' \"' + r[k] + '\"'); r[k] = ''; return; }\n      if (t.note === 'gap') { gaps++; if (!firstDst) firstDst = id + ' ' + k + ' \"' + r[k] + '\"'; }\n      if (t.note === 'ambiguous') { ambiguous++; if (!firstDst) firstDst = id + ' ' + k + ' \"' + r[k] + '\"'; }\n      r[k] = t.iso;\n    });\n    spec.dayKeys.forEach(function (k) {\n      const t = toLocalDate(r[k], tz);\n      if (t.bad) { badDates.push(spec.idWord + ' ' + id + ' ' + k + ' \"' + r[k] + '\"'); r[k] = ''; } else { r[k] = t.date; }\n    });\n    spec.moneyKeys.forEach(function (k) {\n      const m = parseMoney(r[k]);\n      if (m.bad) badMoney.push(spec.idWord + ' ' + id + ' ' + k + ' \"' + r[k] + '\"');\n      r[k] = m.value;\n    });\n    const prev = byId.get(id);\n    if (!prev) { r._rows = 1; byId.set(id, r); return; }\n    dupes++;\n    if (kind === 'jobs') {\n      // one row per visit: merge. Earliest start, latest end; blank fields are filled from later rows.\n      prev._rows++;\n      prev._blankStart += r._blankStart;\n      if (r.status && prev.status && lc(r.status) !== lc(prev.status)) {\n        res.headsUp.push('Job ' + id + ' has conflicting statuses on repeated rows. The first status was used.');\n      }\n      const e = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x < y) ? a : b; };\n      const l = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x > y) ? a : b; };\n      prev.scheduled_start = e(prev.scheduled_start, r.scheduled_start) || '';\n      prev.scheduled_end = l(prev.scheduled_end, r.scheduled_end) || '';\n      Object.keys(r).forEach(function (k) { if (k.charAt(0) !== '_' && isBlank(prev[k]) && !isBlank(r[k])) prev[k] = r[k]; });\n    } else if (Object.keys(r).some(function (k) { return r[k] !== prev[k]; })) {\n      conflictingIds.add(id);\n    }\n  });\n  conflictingIds.forEach(function (id) { byId.delete(id); });\n  res.rows = Array.from(byId.values());\n  if (res.skipped.length) {\n    res.headsUp.push(res.skipped.length + ' ' + plural(res.skipped.length, 'row') + ' in the ' + label + ' ' + plural(res.skipped.length, 'was', 'were') + ' skipped. First: row ' + res.skipped[0].row + ' (' + res.skipped[0].reason + ').');\n  }\n  if (badDates.length) {\n    res.headsUp.push(badDates.length + ' date ' + plural(badDates.length, 'value') + ' in the ' + label + ' could not be read and ' + plural(badDates.length, 'was', 'were') + ' left blank (' + badDates.slice(0, 3).join('; ') + (badDates.length > 3 ? '; ...' : '') + '). Use dates like 3/10/2026 9:50 AM or 2026-03-10.');\n  }\n  if (badMoney.length) {\n    res.headsUp.push(badMoney.length + ' dollar ' + plural(badMoney.length, 'amount') + ' in the ' + label + ' could not be read and ' + plural(badMoney.length, 'was', 'were') + ' left blank (' + badMoney.slice(0, 3).join('; ') + (badMoney.length > 3 ? '; ...' : '') + ').');\n  }\n  if (gaps > 0) {\n    res.headsUp.push(gaps + ' ' + plural(gaps, 'time') + ' in the ' + label + ' fell in the spring daylight-saving gap (a clock time that does not exist) and ' + plural(gaps, 'was', 'were') + ' moved forward by the gap, e.g. ' + firstDst + '.');\n  }\n  if (ambiguous > 0) {\n    res.headsUp.push(ambiguous + ' ' + plural(ambiguous, 'time') + ' in the ' + label + ' fell in the fall daylight-saving overlap (a clock time that happens twice) and the first occurrence was used, e.g. ' + firstDst + '.');\n  }\n  if (dupes > 0) {\n    res.headsUp.push(dupes + ' repeated ' + spec.idWord + ' ' + plural(dupes, 'row') + ' in the ' + label + (kind === 'jobs' ? ' ' + plural(dupes, 'was', 'were') + ' merged into the job with the same number (one row per visit).' : ' ' + plural(dupes, 'was', 'were') + ' consolidated by number.'));\n  }\n  if (conflictingIds.size) {\n    res.headsUp.push('Conflicting records for ' + spec.idWord + ' ' + Array.from(conflictingIds).slice(0, 5).join(', ') +\n      ' were omitted. Use a single-account report with an unambiguous record per number.');\n  }\n  if (res.rows.length === 0) res.errors.push('No usable rows were found in the ' + label + '.' + seen);\n  if (kind === 'jobs' && c.mapped.scheduled_start === undefined) {\n    res.headsUp.push('The ' + label + ' has no start-date column (for example \"Schedule start date\"), so jobs with no scheduled visit can only be found from the Status column.');\n  }\n  res.ok = res.errors.length === 0;\n  return res;\n}\n\nfunction mapJobRow(r, startKnown) {\n  return {\n    id: String(r.job_id), title: r.title || '', client: r.client || '', address: r.address || '', statusRaw: r.status || '',\n    status: jobStatusKey(r.status), startAt: r.scheduled_start || '', endAt: r.scheduled_end || '', createdAt: r.created_at || '',\n    completedAt: r.completed_at || '', total: r.total === undefined ? null : r.total, assigned: r.assigned || '',\n    visitCount: r._rows || 1, unscheduledVisits: startKnown ? (r._blankStart || 0) : null, startKnown: startKnown,\n  };\n}\nfunction mapInvoiceRow(r) {\n  return {\n    id: String(r.invoice_id), client: r.client || '', statusRaw: r.status || '', status: invoiceStatusKey(r.status),\n    total: r.total === undefined ? null : r.total, balance: r.balance === undefined ? null : r.balance,\n    issuedAt: r.issued_at || '', dueDate: r.due_date || '', jobRef: r.job_ref || '',\n  };\n}\nfunction mapQuoteRow(r) {\n  return {\n    id: String(r.quote_id), client: r.client || '', title: r.title || '', statusRaw: r.status || '', status: quoteStatusKey(r.status),\n    total: r.total === undefined ? null : r.total, sentAt: r.sent_at || '',\n  };\n}\nconst MAPPERS = { jobs: mapJobRow, invoices: mapInvoiceRow, quotes: mapQuoteRow };\n\n// Public entry point for one report. input = CSV text or parseCsv rows. Never throws unless opts.strict is true;\n// check result.ok / result.message. result.items uses the internal schema.\nfunction normalizeReportExport(kind, input, opts) {\n  const o = opts || {};\n  let rows;\n  let headers = o.headers;\n  const warnings = Array.isArray(o.parseWarnings) ? o.parseWarnings.slice() : [];\n  if (typeof input === 'string') {\n    const t = parseCsvTable(input);\n    rows = t.rows; headers = t.headers;\n    (t.warnings || []).forEach(function (w) { warnings.push(w); });\n  } else {\n    rows = Array.isArray(input) ? input : [];\n  }\n  const res = warnings.length\n    ? { kind: kind, ok: false, rows: [], headsUp: [], errors: [], missingRequired: [], headersSeen: headers || [], mapped: {}, rowCount: rows.length, skipped: [] }\n    : prepareReport(kind, rows, Object.assign({}, o, { headers: headers }));\n  warnings.forEach(function (w) { res.errors.push(w); res.headsUp.push(w); });\n  if (res.errors.length) res.ok = false;\n  const startKnown = res.mapped.scheduled_start !== undefined;\n  res.items = res.ok ? res.rows.map(function (r) { return MAPPERS[kind](r, startKnown); }) : [];\n  res.message = res.errors.join(' ');\n  if (o.strict && !res.ok) throw new Error(res.message);\n  return res;\n}\nfunction normalizeJobsExport(input, opts) { return normalizeReportExport('jobs', input, opts); }\nfunction normalizeInvoicesExport(input, opts) { return normalizeReportExport('invoices', input, opts); }\nfunction normalizeQuotesExport(input, opts) { return normalizeReportExport('quotes', input, opts); }\n\n// Work out which report a file is. Header signature first, then the file name, then \"the only file is the jobs file\".\nfunction classifyCsvTable(fileName, table, fileCount) {\n  const has = function (kind, key) { return canonicalizeRows([], REPORTS[kind].columns, table.headers).mapped[key] !== undefined; };\n  if (has('invoices', 'invoice_id')) return 'invoices';\n  if (has('quotes', 'quote_id')) return 'quotes';\n  if (has('jobs', 'job_id')) return 'jobs';\n  const n = String(fileName || '').toLowerCase();\n  if (/invoice/.test(n)) return 'invoices';\n  if (/quote|estimate/.test(n)) return 'quotes';\n  if (/job|visit/.test(n)) return 'jobs';\n  return fileCount === 1 ? 'jobs' : null;\n}\n\nfunction emptyDataset(settings, notes) {\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(notes || []) }),\n    jobs: [], invoices: [], quotes: [], supplied: { jobs: false, invoices: false, quotes: false },\n  };\n}\n\n// files = [{ name, text }] in any order and with any file names. Any one of the three reports is enough.\n// Duplicate report types require an operator to select one snapshot.\nfunction datasetFromCsvFiles(settings, files) {\n  const list = Array.isArray(files) ? files : [];\n  const notes = [];\n  const byKind = { jobs: [], invoices: [], quotes: [] };\n  list.forEach(function (f) {\n    const name = String((f && f.name) || 'upload.csv');\n    const t = parseCsvTable(f && f.text);\n    if (t.warnings.length) {\n      t.warnings.forEach(function (w) { notes.push('CSV import: file \"' + name + '\": ' + w); });\n      return;\n    }\n    const kind = classifyCsvTable(name, t, list.length);\n    if (t.headers.length === 0) {\n      notes.push('CSV import: file \"' + name + '\" is empty. Export the report again with a header row and at least one row.');\n      return;\n    }\n    if (!kind) {\n      notes.push('CSV import: file \"' + name + '\" was not recognized as a Jobs, Invoices, or Quotes report and was ignored.');\n      return;\n    }\n    byKind[kind].push({ name: name, table: t });\n  });\n  const ds = emptyDataset(settings, notes);\n  Object.keys(byKind).forEach(function (kind) {\n    const files2 = byKind[kind];\n    if (files2.length === 0) return;\n    if (files2.length > 1) {\n      notes.push('CSV import: multiple ' + REPORTS[kind].label + ' exports were received (' + files2.map(function (f) {\n        return '\"' + f.name + '\"';\n      }).join(', ') + '). Supply one snapshot per report type.');\n      return;\n    }\n    const chosen = files2[0];\n    const label = REPORTS[kind].label + ' export \"' + chosen.name + '\"';\n    const r = normalizeReportExport(kind, chosen.table.rows, { timezone: settings.timezone, label: label, headers: chosen.table.headers, parseWarnings: chosen.table.warnings });\n    // parse warnings are already inside r.errors / r.headsUp; show each message once\n    uniqueList(r.errors.concat(r.headsUp)).forEach(function (m) { notes.push('CSV import: ' + m); });\n    if (r.ok) { ds[kind] = r.items; ds.supplied[kind] = true; }\n  });\n  if (list.length === 0) notes.push('CSV import: no CSV file was received. Send or drop a Jobber Jobs, Invoices, or Quotes report export.');\n  ['jobs', 'invoices', 'quotes'].forEach(function (kind) {\n    if (!ds.supplied[kind] && byKind[kind].length === 0 && list.length > 0) notes.push('CSV import: no ' + REPORTS[kind].label + ' export was supplied, so that part of the digest is skipped.');\n  });\n  ds.settings = Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(uniqueList(notes)) });\n  return ds;\n}\n\nconst prep = $('Prepare Settings').first().json;\nconst settings = prep.settings;\nconst files = (prep.inboundFiles || []).slice();\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const bins = items[i].binary || {};\n  for (const key of Object.keys(bins)) {\n    const bin = bins[key];\n    const name = String((bin && bin.fileName) || key);\n    if (!(/\\.csv$/i.test(name) || /csv/i.test(String((bin && bin.mimeType) || '')))) continue;\n    const buf = await this.helpers.getBinaryDataBuffer(i, key);\n    files.push({ name: name, text: buf.toString('utf8') });\n  }\n}\nreturn [{ json: datasetFromCsvFiles(settings, files) }];\n"
+      }
+    },
+    {
+      "id": "3adaa4f3-2fde-51ef-a4e9-772f413e2ea2",
+      "name": "Load Built-in Sample Export",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Generated from jobber_logic.cjs by build_csv_fallback_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  pastDueMinDays: 1,\n  quoteStalledDays: 14,\n  quoteMinValue: 1000,\n  maxItemsPerSection: 10,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].indexOf(s) !== -1) return true;\n  if (['false', 'no', 'n', '0'].indexOf(s) !== -1) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtDateOnly(dateStr) {\n  // dateStr is YYYY-MM-DD; formatted in UTC so the day never shifts.\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(dayMs(dateStr))));\n}\nfunction fmtMoney(n) {\n  if (n === null || n === undefined || !Number.isFinite(Number(n))) return 'n/a';\n  const v = Number(n);\n  const whole = Math.abs(v - Math.round(v)) < 0.005;\n  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\nfunction uniqueList(list) {\n  const out = [];\n  const seen = Object.create(null);\n  (list || []).forEach(function (x) {\n    const s = String(x === null || x === undefined ? '' : x);\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\nfunction statusWord(raw) {\n  return String(raw === null || raw === undefined ? '' : raw).toLowerCase().replace(/[^a-z0-9]+/g, '');\n}\nfunction jobStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    unscheduled: 'unscheduled', late: 'late', actionrequired: 'action_required', requiresinvoicing: 'requires_invoicing',\n    active: 'active', inprogress: 'active', upcoming: 'upcoming', today: 'today', completed: 'completed', complete: 'completed',\n    closed: 'completed', archived: 'archived', cancelled: 'cancelled', canceled: 'cancelled', endingwithin30days: 'active',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction invoiceStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    pastdue: 'past_due', overdue: 'past_due', awaitingpayment: 'awaiting_payment', unpaid: 'awaiting_payment', sent: 'awaiting_payment',\n    outstanding: 'awaiting_payment', paid: 'paid', draft: 'draft', baddebt: 'bad_debt', void: 'void', voided: 'void',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction quoteStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    awaitingresponse: 'awaiting_response', draft: 'draft', drafted: 'draft',\n    approved: 'approved', accepted: 'approved', won: 'approved', converted: 'converted', declined: 'declined', rejected: 'declined',\n    lost: 'declined', changesrequested: 'changes_requested', archived: 'archived',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\n\n// CSV parsing, header-alias mapping, and the Jobs / Invoices / Quotes export normalizers.\n// Header aliases come from the column names Jobber's help center lists for its reports plus common\n// variants. The exact header text of a real export has NOT been checked against a live account.\nfunction parseCsvTable(text) {\n  const rows = [];\n  const warnings = [];\n  let row = [];\n  let field = '';\n  let inQuotes = false;\n  let closedQuote = false;\n  let record = 1;\n  const malformed = function (message) {\n    return { headers: rows[0] || [], rows: [], warnings: ['CSV record ' + record + ': ' + message] };\n  };\n  const src = String(text === null || text === undefined ? '' : text).replace(/^﻿/, '');\n  for (let i = 0; i < src.length; i++) {\n    const c = src[i];\n    if (inQuotes) {\n      if (c === '\"') {\n        if (src[i + 1] === '\"') { field += '\"'; i++; } else { inQuotes = false; closedQuote = true; }\n      } else { field += c; }\n    } else if (closedQuote && c !== ',' && c !== '\\n' && c !== '\\r') {\n      if (c === ' ' || c === '\\t') continue;\n      return malformed('Unexpected text after a closing quote.');\n    } else if (c === '\"') {\n      if (field.trim()) return malformed('Unexpected quote inside an unquoted field.');\n      field = '';\n      inQuotes = true;\n    } else if (c === ',') {\n      row.push(field); field = ''; closedQuote = false;\n    } else if (c === '\\n' || c === '\\r') {\n      if (c === '\\r' && src[i + 1] === '\\n') i++;\n      row.push(field); field = ''; closedQuote = false;\n      if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);\n      row = [];\n      record++;\n    } else { field += c; }\n  }\n  row.push(field);\n  if (row.some(function (x) { return x.trim() !== ''; })) rows.push(row);\n  if (inQuotes) return malformed('A quoted field was never closed. Re-export the CSV and try again.');\n  if (rows.length === 0) return { headers: [], rows: [], warnings: warnings };\n  const header = rows[0].map(function (h) { return h.trim(); });\n  const duplicates = header.filter(function (h, i) { return h && header.indexOf(h) !== i; });\n  if (duplicates.length) {\n    return { headers: header, rows: [], warnings: ['Duplicate CSV headers: ' + duplicates.join(', ') + '.'] };\n  }\n  const body = [];\n  rows.slice(1).forEach(function (r, idx) {\n    if (r.length > header.length) {\n      warnings.push('CSV data record ' + (idx + 2) + ' has more columns than the header. Check for an unescaped comma.');\n      return;\n    }\n    body.push(Object.fromEntries(header.map(function (h, i) {\n      return [h, r[i] === undefined ? '' : r[i].trim()];\n    })));\n  });\n  return { headers: header, rows: warnings.length ? [] : body, warnings: warnings };\n}\n\nfunction parseCsv(text) {\n  return parseCsvTable(text).rows;\n}\n\nfunction headerKey(h) {\n  return String(h === null || h === undefined ? '' : h).toLowerCase().replace(/#/g, ' number ').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '');\n}\n\n// key = internal snake_case name. Aliases are tried in order after the key itself.\nconst JOB_COLUMNS = [\n  { key: 'job_id', label: 'Job # (or Job Number / Job ID)', required: true, aliases: ['Job #', 'Job Number', 'Job No', 'Job ID', 'JobId', 'Job'] },\n  { key: 'status', label: 'Status (or Job Status)', required: true, aliases: ['Job Status', 'Status'] },\n  { key: 'client', label: 'Client name', aliases: ['Client name', 'Client', 'Customer', 'Customer name', 'Name'] },\n  { key: 'title', label: 'Title', aliases: ['Title', 'Job Title', 'Description', 'Job Description', 'Summary', 'Service'] },\n  { key: 'address', label: 'Property', aliases: ['Property', 'Property Address', 'Service Address', 'Address', 'Location'] },\n  { key: 'scheduled_start', label: 'Schedule start date', aliases: ['Schedule start date', 'Scheduled Start', 'Schedule Start', 'Start', 'Start Date', 'Start Time', 'Next Visit', 'Next Visit Date', 'Visit Date'] },\n  { key: 'scheduled_end', label: 'Schedule end date', aliases: ['Schedule end date', 'Scheduled End', 'Schedule End', 'End', 'End Date', 'End Time'] },\n  { key: 'created_at', label: 'Created date', aliases: ['Created date', 'Created', 'Date Created', 'Created On', 'Created At'] },\n  { key: 'completed_at', label: 'Closed date', aliases: ['Closed date', 'Completed date', 'Completed', 'Date Completed', 'Completed On', 'Completed At', 'Closed'] },\n  { key: 'total', label: 'Total ($)', aliases: ['Total ($)', 'Total', 'Job Total', 'Job Revenue ($)', 'Amount', 'Value'] },\n  { key: 'assigned', label: 'Assigned to', aliases: ['Assigned To', 'Assigned', 'Crew', 'Team Member', 'Team Members', 'Technician'] },\n];\nconst INVOICE_COLUMNS = [\n  { key: 'invoice_id', label: 'Invoice # (or Invoice Number)', required: true, aliases: ['Invoice #', 'Invoice Number', 'Invoice No', 'Invoice ID', 'Invoice'] },\n  { key: 'due_date', label: 'Due date', required: true, aliases: ['Due date', 'Due', 'Due On', 'Payment Due', 'Due By'] },\n  { key: 'balance', label: 'Balance ($) (or Balance Due / Outstanding)', required: true, aliases: ['Balance ($)', 'Balance', 'Balance Due', 'Outstanding', 'Outstanding Balance', 'Amount Due', 'Amount Outstanding'] },\n  { key: 'status', label: 'Status', required: true, aliases: ['Invoice Status', 'Status'] },\n  { key: 'client', label: 'Client name', aliases: ['Client name', 'Client', 'Customer', 'Customer name'] },\n  { key: 'total', label: 'Total ($)', aliases: ['Total ($)', 'Total', 'Invoice Total', 'Amount'] },\n  { key: 'issued_at', label: 'Issued date', aliases: ['Issued date', 'Issued', 'Date Issued', 'Sent date', 'Created date'] },\n  { key: 'job_ref', label: 'Job #', aliases: ['Job #', 'Job Number', 'Job No'] },\n];\nconst QUOTE_COLUMNS = [\n  { key: 'quote_id', label: 'Quote # (or Quote Number)', required: true, aliases: ['Quote #', 'Quote Number', 'Quote No', 'Quote ID', 'Quote'] },\n  { key: 'status', label: 'Status (or Quote Status)', required: true, aliases: ['Quote Status', 'Status'] },\n  { key: 'total', label: 'Total ($)', required: true, aliases: ['Total ($)', 'Total', 'Quote Total', 'Amount', 'Value'] },\n  { key: 'sent_at', label: 'Sent date', aliases: ['Sent date', 'Sent', 'Date Sent', 'Sent On', 'Sent At'] },\n  { key: 'created_at', label: 'Drafted date (or Created date)', aliases: ['Drafted date', 'Created date', 'Created', 'Date Created', 'Created On'] },\n  { key: 'client', label: 'Client name', aliases: ['Client name', 'Client', 'Customer', 'Customer name'] },\n  { key: 'title', label: 'Title', aliases: ['Title', 'Quote Title', 'Description', 'Summary'] },\n];\nconst REPORTS = {\n  jobs: { label: 'Jobs', idKey: 'job_id', columns: JOB_COLUMNS, dateKeys: ['scheduled_start', 'scheduled_end', 'created_at', 'completed_at'], dayKeys: [], moneyKeys: ['total'], idWord: 'job number', hint: 'Export Jobs from Jobber (Insights > Reports > One-off jobs) with a header row.' },\n  invoices: { label: 'Invoices', idKey: 'invoice_id', columns: INVOICE_COLUMNS, dateKeys: ['issued_at'], dayKeys: ['due_date'], moneyKeys: ['total', 'balance'], idWord: 'invoice number', hint: 'Export the Invoices report from Jobber with a header row.' },\n  quotes: { label: 'Quotes', idKey: 'quote_id', columns: QUOTE_COLUMNS, dateKeys: ['sent_at', 'created_at'], dayKeys: [], moneyKeys: ['total'], idWord: 'quote number', hint: 'Export the Quotes report from Jobber with a header row.' },\n};\n\n// Rename a table's columns onto the internal names. Every key is present on every output row ('' when the\n// column was not in the export), so downstream code never sees undefined.\nfunction canonicalizeRows(rows, columns, headersIn) {\n  const list = Array.isArray(rows) ? rows : [];\n  const headers = headersIn && headersIn.length ? headersIn : (list.length ? Object.keys(list[0]) : []);\n  const used = new Set();\n  const conflicts = [];\n  const candidates = {};\n  const mapped = {};\n  columns.forEach(function (col) {\n    const names = col.key === 'status' ? col.aliases : [col.key].concat(col.aliases || []);\n    const matching = Array.from(new Set(names.flatMap(function (name) {\n      return headers.filter(function (h) { return headerKey(h) === headerKey(name) && !used.has(h); });\n    })));\n    if (matching.length) mapped[col.key] = matching[0];\n    candidates[col.key] = matching;\n    matching.forEach(function (h) { used.add(h); });\n  });\n  const out = list.map(function (r, idx) {\n    const o = {};\n    columns.forEach(function (col) {\n      const values = candidates[col.key].filter(function (h) { return !isBlank(r[h]); });\n      const h = values[0];\n      o[col.key] = h === undefined ? '' : String(r[h]).trim();\n      if (values.some(function (other) { return lc(r[other]) !== lc(o[col.key]); })) {\n        conflicts.push('Row ' + (idx + 2) + ' has conflicting ' + col.key + ' columns. Used \"' + h + '\".');\n      }\n    });\n    return o;\n  });\n  return {\n    rows: out,\n    mapped: mapped,\n    headers: headers,\n    missing: columns.filter(function (c) { return c.required && mapped[c.key] === undefined; }).map(function (c) { return c.label; }),\n    conflicts: conflicts,\n    unmapped: headers.filter(function (h) { return !used.has(h); }),\n  };\n}\n\n// Offset of `tz` at instant `ms`, in ms (local wall clock minus UTC), minute precision.\nfunction zoneOffsetMs(ms, tz) {\n  const floor = Math.floor(ms / 60000) * 60000;\n  const p = localParts(floor, tz);\n  const dp = p.date.split('-').map(Number);\n  return Date.UTC(dp[0], dp[1] - 1, dp[2], p.hour, p.minute) - floor;\n}\n\n// Resolve a wall-clock time in `tz` to an instant. kind is 'ok', 'gap' (time does not exist; moved forward\n// by the gap), or 'ambiguous' (time occurs twice; the first, daylight-time occurrence is used).\nfunction resolveWall(y, mo, d, h, mi, tz) {\n  const target = Date.UTC(y, mo - 1, d, h, mi);\n  const before = zoneOffsetMs(target - DAY, tz);\n  const after = zoneOffsetMs(target + DAY, tz);\n  const cands = uniqueList([before, after]).map(Number);\n  const valid = cands.map(function (o) { return target - o; }).filter(function (u, i) { return zoneOffsetMs(u, tz) === cands[i]; }).sort(function (a, b) { return a - b; });\n  if (valid.length === 0) return { ms: target - before, kind: 'gap' };\n  if (valid.length === 1) return { ms: valid[0], kind: 'ok' };\n  return { ms: valid[0], kind: 'ambiguous' };\n}\n\nconst MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12, january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };\n\n// Split a human date/time into parts. Returns null when the shape is not recognized, or { bad: true }\n// when it is recognized but impossible (2026-02-30, month 13, hour 25).\nfunction parseDateParts(raw) {\n  let y; let mo; let d; let h = 0; let mi = 0; let sec = 0; let ap = ''; let hasTime = false;\n  let m = raw.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})(?:[ T]+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?(?:\\.\\d+)?)?$/);\n  if (m) {\n    y = +m[1]; mo = +m[2]; d = +m[3];\n    if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; }\n  } else {\n    m = raw.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})(?:[ T,]+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*([AaPp][Mm])?)?$/);\n    if (m) {\n      mo = +m[1]; d = +m[2]; y = +m[3]; if (y < 100) y += 2000;\n      if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : ''; }\n    } else {\n      m = raw.match(/^([A-Za-z]{3,9})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})(?:[ T,]+(?:at\\s+)?(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*([AaPp][Mm])?)?$/);\n      if (!m || !MONTHS[m[1].toLowerCase()]) return null;\n      mo = MONTHS[m[1].toLowerCase()]; d = +m[2]; y = +m[3];\n      if (m[4] !== undefined) { hasTime = true; h = +m[4]; mi = +m[5]; sec = m[6] ? +m[6] : 0; ap = m[7] ? m[7].toLowerCase() : ''; }\n    }\n  }\n  if (ap) {\n    if (h < 1 || h > 12) return { bad: true };\n    h = (h % 12) + (ap === 'pm' ? 12 : 0);\n  }\n  const probe = new Date(Date.UTC(y, mo - 1, d));\n  if (mo < 1 || mo > 12 || d < 1 || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d || h > 23 || mi > 59 || sec > 59) return { bad: true };\n  return { y: y, mo: mo, d: d, h: h, mi: mi, sec: sec, hasTime: hasTime };\n}\n\n// ISO values that already carry an offset or Z are kept (after a calendar check). Everything else is read as\n// shop-local wall time in `tz`. Returns { iso, bad, note } where note is 'gap' or 'ambiguous' when the DST policy applied.\nfunction toIsoInZone(v, tz) {\n  if (isBlank(v)) return { iso: '', bad: false, note: '' };\n  const raw = String(v).trim();\n  const withOffset = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})[T ](\\d{2}):(\\d{2})(?::\\d{2}(?:\\.\\d+)?)?\\s*(Z|[+-]\\d{2}:?\\d{2})$/i);\n  if (withOffset) {\n    const probe = new Date(Date.UTC(+withOffset[1], +withOffset[2] - 1, +withOffset[3]));\n    if (probe.getUTCMonth() !== +withOffset[2] - 1 || probe.getUTCDate() !== +withOffset[3] || +withOffset[4] > 23 || +withOffset[5] > 59) return { iso: '', bad: true, note: '' };\n    const t = parseTime(raw.replace(' ', 'T'));\n    return t === null ? { iso: '', bad: true, note: '' } : { iso: raw, bad: false, note: '' };\n  }\n  const p = parseDateParts(raw);\n  if (!p || p.bad) return { iso: '', bad: true, note: '' };\n  const r = resolveWall(p.y, p.mo, p.d, p.h, p.mi, tz || 'America/Chicago');\n  return { iso: new Date(r.ms + p.sec * 1000).toISOString(), bad: false, note: r.kind === 'ok' ? '' : r.kind };\n}\n\n// Calendar day (YYYY-MM-DD) for due dates and similar. A bare date stays that date; a date with a time is\n// converted to its shop-local day.\nfunction toLocalDate(v, tz) {\n  if (isBlank(v)) return { date: '', bad: false };\n  const raw = String(v).trim();\n  const p = parseDateParts(raw);\n  if (p && !p.bad) {\n    const pad = function (n) { return (n < 10 ? '0' : '') + n; };\n    return { date: p.y + '-' + pad(p.mo) + '-' + pad(p.d), bad: false };\n  }\n  const t = toIsoInZone(raw, tz);\n  if (t.bad) return { date: '', bad: true };\n  const ms = parseTime(t.iso);\n  return ms === null ? { date: '', bad: true } : { date: localDate(ms, tz || 'America/Chicago'), bad: false };\n}\n\n// \"$1,234.50\", \"1234\", \"(500)\" -> number. Anything else is bad (null), never guessed.\nfunction parseMoney(v) {\n  if (isBlank(v)) return { value: null, bad: false };\n  const raw = String(v).trim();\n  const accounting = /^\\(.*\\)$/.test(raw);\n  const s = accounting ? raw.slice(1, -1).trim() : raw;\n  if ((accounting && s.startsWith('-')) || !/^-?\\$?(?:\\d+|\\d{1,3}(?:,\\d{3})+)(?:\\.\\d+)?$/.test(s)) {\n    return { value: null, bad: true };\n  }\n  const n = Number(s.replace(/[$,]/g, '')) * (accounting ? -1 : 1);\n  return Number.isFinite(n) ? { value: n, bad: false } : { value: null, bad: true };\n}\n\nconst SUBTOTAL_ID = /^(total|totals|subtotal|grand total|sum)$/i;\n\n// Generic report preparer for jobs / invoices / quotes. Never throws. res.ok is true only when usable rows exist\n// and nothing in the file looks truncated.\nfunction prepareReport(kind, rowsIn, opts) {\n  const spec = REPORTS[kind];\n  const o = opts || {};\n  const tz = o.timezone || 'America/Chicago';\n  const label = o.label || spec.label + ' export';\n  const rows = Array.isArray(rowsIn) ? rowsIn : [];\n  const c = canonicalizeRows(rows, spec.columns, o.headers);\n  const res = { kind: kind, ok: false, rows: [], headsUp: [], errors: [], missingRequired: c.missing.slice(), headersSeen: c.headers, mapped: c.mapped, rowCount: rows.length, skipped: [] };\n  const seen = c.headers.length ? ' Columns found: ' + c.headers.slice(0, 25).join(', ') + (c.headers.length > 25 ? ', ...' : '') + '.' : '';\n  if (c.headers.length === 0) {\n    res.errors.push(label + ' is empty. ' + spec.hint);\n    return res;\n  }\n  const missing = c.missing.slice();\n  if (kind === 'quotes' && c.mapped.sent_at === undefined) missing.push('Sent date');\n  if (missing.length) {\n    res.missingRequired = missing;\n    res.errors.push(label + ' is missing required column(s): ' + missing.join('; ') + '.' + seen + ' Add the missing column(s) to your Jobber report and export again.');\n    return res;\n  }\n  if (rows.length === 0) {\n    res.errors.push(label + ' has a header row but no data rows. Export a report that includes at least one row.');\n    return res;\n  }\n  const byId = new Map();\n  const conflictingIds = new Set();\n  res.headsUp.push(...c.conflicts);\n  const badDates = [];\n  const badMoney = [];\n  let gaps = 0; let ambiguous = 0; let dupes = 0;\n  let firstDst = '';\n  c.rows.forEach(function (r, idx) {\n    const line = idx + 2; // the header is row 1; blank lines are not counted\n    const id = r[spec.idKey];\n    if (isBlank(id)) { res.skipped.push({ row: line, reason: 'no ' + spec.idWord + ' (footer or subtotal row?)' }); return; }\n    if (SUBTOTAL_ID.test(String(id).trim())) { res.skipped.push({ row: line, reason: 'a totals row' }); return; }\n    if (kind === 'jobs') r._blankStart = isBlank(r.scheduled_start) && isBlank(r.scheduled_end) ? 1 : 0;\n    spec.dateKeys.forEach(function (k) {\n      const t = toIsoInZone(r[k], tz);\n      if (t.bad) { badDates.push(spec.idWord + ' ' + id + ' ' + k + ' \"' + r[k] + '\"'); r[k] = ''; return; }\n      if (t.note === 'gap') { gaps++; if (!firstDst) firstDst = id + ' ' + k + ' \"' + r[k] + '\"'; }\n      if (t.note === 'ambiguous') { ambiguous++; if (!firstDst) firstDst = id + ' ' + k + ' \"' + r[k] + '\"'; }\n      r[k] = t.iso;\n    });\n    spec.dayKeys.forEach(function (k) {\n      const t = toLocalDate(r[k], tz);\n      if (t.bad) { badDates.push(spec.idWord + ' ' + id + ' ' + k + ' \"' + r[k] + '\"'); r[k] = ''; } else { r[k] = t.date; }\n    });\n    spec.moneyKeys.forEach(function (k) {\n      const m = parseMoney(r[k]);\n      if (m.bad) badMoney.push(spec.idWord + ' ' + id + ' ' + k + ' \"' + r[k] + '\"');\n      r[k] = m.value;\n    });\n    const prev = byId.get(id);\n    if (!prev) { r._rows = 1; byId.set(id, r); return; }\n    dupes++;\n    if (kind === 'jobs') {\n      // one row per visit: merge. Earliest start, latest end; blank fields are filled from later rows.\n      prev._rows++;\n      prev._blankStart += r._blankStart;\n      if (r.status && prev.status && lc(r.status) !== lc(prev.status)) {\n        res.headsUp.push('Job ' + id + ' has conflicting statuses on repeated rows. The first status was used.');\n      }\n      const e = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x < y) ? a : b; };\n      const l = function (a, b) { const x = parseTime(a); const y = parseTime(b); return x !== null && (y === null || x > y) ? a : b; };\n      prev.scheduled_start = e(prev.scheduled_start, r.scheduled_start) || '';\n      prev.scheduled_end = l(prev.scheduled_end, r.scheduled_end) || '';\n      Object.keys(r).forEach(function (k) { if (k.charAt(0) !== '_' && isBlank(prev[k]) && !isBlank(r[k])) prev[k] = r[k]; });\n    } else if (Object.keys(r).some(function (k) { return r[k] !== prev[k]; })) {\n      conflictingIds.add(id);\n    }\n  });\n  conflictingIds.forEach(function (id) { byId.delete(id); });\n  res.rows = Array.from(byId.values());\n  if (res.skipped.length) {\n    res.headsUp.push(res.skipped.length + ' ' + plural(res.skipped.length, 'row') + ' in the ' + label + ' ' + plural(res.skipped.length, 'was', 'were') + ' skipped. First: row ' + res.skipped[0].row + ' (' + res.skipped[0].reason + ').');\n  }\n  if (badDates.length) {\n    res.headsUp.push(badDates.length + ' date ' + plural(badDates.length, 'value') + ' in the ' + label + ' could not be read and ' + plural(badDates.length, 'was', 'were') + ' left blank (' + badDates.slice(0, 3).join('; ') + (badDates.length > 3 ? '; ...' : '') + '). Use dates like 3/10/2026 9:50 AM or 2026-03-10.');\n  }\n  if (badMoney.length) {\n    res.headsUp.push(badMoney.length + ' dollar ' + plural(badMoney.length, 'amount') + ' in the ' + label + ' could not be read and ' + plural(badMoney.length, 'was', 'were') + ' left blank (' + badMoney.slice(0, 3).join('; ') + (badMoney.length > 3 ? '; ...' : '') + ').');\n  }\n  if (gaps > 0) {\n    res.headsUp.push(gaps + ' ' + plural(gaps, 'time') + ' in the ' + label + ' fell in the spring daylight-saving gap (a clock time that does not exist) and ' + plural(gaps, 'was', 'were') + ' moved forward by the gap, e.g. ' + firstDst + '.');\n  }\n  if (ambiguous > 0) {\n    res.headsUp.push(ambiguous + ' ' + plural(ambiguous, 'time') + ' in the ' + label + ' fell in the fall daylight-saving overlap (a clock time that happens twice) and the first occurrence was used, e.g. ' + firstDst + '.');\n  }\n  if (dupes > 0) {\n    res.headsUp.push(dupes + ' repeated ' + spec.idWord + ' ' + plural(dupes, 'row') + ' in the ' + label + (kind === 'jobs' ? ' ' + plural(dupes, 'was', 'were') + ' merged into the job with the same number (one row per visit).' : ' ' + plural(dupes, 'was', 'were') + ' consolidated by number.'));\n  }\n  if (conflictingIds.size) {\n    res.headsUp.push('Conflicting records for ' + spec.idWord + ' ' + Array.from(conflictingIds).slice(0, 5).join(', ') +\n      ' were omitted. Use a single-account report with an unambiguous record per number.');\n  }\n  if (res.rows.length === 0) res.errors.push('No usable rows were found in the ' + label + '.' + seen);\n  if (kind === 'jobs' && c.mapped.scheduled_start === undefined) {\n    res.headsUp.push('The ' + label + ' has no start-date column (for example \"Schedule start date\"), so jobs with no scheduled visit can only be found from the Status column.');\n  }\n  res.ok = res.errors.length === 0;\n  return res;\n}\n\nfunction mapJobRow(r, startKnown) {\n  return {\n    id: String(r.job_id), title: r.title || '', client: r.client || '', address: r.address || '', statusRaw: r.status || '',\n    status: jobStatusKey(r.status), startAt: r.scheduled_start || '', endAt: r.scheduled_end || '', createdAt: r.created_at || '',\n    completedAt: r.completed_at || '', total: r.total === undefined ? null : r.total, assigned: r.assigned || '',\n    visitCount: r._rows || 1, unscheduledVisits: startKnown ? (r._blankStart || 0) : null, startKnown: startKnown,\n  };\n}\nfunction mapInvoiceRow(r) {\n  return {\n    id: String(r.invoice_id), client: r.client || '', statusRaw: r.status || '', status: invoiceStatusKey(r.status),\n    total: r.total === undefined ? null : r.total, balance: r.balance === undefined ? null : r.balance,\n    issuedAt: r.issued_at || '', dueDate: r.due_date || '', jobRef: r.job_ref || '',\n  };\n}\nfunction mapQuoteRow(r) {\n  return {\n    id: String(r.quote_id), client: r.client || '', title: r.title || '', statusRaw: r.status || '', status: quoteStatusKey(r.status),\n    total: r.total === undefined ? null : r.total, sentAt: r.sent_at || '',\n  };\n}\nconst MAPPERS = { jobs: mapJobRow, invoices: mapInvoiceRow, quotes: mapQuoteRow };\n\n// Public entry point for one report. input = CSV text or parseCsv rows. Never throws unless opts.strict is true;\n// check result.ok / result.message. result.items uses the internal schema.\nfunction normalizeReportExport(kind, input, opts) {\n  const o = opts || {};\n  let rows;\n  let headers = o.headers;\n  const warnings = Array.isArray(o.parseWarnings) ? o.parseWarnings.slice() : [];\n  if (typeof input === 'string') {\n    const t = parseCsvTable(input);\n    rows = t.rows; headers = t.headers;\n    (t.warnings || []).forEach(function (w) { warnings.push(w); });\n  } else {\n    rows = Array.isArray(input) ? input : [];\n  }\n  const res = warnings.length\n    ? { kind: kind, ok: false, rows: [], headsUp: [], errors: [], missingRequired: [], headersSeen: headers || [], mapped: {}, rowCount: rows.length, skipped: [] }\n    : prepareReport(kind, rows, Object.assign({}, o, { headers: headers }));\n  warnings.forEach(function (w) { res.errors.push(w); res.headsUp.push(w); });\n  if (res.errors.length) res.ok = false;\n  const startKnown = res.mapped.scheduled_start !== undefined;\n  res.items = res.ok ? res.rows.map(function (r) { return MAPPERS[kind](r, startKnown); }) : [];\n  res.message = res.errors.join(' ');\n  if (o.strict && !res.ok) throw new Error(res.message);\n  return res;\n}\nfunction normalizeJobsExport(input, opts) { return normalizeReportExport('jobs', input, opts); }\nfunction normalizeInvoicesExport(input, opts) { return normalizeReportExport('invoices', input, opts); }\nfunction normalizeQuotesExport(input, opts) { return normalizeReportExport('quotes', input, opts); }\n\n// Work out which report a file is. Header signature first, then the file name, then \"the only file is the jobs file\".\nfunction classifyCsvTable(fileName, table, fileCount) {\n  const has = function (kind, key) { return canonicalizeRows([], REPORTS[kind].columns, table.headers).mapped[key] !== undefined; };\n  if (has('invoices', 'invoice_id')) return 'invoices';\n  if (has('quotes', 'quote_id')) return 'quotes';\n  if (has('jobs', 'job_id')) return 'jobs';\n  const n = String(fileName || '').toLowerCase();\n  if (/invoice/.test(n)) return 'invoices';\n  if (/quote|estimate/.test(n)) return 'quotes';\n  if (/job|visit/.test(n)) return 'jobs';\n  return fileCount === 1 ? 'jobs' : null;\n}\n\nfunction emptyDataset(settings, notes) {\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(notes || []) }),\n    jobs: [], invoices: [], quotes: [], supplied: { jobs: false, invoices: false, quotes: false },\n  };\n}\n\n// files = [{ name, text }] in any order and with any file names. Any one of the three reports is enough.\n// Duplicate report types require an operator to select one snapshot.\nfunction datasetFromCsvFiles(settings, files) {\n  const list = Array.isArray(files) ? files : [];\n  const notes = [];\n  const byKind = { jobs: [], invoices: [], quotes: [] };\n  list.forEach(function (f) {\n    const name = String((f && f.name) || 'upload.csv');\n    const t = parseCsvTable(f && f.text);\n    if (t.warnings.length) {\n      t.warnings.forEach(function (w) { notes.push('CSV import: file \"' + name + '\": ' + w); });\n      return;\n    }\n    const kind = classifyCsvTable(name, t, list.length);\n    if (t.headers.length === 0) {\n      notes.push('CSV import: file \"' + name + '\" is empty. Export the report again with a header row and at least one row.');\n      return;\n    }\n    if (!kind) {\n      notes.push('CSV import: file \"' + name + '\" was not recognized as a Jobs, Invoices, or Quotes report and was ignored.');\n      return;\n    }\n    byKind[kind].push({ name: name, table: t });\n  });\n  const ds = emptyDataset(settings, notes);\n  Object.keys(byKind).forEach(function (kind) {\n    const files2 = byKind[kind];\n    if (files2.length === 0) return;\n    if (files2.length > 1) {\n      notes.push('CSV import: multiple ' + REPORTS[kind].label + ' exports were received (' + files2.map(function (f) {\n        return '\"' + f.name + '\"';\n      }).join(', ') + '). Supply one snapshot per report type.');\n      return;\n    }\n    const chosen = files2[0];\n    const label = REPORTS[kind].label + ' export \"' + chosen.name + '\"';\n    const r = normalizeReportExport(kind, chosen.table.rows, { timezone: settings.timezone, label: label, headers: chosen.table.headers, parseWarnings: chosen.table.warnings });\n    // parse warnings are already inside r.errors / r.headsUp; show each message once\n    uniqueList(r.errors.concat(r.headsUp)).forEach(function (m) { notes.push('CSV import: ' + m); });\n    if (r.ok) { ds[kind] = r.items; ds.supplied[kind] = true; }\n  });\n  if (list.length === 0) notes.push('CSV import: no CSV file was received. Send or drop a Jobber Jobs, Invoices, or Quotes report export.');\n  ['jobs', 'invoices', 'quotes'].forEach(function (kind) {\n    if (!ds.supplied[kind] && byKind[kind].length === 0 && list.length > 0) notes.push('CSV import: no ' + REPORTS[kind].label + ' export was supplied, so that part of the digest is skipped.');\n  });\n  ds.settings = Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(uniqueList(notes)) });\n  return ds;\n}\n\nconst SAMPLE_FILES = [\n  { name: 'sample-jobber-export-jobs.csv', text: \"Job #,Status,Client name,Title,Property,Schedule start date,Schedule end date,Created date,Closed date,Total ($),Assigned to\\n1001,Late,Sample Household 5001,Weekly lawn mowing,\\\"11 Sample Meadow Ln, Testville\\\",3/9/2026 8:00 AM,3/9/2026 10:00 AM,2/20/2026 9:00 AM,,$85.00,Crew A\\n1002,Late,Sample Household 5002,Furnace no heat repair,\\\"12 Sample Meadow Ln, Testville\\\",3/6/2026 1:00 PM,3/6/2026 3:00 PM,3/5/2026 4:40 PM,,$420.00,Tech Rowan\\n1003,Action Required,Sample Household 5003,Water heater swap,\\\"13 Sample Meadow Ln, Testville\\\",3/12/2026 9:00 AM,3/12/2026 1:00 PM,3/1/2026 10:15 AM,,\\\"$1,850.00\\\",Tech Imani\\n1004,Unscheduled,Sample Household 5004,Spring cleanup and mulch,\\\"14 Sample Meadow Ln, Testville\\\",,,3/2/2026 3:10 PM,,$640.00,\\n1005,Unscheduled,Sample Household 5005,AC tune-up,\\\"15 Sample Meadow Ln, Testville\\\",,,3/9/2026 4:30 PM,,$189.00,\\n1006,Requires Invoicing,Sample Household 5006,Drain clearing,\\\"16 Sample Meadow Ln, Testville\\\",3/5/2026 1:00 PM,3/5/2026 3:00 PM,3/3/2026 8:00 AM,3/5/2026 4:15 PM,$275.00,Tech Imani\\n1007,Requires Invoicing,Sample Household 5007,Lawn aeration,\\\"17 Sample Meadow Ln, Testville\\\",3/9/2026 9:00 AM,3/9/2026 11:00 AM,2/25/2026 2:00 PM,3/9/2026 11:00 AM,$160.00,Crew A\\n1008,Requires Invoicing,Sample Household 5008,Mini-split install,\\\"18 Sample Meadow Ln, Testville\\\",2/27/2026 8:00 AM,3/2/2026 4:00 PM,2/10/2026 11:00 AM,3/2/2026 4:30 PM,,Tech Rowan\\n1009,Active,Sample Household 5009,Irrigation repair,\\\"19 Sample Meadow Ln, Testville\\\",3/10/2026 10:00 AM,3/10/2026 12:00 PM,3/8/2026 9:30 AM,,$310.00,Crew B\\n1010,Upcoming,Sample Household 5010,Drain camera inspection,\\\"20 Sample Meadow Ln, Testville\\\",3/11/2026 2:00 PM,3/11/2026 4:00 PM,3/9/2026 1:00 PM,,$225.00,Tech Imani\\n1011,Completed,Sample Household 5011,Thermostat replacement,\\\"21 Sample Meadow Ln, Testville\\\",3/8/2026 9:00 AM,3/8/2026 10:00 AM,3/6/2026 8:20 AM,3/8/2026 10:05 AM,$240.00,Tech Rowan\\n1012,Active,Sample Household 5012,Sod repair,\\\"22 Sample Meadow Ln, Testville\\\",,,3/3/2026 12:00 PM,,$520.00,Crew B\\n1013,Archived,Sample Household 5013,Gutter cleaning,\\\"23 Sample Meadow Ln, Testville\\\",2/10/2026 9:00 AM,2/10/2026 11:00 AM,2/1/2026 9:00 AM,2/10/2026 11:30 AM,$150.00,Crew A\\n1014,Active,Sample Household 5014,Patio drain re-pipe,\\\"24 Sample Meadow Ln, Testville\\\",3/11/2026 8:00 AM,3/11/2026 12:00 PM,3/4/2026 3:00 PM,,\\\"$2,200.00\\\",Tech Rowan\\n1014,Active,Sample Household 5014,Patio drain re-pipe,\\\"24 Sample Meadow Ln, Testville\\\",,,3/4/2026 3:00 PM,,\\\"$2,200.00\\\",\\n\" },\n  { name: 'sample-jobber-export-invoices.csv', text: \"Invoice #,Client name,Status,Issued date,Due date,Total ($),Balance ($),Job #\\n2001,Sample Household 5021,Past due,1/30/2026,2/14/2026,\\\"$3,200.00\\\",\\\"$3,200.00\\\",990\\n2002,Sample Household 5022,Past due,2/16/2026,3/2/2026,$480.00,$480.00,991\\n2003,Sample Household 5023,Past due,2/23/2026,3/9/2026,\\\"$1,250.00\\\",$625.00,992\\n2004,Sample Household 5024,Awaiting payment,2/24/2026,3/10/2026,$900.00,$900.00,993\\n2005,Sample Household 5025,Awaiting payment,3/4/2026,3/25/2026,$350.00,$350.00,994\\n2006,Sample Household 5026,Paid,1/20/2026,2/10/2026,$600.00,$0.00,995\\n2007,Sample Household 5027,Draft,,,$300.00,$300.00,996\\n2008,Sample Household 5028,Bad debt,10/15/2025,11/1/2025,$750.00,$750.00,997\\n\" },\n  { name: 'sample-jobber-export-quotes.csv', text: \"Quote #,Client name,Title,Status,Drafted date,Sent date,Total ($)\\n3001,Sample Household 5031,Full HVAC system replacement,Awaiting response,2/9/2026,2/10/2026,\\\"$14,800.00\\\"\\n3002,Sample Household 5032,Backyard drainage and sod,Awaiting response,2/23/2026,2/24/2026,\\\"$6,200.00\\\"\\n3003,Sample Household 5033,Whole-home repipe,Awaiting response,2/24/2026,2/25/2026,\\\"$9,500.00\\\"\\n3004,Sample Household 5034,Patio and walkway lighting,Awaiting response,2/2/2026,2/3/2026,\\\"$1,000.00\\\"\\n3005,Sample Household 5035,Water softener install,Awaiting response,2/2/2026,2/3/2026,$950.00\\n3006,Sample Household 5036,Ductless mini-split (2 zones),Approved,1/31/2026,2/1/2026,\\\"$12,000.00\\\"\\n3007,Sample Household 5037,Landscape redesign,Draft,3/9/2026,,\\\"$7,500.00\\\"\\n3008,Sample Household 5038,Tankless water heater,Changes Requested,1/31/2026,2/1/2026,\\\"$5,400.00\\\"\\n3009,Sample Household 5039,Irrigation system install,Awaiting response,1/19/2026,1/20/2026,\\\"$3,300.00\\\"\\n\" },\n];\nconst SAMPLE_AS_OF = \"2026-03-10T07:00:00-05:00\";\nconst settings = Object.assign({}, $('Prepare Settings').first().json.settings, { asOf: SAMPLE_AS_OF });\nreturn [{ json: datasetFromCsvFiles(settings, SAMPLE_FILES) }];\n"
+      }
+    },
+    {
+      "id": "be853115-f0ae-5967-a142-ab956d6b160b",
+      "name": "Morning Ops Triage Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2120,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from jobber_logic.cjs by build_csv_fallback_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  pastDueMinDays: 1,\n  quoteStalledDays: 14,\n  quoteMinValue: 1000,\n  maxItemsPerSection: 10,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].indexOf(s) !== -1) return true;\n  if (['false', 'no', 'n', '0'].indexOf(s) !== -1) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtDateOnly(dateStr) {\n  // dateStr is YYYY-MM-DD; formatted in UTC so the day never shifts.\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(dayMs(dateStr))));\n}\nfunction fmtMoney(n) {\n  if (n === null || n === undefined || !Number.isFinite(Number(n))) return 'n/a';\n  const v = Number(n);\n  const whole = Math.abs(v - Math.round(v)) < 0.005;\n  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\nfunction uniqueList(list) {\n  const out = [];\n  const seen = Object.create(null);\n  (list || []).forEach(function (x) {\n    const s = String(x === null || x === undefined ? '' : x);\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\nfunction statusWord(raw) {\n  return String(raw === null || raw === undefined ? '' : raw).toLowerCase().replace(/[^a-z0-9]+/g, '');\n}\nfunction jobStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    unscheduled: 'unscheduled', late: 'late', actionrequired: 'action_required', requiresinvoicing: 'requires_invoicing',\n    active: 'active', inprogress: 'active', upcoming: 'upcoming', today: 'today', completed: 'completed', complete: 'completed',\n    closed: 'completed', archived: 'archived', cancelled: 'cancelled', canceled: 'cancelled', endingwithin30days: 'active',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction invoiceStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    pastdue: 'past_due', overdue: 'past_due', awaitingpayment: 'awaiting_payment', unpaid: 'awaiting_payment', sent: 'awaiting_payment',\n    outstanding: 'awaiting_payment', paid: 'paid', draft: 'draft', baddebt: 'bad_debt', void: 'void', voided: 'void',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction quoteStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    awaitingresponse: 'awaiting_response', draft: 'draft', drafted: 'draft',\n    approved: 'approved', accepted: 'approved', won: 'approved', converted: 'converted', declined: 'declined', rejected: 'declined',\n    lost: 'declined', changesrequested: 'changes_requested', archived: 'archived',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\n\n// The three morning queues. Read-only: these functions only look at the data they are given.\nfunction triageNow(data) {\n  const s = data.settings;\n  const asOf = parseTime(s.asOf);\n  return { s: s, tz: s.timezone, asOf: asOf, today: localDate(asOf, s.timezone) };\n}\nfunction ageDaysFromIso(iso, ctx) {\n  const t = parseTime(iso);\n  if (t === null || t > ctx.asOf) return null;\n  return dayDiff(localDate(t, ctx.tz), ctx.today);\n}\nfunction ageLabel(days, suffix) {\n  if (days === null || days === undefined) return 'age not in the data';\n  if (days === 0) return 'today';\n  return days + ' ' + plural(days, 'day') + ' ' + suffix;\n}\nfunction missingReport(label) {\n  return 'No ' + label + ' export was supplied, so that part of the digest is skipped. Nothing is estimated.';\n}\n\n// Queue 1: Unscheduled, Late, Action Required.\nfunction jobsQueue(data) {\n  const ctx = triageNow(data);\n  const out = { computed: false, items: [], counts: { late: 0, action_required: 0, unscheduled: 0 }, total: 0, unrecognized: 0, headsUp: [] };\n  if (!data.supplied || !data.supplied.jobs) { out.headsUp.push(missingReport('Jobs')); return out; }\n  out.computed = true;\n  const order = { late: 0, action_required: 1, unscheduled: 2 };\n  let noEnd = 0;\n  let futureEnd = 0;\n  (data.jobs || []).forEach(function (j) {\n    const st = j.status;\n    if (['completed', 'archived', 'cancelled', 'requires_invoicing'].indexOf(st) !== -1) return;\n    if (st === 'other' || !st) { out.unrecognized++; return; }\n    let kind = '';\n    let reason = '';\n    let age = null;\n    const endMs = parseTime(j.endAt);\n    if (st === 'late') {\n      kind = 'late';\n      if (endMs === null) {\n        noEnd++;\n        reason = 'Late (no end time in the data)';\n      } else if (endMs > ctx.asOf) {\n        futureEnd++;\n        reason = 'Late in Jobber (recorded end is in the future)';\n      } else {\n        reason = 'Late. Visit was due to end ' + fmtDay(endMs, ctx.tz) + ' ' + fmtTime(endMs, ctx.tz);\n        age = ageDaysFromIso(j.endAt, ctx);\n      }\n    } else if (st === 'action_required') {\n      kind = 'action_required';\n      reason = 'Action Required in Jobber';\n    } else if (st === 'unscheduled') {\n      kind = 'unscheduled';\n      reason = 'Unscheduled';\n      age = ageDaysFromIso(j.createdAt, ctx);\n    } else if (j.unscheduledVisits > 0) {\n      kind = 'unscheduled';\n      reason = j.unscheduledVisits === j.visitCount\n        ? (j.visitCount === 1 ? 'The visit has no date' : 'All ' + j.visitCount + ' visits have no date')\n        : j.unscheduledVisits + ' of ' + j.visitCount + ' visits ' + plural(j.unscheduledVisits, 'has', 'have') + ' no date';\n      age = ageDaysFromIso(j.createdAt, ctx);\n    } else if (j.startKnown && ['active', 'upcoming', 'today'].indexOf(st) !== -1 && j.visitCount === 0) {\n      kind = 'unscheduled';\n      reason = 'No scheduled visit';\n      age = ageDaysFromIso(j.createdAt, ctx);\n    }\n    if (!kind) return;\n    out.counts[kind]++;\n    out.items.push({ id: j.id, kind: kind, reason: reason, client: j.client || 'client not in the data', title: j.title, ageDays: age, total: j.total, assigned: j.assigned });\n  });\n  out.items.sort(function (a, b) {\n    if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];\n    const x = a.ageDays === null ? -1 : a.ageDays;\n    const y = b.ageDays === null ? -1 : b.ageDays;\n    if (x !== y) return y - x;\n    return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n  });\n  out.total = out.items.length;\n  if (out.total === 0 && out.unrecognized) out.computed = false;\n  if (out.unrecognized > 0) out.headsUp.push(out.unrecognized + ' ' + plural(out.unrecognized, 'job') + ' had a status this pack does not recognize and ' + plural(out.unrecognized, 'was', 'were') + ' not triaged.');\n  if (noEnd > 0) out.headsUp.push(noEnd + ' Late ' + plural(noEnd, 'job') + ' ' + plural(noEnd, 'has', 'have') + ' no end time, so how late cannot be shown.');\n  if (futureEnd) out.headsUp.push(futureEnd + ' Late job records have a future end time, so lateness cannot be calculated.');\n  return out;\n}\n\n// Queue 2: Requires Invoicing jobs and past-due invoices.\nfunction invoicingQueue(data) {\n  const ctx = triageNow(data);\n  const s = ctx.s;\n  const out = {\n    ready: { computed: false, items: [], count: 0, total: null, knownTotalCount: 0 },\n    pastDue: { computed: false, items: [], count: 0, total: 0 },\n    headsUp: [],\n  };\n  if (!data.supplied || !data.supplied.jobs) {\n    out.headsUp.push('Requires Invoicing jobs need a Jobs export, which was not supplied. That list is skipped.');\n  } else {\n    out.ready.computed = true;\n    let noDate = 0;\n    (data.jobs || []).forEach(function (j) {\n      if (j.status !== 'requires_invoicing') return;\n      const since = j.completedAt || j.endAt || '';\n      const ageDays = ageDaysFromIso(since, ctx);\n      if (ageDays === null) noDate++;\n      out.ready.items.push({ id: j.id, client: j.client || 'client not in the data', title: j.title, ageDays: ageDays, total: j.total });\n    });\n    out.ready.items.sort(function (a, b) {\n      const x = a.ageDays === null ? -1 : a.ageDays;\n      const y = b.ageDays === null ? -1 : b.ageDays;\n      if (x !== y) return y - x;\n      return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n    });\n    out.ready.count = out.ready.items.length;\n    const known = out.ready.items.filter(function (i) { return i.total !== null && i.total !== undefined; });\n    out.ready.knownTotalCount = known.length;\n    out.ready.total = known.length ? known.reduce(function (a, i) { return a + i.total; }, 0) : null;\n    if (noDate > 0) out.headsUp.push(noDate + ' Requires Invoicing ' + plural(noDate, 'job') + ' ' + plural(noDate, 'has', 'have') + ' no usable past completed or end date, so how long ' + plural(noDate, 'it has', 'they have') + ' waited cannot be shown.');\n    if (known.length < out.ready.count) out.headsUp.push((out.ready.count - known.length) + ' Requires Invoicing ' + plural(out.ready.count - known.length, 'job') + ' ' + plural(out.ready.count - known.length, 'has', 'have') + ' no total, so the dollar figure covers only the others.');\n  }\n  if (!data.supplied || !data.supplied.invoices) {\n    out.headsUp.push(missingReport('Invoices'));\n  } else {\n    out.pastDue.computed = true;\n    let noBalance = 0; let noDue = 0; let conflicts = 0; let unknownStatus = 0;\n    (data.invoices || []).forEach(function (inv) {\n      if (['paid', 'draft', 'void', 'bad_debt'].indexOf(inv.status) !== -1) return;\n      if (inv.status !== 'past_due' && inv.status !== 'awaiting_payment') { unknownStatus++; return; }\n      if (inv.balance === null || inv.balance === undefined) { noBalance++; return; }\n      if (!(inv.balance > 0)) return;\n      if (!inv.dueDate) { noDue++; return; }\n      const days = dayDiff(inv.dueDate, ctx.today);\n      if (inv.status === 'past_due' && days <= 0) conflicts++;\n      if (days < Math.max(1, s.pastDueMinDays)) return;\n      out.pastDue.items.push({ id: inv.id, client: inv.client || 'client not in the data', balance: inv.balance, total: inv.total, dueDate: inv.dueDate, daysPastDue: days });\n    });\n    out.pastDue.items.sort(function (a, b) {\n      if (a.balance !== b.balance) return b.balance - a.balance;\n      const x = a.daysPastDue;\n      const y = b.daysPastDue;\n      if (x !== y) return y - x;\n      return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n    });\n    out.pastDue.count = out.pastDue.items.length;\n    out.pastDue.total = out.pastDue.items.reduce(function (a, i) { return a + i.balance; }, 0);\n    if (out.pastDue.count === 0 && (noBalance || noDue || unknownStatus)) out.pastDue.computed = false;\n    if (unknownStatus) out.headsUp.push(unknownStatus + ' invoice records had no recognized status and were skipped.');\n    if (noBalance > 0) out.headsUp.push(noBalance + ' open ' + plural(noBalance, 'invoice') + ' ' + plural(noBalance, 'has', 'have') + ' no balance in the data and ' + plural(noBalance, 'was', 'were') + ' skipped.');\n    if (noDue > 0) out.headsUp.push(noDue + ' open ' + plural(noDue, 'invoice') + ' ' + plural(noDue, 'has', 'have') + ' no due date and were skipped because the age threshold cannot be checked.');\n    if (conflicts > 0) out.headsUp.push(conflicts + ' ' + plural(conflicts, 'invoice') + ' marked past due ' + plural(conflicts, 'has', 'have') + ' a due date today or in the future. The due date was used, so ' + plural(conflicts, 'it was', 'they were') + ' not listed.');\n  }\n  return out;\n}\n\n// Queue 3: high-value quotes still awaiting a response well after Jobber's own follow-ups (max two) would have gone out.\nfunction quoteQueue(data) {\n  const ctx = triageNow(data);\n  const s = ctx.s;\n  const out = { computed: false, items: [], count: 0, total: 0, notYetStalled: 0, belowValue: 0, headsUp: [] };\n  if (!data.supplied || !data.supplied.quotes) { out.headsUp.push(missingReport('Quotes')); return out; }\n  if (s.quoteStalledDays === null || s.quoteStalledDays === undefined) {\n    out.headsUp.push('Set quoteStalledDays to a shop-local day cutoff after the last configured Jobber follow-up. Until then, the quote queue is unavailable.');\n    return out;\n  }\n  out.computed = true;\n  let noTotal = 0; let noDate = 0; let future = 0; let unknownStatus = 0;\n  (data.quotes || []).forEach(function (q) {\n    if (!q.status || q.status === 'other') unknownStatus++;\n    if (q.status !== 'awaiting_response') return; // drafts, approved, converted, declined, archived, changes requested: not stalled\n    if (q.total === null || q.total === undefined) { noTotal++; return; }\n    const sentMs = parseTime(q.sentAt);\n    if (sentMs === null) { noDate++; return; }\n    const age = dayDiff(localDate(sentMs, ctx.tz), ctx.today);\n    if (sentMs > ctx.asOf) { future++; return; }\n    if (q.total < s.quoteMinValue) { out.belowValue++; return; }\n    if (age < s.quoteStalledDays) { out.notYetStalled++; return; }\n    out.items.push({ id: q.id, client: q.client || 'client not in the data', title: q.title, total: q.total, ageDays: age, sentLabel: fmtDay(sentMs, ctx.tz) });\n  });\n  out.items.sort(function (a, b) {\n    if (a.total !== b.total) return b.total - a.total;\n    if (a.ageDays !== b.ageDays) return b.ageDays - a.ageDays;\n    return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n  });\n  out.count = out.items.length;\n  out.total = out.items.reduce(function (a, i) { return a + i.total; }, 0);\n  if (noTotal > 0) out.headsUp.push(noTotal + ' quote' + (noTotal === 1 ? '' : 's') + ' awaiting a response ' + plural(noTotal, 'has', 'have') + ' no total and ' + plural(noTotal, 'was', 'were') + ' skipped.');\n  if (noDate > 0) out.headsUp.push(noDate + ' quote' + (noDate === 1 ? '' : 's') + ' awaiting a response ' + plural(noDate, 'has', 'have') + ' no send date and ' + plural(noDate, 'was', 'were') + ' skipped.');\n  if (future > 0) out.headsUp.push(future + ' quote' + (future === 1 ? '' : 's') + ' ' + plural(future, 'has', 'have') + ' a send date in the future and ' + plural(future, 'was', 'were') + ' skipped.');\n  if (out.items.length === 0 && (noDate || noTotal || unknownStatus)) out.computed = false;\n  if (unknownStatus) out.headsUp.push(unknownStatus + ' quote records had no recognized status and were skipped.');\n  return out;\n}\n\nfunction runTriage(data) {\n  return Object.assign({}, data, { jobsQueue: jobsQueue(data), invoicing: invoicingQueue(data), quoteQueue: quoteQueue(data) });\n}\n\nlet d = $input.first().json;\nd = Object.assign({}, d, { jobsQueue: jobsQueue(d) });\nd = Object.assign({}, d, { invoicing: invoicingQueue(d) });\nd = Object.assign({}, d, { quoteQueue: quoteQueue(d) });\nreturn [{ json: d }];\n"
+      }
+    },
+    {
+      "id": "ecf7bedf-ab1e-5774-a358-0ecaf6756476",
+      "name": "Assemble Owner Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from jobber_logic.cjs by build_csv_fallback_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  pastDueMinDays: 1,\n  quoteStalledDays: 14,\n  quoteMinValue: 1000,\n  maxItemsPerSection: 10,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].indexOf(s) !== -1) return true;\n  if (['false', 'no', 'n', '0'].indexOf(s) !== -1) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtDateOnly(dateStr) {\n  // dateStr is YYYY-MM-DD; formatted in UTC so the day never shifts.\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(dayMs(dateStr))));\n}\nfunction fmtMoney(n) {\n  if (n === null || n === undefined || !Number.isFinite(Number(n))) return 'n/a';\n  const v = Number(n);\n  const whole = Math.abs(v - Math.round(v)) < 0.005;\n  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\nfunction uniqueList(list) {\n  const out = [];\n  const seen = Object.create(null);\n  (list || []).forEach(function (x) {\n    const s = String(x === null || x === undefined ? '' : x);\n    if (!s || seen[s]) return;\n    seen[s] = true;\n    out.push(s);\n  });\n  return out;\n}\nfunction statusWord(raw) {\n  return String(raw === null || raw === undefined ? '' : raw).toLowerCase().replace(/[^a-z0-9]+/g, '');\n}\nfunction jobStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    unscheduled: 'unscheduled', late: 'late', actionrequired: 'action_required', requiresinvoicing: 'requires_invoicing',\n    active: 'active', inprogress: 'active', upcoming: 'upcoming', today: 'today', completed: 'completed', complete: 'completed',\n    closed: 'completed', archived: 'archived', cancelled: 'cancelled', canceled: 'cancelled', endingwithin30days: 'active',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction invoiceStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    pastdue: 'past_due', overdue: 'past_due', awaitingpayment: 'awaiting_payment', unpaid: 'awaiting_payment', sent: 'awaiting_payment',\n    outstanding: 'awaiting_payment', paid: 'paid', draft: 'draft', baddebt: 'bad_debt', void: 'void', voided: 'void',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\nfunction quoteStatusKey(raw) {\n  const w = statusWord(raw);\n  if (!w) return '';\n  const map = {\n    awaitingresponse: 'awaiting_response', draft: 'draft', drafted: 'draft',\n    approved: 'approved', accepted: 'approved', won: 'approved', converted: 'converted', declined: 'declined', rejected: 'declined',\n    lost: 'declined', changesrequested: 'changes_requested', archived: 'archived',\n  };\n  return Object.prototype.hasOwnProperty.call(map, w) ? map[w] : 'other';\n}\n\n// The three morning queues. Read-only: these functions only look at the data they are given.\nfunction triageNow(data) {\n  const s = data.settings;\n  const asOf = parseTime(s.asOf);\n  return { s: s, tz: s.timezone, asOf: asOf, today: localDate(asOf, s.timezone) };\n}\nfunction ageDaysFromIso(iso, ctx) {\n  const t = parseTime(iso);\n  if (t === null || t > ctx.asOf) return null;\n  return dayDiff(localDate(t, ctx.tz), ctx.today);\n}\nfunction ageLabel(days, suffix) {\n  if (days === null || days === undefined) return 'age not in the data';\n  if (days === 0) return 'today';\n  return days + ' ' + plural(days, 'day') + ' ' + suffix;\n}\nfunction missingReport(label) {\n  return 'No ' + label + ' export was supplied, so that part of the digest is skipped. Nothing is estimated.';\n}\n\n// Queue 1: Unscheduled, Late, Action Required.\nfunction jobsQueue(data) {\n  const ctx = triageNow(data);\n  const out = { computed: false, items: [], counts: { late: 0, action_required: 0, unscheduled: 0 }, total: 0, unrecognized: 0, headsUp: [] };\n  if (!data.supplied || !data.supplied.jobs) { out.headsUp.push(missingReport('Jobs')); return out; }\n  out.computed = true;\n  const order = { late: 0, action_required: 1, unscheduled: 2 };\n  let noEnd = 0;\n  let futureEnd = 0;\n  (data.jobs || []).forEach(function (j) {\n    const st = j.status;\n    if (['completed', 'archived', 'cancelled', 'requires_invoicing'].indexOf(st) !== -1) return;\n    if (st === 'other' || !st) { out.unrecognized++; return; }\n    let kind = '';\n    let reason = '';\n    let age = null;\n    const endMs = parseTime(j.endAt);\n    if (st === 'late') {\n      kind = 'late';\n      if (endMs === null) {\n        noEnd++;\n        reason = 'Late (no end time in the data)';\n      } else if (endMs > ctx.asOf) {\n        futureEnd++;\n        reason = 'Late in Jobber (recorded end is in the future)';\n      } else {\n        reason = 'Late. Visit was due to end ' + fmtDay(endMs, ctx.tz) + ' ' + fmtTime(endMs, ctx.tz);\n        age = ageDaysFromIso(j.endAt, ctx);\n      }\n    } else if (st === 'action_required') {\n      kind = 'action_required';\n      reason = 'Action Required in Jobber';\n    } else if (st === 'unscheduled') {\n      kind = 'unscheduled';\n      reason = 'Unscheduled';\n      age = ageDaysFromIso(j.createdAt, ctx);\n    } else if (j.unscheduledVisits > 0) {\n      kind = 'unscheduled';\n      reason = j.unscheduledVisits === j.visitCount\n        ? (j.visitCount === 1 ? 'The visit has no date' : 'All ' + j.visitCount + ' visits have no date')\n        : j.unscheduledVisits + ' of ' + j.visitCount + ' visits ' + plural(j.unscheduledVisits, 'has', 'have') + ' no date';\n      age = ageDaysFromIso(j.createdAt, ctx);\n    } else if (j.startKnown && ['active', 'upcoming', 'today'].indexOf(st) !== -1 && j.visitCount === 0) {\n      kind = 'unscheduled';\n      reason = 'No scheduled visit';\n      age = ageDaysFromIso(j.createdAt, ctx);\n    }\n    if (!kind) return;\n    out.counts[kind]++;\n    out.items.push({ id: j.id, kind: kind, reason: reason, client: j.client || 'client not in the data', title: j.title, ageDays: age, total: j.total, assigned: j.assigned });\n  });\n  out.items.sort(function (a, b) {\n    if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];\n    const x = a.ageDays === null ? -1 : a.ageDays;\n    const y = b.ageDays === null ? -1 : b.ageDays;\n    if (x !== y) return y - x;\n    return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n  });\n  out.total = out.items.length;\n  if (out.total === 0 && out.unrecognized) out.computed = false;\n  if (out.unrecognized > 0) out.headsUp.push(out.unrecognized + ' ' + plural(out.unrecognized, 'job') + ' had a status this pack does not recognize and ' + plural(out.unrecognized, 'was', 'were') + ' not triaged.');\n  if (noEnd > 0) out.headsUp.push(noEnd + ' Late ' + plural(noEnd, 'job') + ' ' + plural(noEnd, 'has', 'have') + ' no end time, so how late cannot be shown.');\n  if (futureEnd) out.headsUp.push(futureEnd + ' Late job records have a future end time, so lateness cannot be calculated.');\n  return out;\n}\n\n// Queue 2: Requires Invoicing jobs and past-due invoices.\nfunction invoicingQueue(data) {\n  const ctx = triageNow(data);\n  const s = ctx.s;\n  const out = {\n    ready: { computed: false, items: [], count: 0, total: null, knownTotalCount: 0 },\n    pastDue: { computed: false, items: [], count: 0, total: 0 },\n    headsUp: [],\n  };\n  if (!data.supplied || !data.supplied.jobs) {\n    out.headsUp.push('Requires Invoicing jobs need a Jobs export, which was not supplied. That list is skipped.');\n  } else {\n    out.ready.computed = true;\n    let noDate = 0;\n    (data.jobs || []).forEach(function (j) {\n      if (j.status !== 'requires_invoicing') return;\n      const since = j.completedAt || j.endAt || '';\n      const ageDays = ageDaysFromIso(since, ctx);\n      if (ageDays === null) noDate++;\n      out.ready.items.push({ id: j.id, client: j.client || 'client not in the data', title: j.title, ageDays: ageDays, total: j.total });\n    });\n    out.ready.items.sort(function (a, b) {\n      const x = a.ageDays === null ? -1 : a.ageDays;\n      const y = b.ageDays === null ? -1 : b.ageDays;\n      if (x !== y) return y - x;\n      return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n    });\n    out.ready.count = out.ready.items.length;\n    const known = out.ready.items.filter(function (i) { return i.total !== null && i.total !== undefined; });\n    out.ready.knownTotalCount = known.length;\n    out.ready.total = known.length ? known.reduce(function (a, i) { return a + i.total; }, 0) : null;\n    if (noDate > 0) out.headsUp.push(noDate + ' Requires Invoicing ' + plural(noDate, 'job') + ' ' + plural(noDate, 'has', 'have') + ' no usable past completed or end date, so how long ' + plural(noDate, 'it has', 'they have') + ' waited cannot be shown.');\n    if (known.length < out.ready.count) out.headsUp.push((out.ready.count - known.length) + ' Requires Invoicing ' + plural(out.ready.count - known.length, 'job') + ' ' + plural(out.ready.count - known.length, 'has', 'have') + ' no total, so the dollar figure covers only the others.');\n  }\n  if (!data.supplied || !data.supplied.invoices) {\n    out.headsUp.push(missingReport('Invoices'));\n  } else {\n    out.pastDue.computed = true;\n    let noBalance = 0; let noDue = 0; let conflicts = 0; let unknownStatus = 0;\n    (data.invoices || []).forEach(function (inv) {\n      if (['paid', 'draft', 'void', 'bad_debt'].indexOf(inv.status) !== -1) return;\n      if (inv.status !== 'past_due' && inv.status !== 'awaiting_payment') { unknownStatus++; return; }\n      if (inv.balance === null || inv.balance === undefined) { noBalance++; return; }\n      if (!(inv.balance > 0)) return;\n      if (!inv.dueDate) { noDue++; return; }\n      const days = dayDiff(inv.dueDate, ctx.today);\n      if (inv.status === 'past_due' && days <= 0) conflicts++;\n      if (days < Math.max(1, s.pastDueMinDays)) return;\n      out.pastDue.items.push({ id: inv.id, client: inv.client || 'client not in the data', balance: inv.balance, total: inv.total, dueDate: inv.dueDate, daysPastDue: days });\n    });\n    out.pastDue.items.sort(function (a, b) {\n      if (a.balance !== b.balance) return b.balance - a.balance;\n      const x = a.daysPastDue;\n      const y = b.daysPastDue;\n      if (x !== y) return y - x;\n      return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n    });\n    out.pastDue.count = out.pastDue.items.length;\n    out.pastDue.total = out.pastDue.items.reduce(function (a, i) { return a + i.balance; }, 0);\n    if (out.pastDue.count === 0 && (noBalance || noDue || unknownStatus)) out.pastDue.computed = false;\n    if (unknownStatus) out.headsUp.push(unknownStatus + ' invoice records had no recognized status and were skipped.');\n    if (noBalance > 0) out.headsUp.push(noBalance + ' open ' + plural(noBalance, 'invoice') + ' ' + plural(noBalance, 'has', 'have') + ' no balance in the data and ' + plural(noBalance, 'was', 'were') + ' skipped.');\n    if (noDue > 0) out.headsUp.push(noDue + ' open ' + plural(noDue, 'invoice') + ' ' + plural(noDue, 'has', 'have') + ' no due date and were skipped because the age threshold cannot be checked.');\n    if (conflicts > 0) out.headsUp.push(conflicts + ' ' + plural(conflicts, 'invoice') + ' marked past due ' + plural(conflicts, 'has', 'have') + ' a due date today or in the future. The due date was used, so ' + plural(conflicts, 'it was', 'they were') + ' not listed.');\n  }\n  return out;\n}\n\n// Queue 3: high-value quotes still awaiting a response well after Jobber's own follow-ups (max two) would have gone out.\nfunction quoteQueue(data) {\n  const ctx = triageNow(data);\n  const s = ctx.s;\n  const out = { computed: false, items: [], count: 0, total: 0, notYetStalled: 0, belowValue: 0, headsUp: [] };\n  if (!data.supplied || !data.supplied.quotes) { out.headsUp.push(missingReport('Quotes')); return out; }\n  if (s.quoteStalledDays === null || s.quoteStalledDays === undefined) {\n    out.headsUp.push('Set quoteStalledDays to a shop-local day cutoff after the last configured Jobber follow-up. Until then, the quote queue is unavailable.');\n    return out;\n  }\n  out.computed = true;\n  let noTotal = 0; let noDate = 0; let future = 0; let unknownStatus = 0;\n  (data.quotes || []).forEach(function (q) {\n    if (!q.status || q.status === 'other') unknownStatus++;\n    if (q.status !== 'awaiting_response') return; // drafts, approved, converted, declined, archived, changes requested: not stalled\n    if (q.total === null || q.total === undefined) { noTotal++; return; }\n    const sentMs = parseTime(q.sentAt);\n    if (sentMs === null) { noDate++; return; }\n    const age = dayDiff(localDate(sentMs, ctx.tz), ctx.today);\n    if (sentMs > ctx.asOf) { future++; return; }\n    if (q.total < s.quoteMinValue) { out.belowValue++; return; }\n    if (age < s.quoteStalledDays) { out.notYetStalled++; return; }\n    out.items.push({ id: q.id, client: q.client || 'client not in the data', title: q.title, total: q.total, ageDays: age, sentLabel: fmtDay(sentMs, ctx.tz) });\n  });\n  out.items.sort(function (a, b) {\n    if (a.total !== b.total) return b.total - a.total;\n    if (a.ageDays !== b.ageDays) return b.ageDays - a.ageDays;\n    return String(a.id) < String(b.id) ? -1 : (String(a.id) > String(b.id) ? 1 : 0);\n  });\n  out.count = out.items.length;\n  out.total = out.items.reduce(function (a, i) { return a + i.total; }, 0);\n  if (noTotal > 0) out.headsUp.push(noTotal + ' quote' + (noTotal === 1 ? '' : 's') + ' awaiting a response ' + plural(noTotal, 'has', 'have') + ' no total and ' + plural(noTotal, 'was', 'were') + ' skipped.');\n  if (noDate > 0) out.headsUp.push(noDate + ' quote' + (noDate === 1 ? '' : 's') + ' awaiting a response ' + plural(noDate, 'has', 'have') + ' no send date and ' + plural(noDate, 'was', 'were') + ' skipped.');\n  if (future > 0) out.headsUp.push(future + ' quote' + (future === 1 ? '' : 's') + ' ' + plural(future, 'has', 'have') + ' a send date in the future and ' + plural(future, 'was', 'were') + ' skipped.');\n  if (out.items.length === 0 && (noDate || noTotal || unknownStatus)) out.computed = false;\n  if (unknownStatus) out.headsUp.push(unknownStatus + ' quote records had no recognized status and were skipped.');\n  return out;\n}\n\nfunction runTriage(data) {\n  return Object.assign({}, data, { jobsQueue: jobsQueue(data), invoicing: invoicingQueue(data), quoteQueue: quoteQueue(data) });\n}\n\nfunction renderMessage(data) {\n  const s = data.settings;\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const max = s.maxItemsPerSection;\n  const jq = data.jobsQueue;\n  const inv = data.invoicing;\n  const qq = data.quoteQueue;\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  const more = function (arr) { return arr.length > max ? ['- ...and ' + (arr.length - max) + ' more (see the workflow output)'] : []; };\n  const kindLabel = { late: 'Late', action_required: 'Action Required', unscheduled: 'Unscheduled' };\n\n  L.push('# ' + tag + 'Morning Ops Triage Digest: ' + s.businessName);\n  L.push('');\n  L.push(fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ' ' + tz + ' | source: ' + s.source);\n  if (s.testMode) {\n    L.push('');\n    L.push('> [TEST] Preview only. Sent to the owner address or channel you set, never to a customer.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  }\n  L.push('');\n  L.push('## Today at a glance');\n  L.push('');\n  L.push(jq.computed ? '- Jobs needing attention: ' + jq.total + ' (' + jq.counts.late + ' late, ' + jq.counts.action_required + ' action required, ' + jq.counts.unscheduled + ' unscheduled)' : '- Jobs needing attention: not available (see Heads-up)');\n  L.push(inv.ready.computed ? '- Ready to invoice: ' + inv.ready.count + ' ' + plural(inv.ready.count, 'job') + (inv.ready.total === null ? '' : ' (' + fmtMoney(inv.ready.total) + (inv.ready.knownTotalCount < inv.ready.count ? ' for the ' + inv.ready.knownTotalCount + ' with a total' : '') + ')') : '- Ready to invoice: not available (see Heads-up)');\n  L.push(inv.pastDue.computed ? '- Past-due invoices: ' + inv.pastDue.count + ' ' + plural(inv.pastDue.count, 'invoice') + ' with ' + fmtMoney(inv.pastDue.total) + ' outstanding (' + s.pastDueMinDays + '+ ' + plural(s.pastDueMinDays, 'day') + ' past the due date)' : '- Past-due invoices: not available (see Heads-up)');\n  L.push(qq.computed ? '- Stalled quotes worth a call: ' + qq.count + ' ' + plural(qq.count, 'quote') + ' worth ' + fmtMoney(qq.total) + ' (' + fmtMoney(s.quoteMinValue) + '+, still awaiting a response ' + s.quoteStalledDays + '+ days after sending)' : '- Stalled quotes worth a call: not available (see Heads-up)');\n\n  L.push('');\n  L.push('## 1. Unscheduled, Late & Action Required jobs');\n  L.push('');\n  if (jq.computed) {\n    jq.items.slice(0, max).forEach(function (i) {\n      L.push('- Job ' + i.id + ' | ' + kindLabel[i.kind] + ' | ' + i.client + (i.title ? ' | ' + i.title : '') + (i.ageDays === null ? '' : ' | ' + ageLabel(i.ageDays, i.kind === 'late' ? 'late' : 'old')));\n      L.push('  - ' + i.reason + (i.assigned ? ' | assigned: ' + i.assigned : ''));\n    });\n    more(jq.items).forEach(function (x) { L.push(x); });\n    if (jq.items.length === 0) L.push('- Nothing flagged.');\n  } else {\n    L.push('Not available (see Heads-up).');\n  }\n\n  L.push('');\n  L.push('## 2. Requires Invoicing & past-due invoices');\n  L.push('');\n  L.push('Jobs marked Requires Invoicing:');\n  if (inv.ready.computed) {\n    inv.ready.items.slice(0, max).forEach(function (i) {\n      L.push('- Job ' + i.id + ' | ' + i.client + (i.title ? ' | ' + i.title : '') + ' | ' + (i.total === null || i.total === undefined ? 'total not in the data' : fmtMoney(i.total)) + ' | ' + (i.ageDays === null ? 'wait time not in the data' : 'waiting ' + ageLabel(i.ageDays, 'so far')));\n    });\n    more(inv.ready.items).forEach(function (x) { L.push(x); });\n    if (inv.ready.items.length === 0) L.push('- None.');\n  } else {\n    L.push('- Not available (see Heads-up).');\n  }\n  L.push('');\n  L.push('Past-due invoices, largest balance first:');\n  if (inv.pastDue.computed) {\n    inv.pastDue.items.slice(0, max).forEach(function (i) {\n      L.push('- Invoice ' + i.id + ' | ' + i.client + ' | ' + fmtMoney(i.balance) + ' outstanding | ' + (i.daysPastDue + ' ' + plural(i.daysPastDue, 'day') + ' past due (due ' + fmtDateOnly(i.dueDate) + ')'));\n    });\n    more(inv.pastDue.items).forEach(function (x) { L.push(x); });\n    if (inv.pastDue.items.length === 0) L.push('- None.');\n  } else {\n    L.push('- Not available (see Heads-up).');\n  }\n\n  L.push('');\n  L.push('## 3. High-value quotes for a human call');\n  L.push('');\n  L.push('These quotes are still awaiting a response beyond the configured send-date cutoff. Pick up the phone or write a personal note. This pack sends nothing to customers and does not send another automated reminder.');\n  L.push('');\n  if (qq.computed) {\n    qq.items.slice(0, max).forEach(function (i, n) {\n      L.push((n + 1) + '. Quote ' + i.id + ' | ' + fmtMoney(i.total) + ' | ' + i.client + (i.title ? ' | ' + i.title : '') + ' | sent ' + i.sentLabel + ' (' + i.ageDays + ' ' + plural(i.ageDays, 'day') + ' ago)');\n    });\n    more(qq.items).forEach(function (x) { L.push(x); });\n    if (qq.items.length === 0) L.push('- No stalled high-value quotes.');\n  } else {\n    L.push('Not available (see Heads-up).');\n  }\n\n  const hu = uniqueList((s.headsUp || []).concat(jq.headsUp, inv.headsUp, qq.headsUp, data.headsUp || []));\n  if (hu.length > 0) {\n    L.push('');\n    L.push('## Heads-up');\n    L.push('');\n    hu.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live Jobber account. Read-only. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[a-z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-z0-9-]+(?:\\.[a-z0-9-]+)+$/i.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const out = {\n    subject: tag + 'Morning Ops Triage Digest: ' + s.businessName + ' (' + fmtDay(asOf, tz) + ')',\n    text: text,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && /^[CG][A-Z0-9]{8,}$/.test(s.ownerSlackChannel),\n    slackText: esc(text),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && !out.sendSlack) out.deliveryNotes.push('Slack not sent: ownerSlackChannel must be a configured channel ID.');\n  return out;\n}\n\nconst d = $input.first().json;\nreturn [{ json: renderMessage(d) }];\n"
+      }
+    },
+    {
+      "id": "26132971-7640-5f00-a403-3b13438217a3",
+      "name": "Send email to owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2680,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "4000020d-2740-5ca6-ad30-084b42b6ce8a",
+              "leftValue": "={{ $json.sendEmail }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e09b1006-ab2c-5ae0-a24d-d91314634b74",
+      "name": "Send Slack to owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2680,
+        640
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e54d4d0a-a32f-51a0-aad5-72297011be9e",
+              "leftValue": "={{ $json.sendSlack }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5f1f1386-dc55-5af6-abaf-fb58c1e0b849",
+      "name": "Email owner (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2960,
+        420
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.emailTo }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PLACEHOLDER_GMAIL",
+          "name": "Gmail account (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "95224ae7-2d65-5436-a294-778a5500da46",
+      "name": "Post to owner Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2960,
+        640
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.slackChannel }}",
+          "mode": "id"
+        },
+        "messageType": "text",
+        "text": "={{ $json.slackText }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "link_names": false,
+          "mrkdwn": false,
+          "unfurl_links": false,
+          "unfurl_media": false
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "PLACEHOLDER_SLACK",
+          "name": "Slack account (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "1695e173-2402-56ee-a169-3fb6a973414c",
+      "name": "Note: Start here",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        80
+      ],
+      "parameters": {
+        "content": "## START HERE: Jobber CSV-Fallback Triage (DRAFT v0.1.0)\nThe zero-OAuth way in, and the recommended way to start, for every Jobber plan. Export your Jobs, Invoices, and Quotes reports from Jobber as CSV, get them into n8n, and get the Morning Ops digest (unscheduled / late / action-required jobs, requires-invoicing and past-due, stalled high-value quotes) to the OWNER only.\n\n**Test it in about 2 minutes:**\n1. Import this file (done). It is imported inactive. The webhook, email, and schedule triggers are switched off.\n2. testMode is on and **source** defaults to test, which is fictional sample data (fixtures/sample-jobber-export-*.csv). Click **Execute workflow** on Manual Test Run. You get a [TEST] digest.\n3. Compare with sample_morning_digest.md in the pack.\n4. Set source = csv, put your own exports in csvFolder, run again. Still [TEST].\n5. Only then enable one trigger. See the go-live note.\n\nStatus: DRAFT. Workflow JSON and Code nodes checked locally with fictional data. NOT tested against a live Jobber, Gmail, or Slack account.",
+        "height": 380,
+        "width": 620,
+        "color": 4
+      }
+    },
+    {
+      "id": "592a9187-e3b6-5ddb-a98c-f7b64ecd3f6d",
+      "name": "Note: Config guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        600,
+        80
+      ],
+      "parameters": {
+        "content": "## Config fields\n- **source**: test (built-in fictional sample, default) | csv (read your exports). An upload that arrives by webhook or email is always treated as csv. There is no jobber (API) source in this file.\n- **testMode**: ON by default. Messages are labeled [TEST]. source = test always forces it on.\n- **delivery**: email | slack | both | none. Owner only.\n- **ownerEmail / ownerSlackChannel**: YOUR address and a private channel. Never a customer. Read from this Config node only, never from an uploaded row or email header.\n- **csvFolder**: watch folder for manual and scheduled runs. n8n only reads files inside its allowed folder. The Read node reads every .csv in it.\n- **asOfOverride**: ISO time to pretend it is a different moment, for an export from earlier. Blank = now.\n- **pastDueMinDays** (1), **quoteStalledDays** (blank until configured), **quoteMinValue** (1000): starting points, not industry standards.\n- The scheduled run uses Config source, so set source = csv before you enable the schedule.",
+        "height": 380,
+        "width": 600,
+        "color": 5
+      }
+    },
+    {
+      "id": "af6fcfc4-d050-581b-a52f-f906e3330703",
+      "name": "Note: Safety defaults",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        80
+      ],
+      "parameters": {
+        "content": "## Safety defaults\n- Imported **inactive**. The Schedule, Webhook, and Email-attachment triggers are all **disabled**.\n- **testMode** ON; source = **test** (fictional sample).\n- **Zero Jobber write-back**: this file never calls Jobber at all. It only reads the CSV you give it.\n- **Owner-only output**: Gmail and Slack recipients come from ownerEmail / ownerSlackChannel. No SMS, no Twilio, no customer email, no review request, no reminder blast.\n- The email trigger only READS an inbound message. It does not reply, label, or forward.\n- The webhook expects a header-auth credential (placeholder). Never expose it without one.\n- The stalled-quote list is for a human call or personal note.\n- Never invents numbers. A missing report becomes a \"Heads-up\" line.",
+        "height": 380,
+        "width": 540,
+        "color": 6
+      }
+    },
+    {
+      "id": "1c70ce48-119d-5776-a86b-8c55459056a2",
+      "name": "Note: CSV-Fallback mode",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        940
+      ],
+      "parameters": {
+        "content": "## CSV-Fallback (every Jobber plan, no OAuth, no App Review)\n**Export:** in Jobber, run the Jobs (One-off jobs), Invoices, and Quotes reports and export each to CSV. Reports are on all Jobber plans (some columns need a higher plan). Jobber's Report Scheduler app can email reports on a schedule. Any one report is enough; a missing one becomes a Heads-up.\n**Required columns:** Jobs: Job #, Status. Invoices: Invoice #, Invoice Status, Due date, Balance ($). Quotes: Quote #, Status, Total ($), and Sent date. A missing one produces a plain-language Heads-up that names it and lists the headers seen, not a crash.\n**Headers are matched loosely** (case, punctuation, spaces/underscores/hyphens ignored). The aliases are built from the column names Jobber's help center lists; the exact header text of a real export has NOT been checked against a live account.\n**Dates** like 3/10/2026 9:50 AM are shop-local in the Config timezone. Impossible dates (2026-02-30) and unclosed quotes are reported, never silently accepted.\n**Three ways in:** (1) Webhook: POST the file(s) as multipart field \"data\". (2) Email attachment from an allowed sender set in the Gmail trigger query. (3) Watch folder: drop the files in csvFolder.",
+        "height": 440,
+        "width": 780,
+        "color": 4
+      }
+    },
+    {
+      "id": "a7efc909-1108-5cc7-af94-942479ea7e11",
+      "name": "Note: Credentials",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        220
+      ],
+      "parameters": {
+        "content": "## Credentials (placeholders only)\nPLACEHOLDER_GMAIL (inbound email trigger and owner email), PLACEHOLDER_SLACK, PLACEHOLDER_WEBHOOK_HEADER_AUTH (webhook). No Jobber credential is used or needed. No secrets are stored in this file. GraphQL paths and fields are unverified until a live Jobber test, and they are not used here at all.",
+        "height": 160,
+        "width": 540,
+        "color": 2
+      }
+    },
+    {
+      "id": "3cf47844-0b85-50e8-a268-ac122e854e2a",
+      "name": "Note: Go live",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        800
+      ],
+      "parameters": {
+        "content": "## Hard stop before go-live\nDo not turn testMode off or enable a trigger until: (1) a clean [TEST] run from the sample export, (2) a clean [TEST] run from YOUR exports, spot-checked by hand against Jobber, (3) ownerEmail / ownerSlackChannel confirmed as owner-only, (4) the Gmail query limited to one sender you trust and the webhook behind header auth, (5) an owner has signed off in writing. Even live, this workflow only reports to the owner.",
+        "height": 260,
+        "width": 540,
+        "color": 6
+      }
+    }
+  ],
+  "connections": {
+    "Manual Test Run": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule 7:00 AM: watch folder (disabled until you are ready)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: upload a Jobber CSV (disabled until you are ready)": {
+      "main": [
+        [
+          {
+            "node": "Gather Inbound CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email attachment: inbound Jobber CSV (disabled until you are ready)": {
+      "main": [
+        [
+          {
+            "node": "Gather Inbound CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gather Inbound CSV": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Prepare Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Settings": {
+      "main": [
+        [
+          {
+            "node": "Source is CSV?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source is CSV?": {
+      "main": [
+        [
+          {
+            "node": "Upload just arrived?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load Built-in Sample Export",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload just arrived?": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV Upload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read CSV Exports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV Exports": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV Upload": {
+      "main": [
+        [
+          {
+            "node": "Morning Ops Triage Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Built-in Sample Export": {
+      "main": [
+        [
+          {
+            "node": "Morning Ops Triage Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Morning Ops Triage Logic": {
+      "main": [
+        [
+          {
+            "node": "Assemble Owner Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Owner Message": {
+      "main": [
+        [
+          {
+            "node": "Send email to owner?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Slack to owner?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email to owner?": {
+      "main": [
+        [
+          {
+            "node": "Email owner (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack to owner?": {
+      "main": [
+        [
+          {
+            "node": "Post to owner Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Chicago"
+  }
+}

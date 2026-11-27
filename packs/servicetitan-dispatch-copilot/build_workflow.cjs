@@ -150,19 +150,22 @@ code('Normalize ServiceTitan', [1060 + live.length * 240, 280], ['common', 'serv
 
 // ---- CSV + built-in test data
 add('Read CSV Exports', 'n8n-nodes-base.readWriteFile', 1, [1320, 680],
-  { operation: 'read', fileSelector: `={{ ${PS}.csvFolder }}/*.csv`, options: {} });
+  { operation: 'read', fileSelector: `={{ ${PS}.csvFolder }}/*.csv`, options: {} }, { alwaysOutputData: true });
 code('Parse CSV Exports', [1580, 680], ['common', 'csv'], [
   `const settings = ${PS};`,
   'const tables = {};',
+  'const notes = [];',
   'const items = $input.all();',
   'for (let i = 0; i < items.length; i++) {',
   '  const bin = items[i].binary && items[i].binary.data;',
   '  if (!bin) continue;',
   "  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');",
   "  const name = String(bin.fileName || '').toLowerCase().replace(/\\.csv$/, '');",
-  "  tables[name] = parseCsv(buf.toString('utf8'));",
+  "  const table = parseCsvTable(buf.toString('utf8'));",
+  "  for (const warning of table.warnings) notes.push('CSV import: ' + bin.fileName + ': ' + warning);",
+  "  if (!table.warnings.length) tables[name] = table.rows;",
   '}',
-  'return [{ json: datasetFromTables(settings, tables) }];',
+  'return [{ json: datasetFromTables(Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(notes) }), tables) }];',
 ].join('\n'));
 code('Load Built-in Test Data', [1320, 860], ['common', 'testdata'],
   `const DATASET = ${JSON.stringify(builtinDataset())};\nconst settings = ${PS};\nreturn [{ json: loadTestData(settings, DATASET) }];`);
@@ -186,7 +189,8 @@ add('Email owner (Gmail)', 'n8n-nodes-base.gmail', 2.1, [X + 1680, 420], {
 add('Post to owner Slack', 'n8n-nodes-base.slack', 2.3, [X + 1680, 640], {
   resource: 'message', operation: 'post', select: 'channel',
   channelId: { __rl: true, value: "={{ $json.slackChannel.replace(/^#/, '') }}", mode: 'name' },
-  text: '={{ $json.text }}', otherOptions: { includeLinkToWorkflow: false },
+  messageType: 'text', text: '={{ $json.slackText }}',
+  otherOptions: { includeLinkToWorkflow: false, link_names: false, mrkdwn: false, unfurl_links: false, unfurl_media: false },
 }, { credentials: { slackApi: { id: 'PLACEHOLDER_SLACK', name: 'Slack account (PLACEHOLDER)' } } });
 
 // ---- sticky notes (not counted as executable nodes)
