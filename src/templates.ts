@@ -9,7 +9,7 @@
  * - Manager Digest is Free. Every other price is "Pricing coming soon" until Bryce
  *   approves list prices. Do NOT add the draft dollar ranges from older listing or
  *   README copy; they are under review and must not appear on the site.
- * - Nothing here is for sale. No checkout or Gumroad URLs. CTAs are email waitlist only.
+ * - Nothing here is for sale. No checkout or Gumroad URLs. CTAs are the email waitlist plus the site scheduling URL, when set.
  * - Node counts are executable nodes from the shipped n8n JSON, excluding sticky notes.
  *
  * TODO: Setup time is not known for most packs (listings say [TBD] until a live

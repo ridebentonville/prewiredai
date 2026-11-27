@@ -100,10 +100,10 @@ export const siteConfig = {
   openTo:
     "Open to GTM engineering, RevOps and FDE roles, plus fixed-price builds.",
   /**
-   * TODO: Scheduling link (for example a Cal.com or Calendly URL) was not provided.
-   * Leave empty and the "Book a call" button is hidden. Do not guess a URL.
+   * Cal.com booking profile (live event types: "15 min meeting" and "30 min meeting").
+   * Leave empty and the "Book a call" / "Book a 15-min ops audit" buttons are hidden.
    */
-  schedulingUrl: "",
+  schedulingUrl: "https://cal.com/bryce-nelson-kj6s9i",
   social: {
     email: "brycednelson@gmail.com",
     linkedin: "https://www.linkedin.com/in/bryce-nelson-8557a364/",

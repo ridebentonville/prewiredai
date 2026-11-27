@@ -20,7 +20,16 @@ const pageLinks = [
   hasEducation ? { href: "/#education", label: "Education" } : null,
 ].filter((link) => link !== null);
 
+const schedulingUrl = siteConfig.schedulingUrl?.trim();
+
 const contactLinks = [
+  schedulingUrl
+    ? {
+        href: schedulingUrl,
+        label: "Book a call",
+        external: true,
+      }
+    : null,
   siteConfig.social.email
     ? {
         href: `mailto:${siteConfig.social.email}`,

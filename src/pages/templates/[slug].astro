@@ -39,6 +39,7 @@ const title = `${pack.name} | Prewired AI template pack (draft)`;
 const description = `${pack.summary} ${pack.free ? "Free." : `${PRICE_PENDING}.`} Draft, not for sale yet.`;
 const workflowWord = pack.workflows.length === 1 ? "n8n workflow" : "n8n workflows";
 const email = siteConfig.social.email;
+const schedulingUrl = siteConfig.schedulingUrl?.trim();
 ---
 
 <html lang="en">
@@ -84,11 +85,29 @@ const email = siteConfig.social.email;
           </p>
           <div class="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
             {
+              schedulingUrl && (
+                <a
+                  href={schedulingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={`background-color: ${accent}; outline-color: ${accent}`}
+                >
+                  Book a 15-min ops audit
+                </a>
+              )
+            }
+            {
               email && (
                 <a
                   href="#waitlist"
-                  class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  style={`background-color: ${accent}; outline-color: ${accent}`}
+                  class:list={[
+                    "inline-flex items-center rounded-full px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2",
+                    schedulingUrl
+                      ? "border border-stone-300 bg-white text-stone-950 hover:border-stone-500"
+                      : "text-white hover:opacity-90",
+                  ]}
+                  style={schedulingUrl ? undefined : `background-color: ${accent}; outline-color: ${accent}`}
                 >
                   {pack.free ? "Get the free pack (waitlist)" : "Join the waitlist"}
                 </a>
@@ -351,19 +370,44 @@ const email = siteConfig.social.email;
             <TierTable pack={pack} />
           </div>
           {
-            email && (
-              <p class="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
-                <a
-                  href={waitlistHref(email, pack)}
-                  class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-                  style={`background-color: ${accent}; outline-color: ${accent}`}
-                >
-                  Email to join the waitlist
-                </a>
-                <span class="text-xs uppercase tracking-[0.16em] text-stone-500">Not for sale yet</span>
+            schedulingUrl && (
+              <p class="mt-6 max-w-2xl text-sm leading-relaxed text-stone-700">
+                Want me to wire this into your CRM in 10 days?
               </p>
             )
           }
+          <div class="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+            {
+              schedulingUrl && (
+                <a
+                  href={schedulingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center rounded-full px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={`background-color: ${accent}; outline-color: ${accent}`}
+                >
+                  Book a 15-min ops audit
+                </a>
+              )
+            }
+            {
+              email && (
+                <a
+                  href={waitlistHref(email, pack)}
+                  class:list={[
+                    "inline-flex items-center rounded-full px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2",
+                    schedulingUrl
+                      ? "border border-stone-300 bg-white text-stone-950 hover:border-stone-500"
+                      : "text-white hover:opacity-90",
+                  ]}
+                  style={schedulingUrl ? undefined : `background-color: ${accent}; outline-color: ${accent}`}
+                >
+                  Email to join the waitlist
+                </a>
+              )
+            }
+            <span class="text-xs uppercase tracking-[0.16em] text-stone-500">Not for sale yet</span>
+          </div>
           <p class="mt-6 max-w-2xl text-xs leading-relaxed text-stone-500">{pack.testingNote} Sample data is fictional.</p>
         </div>
       </section>
