@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServiceTitan Dispatch &amp; Capacity Copilot — workflow</title>
+  <style>
+    :root {
+      --bg: #fafaf9;
+      --surface: #ffffff;
+      --surface-subtle: #f5f5f4;
+      --border: #e7e5e4;
+      --border-strong: #d6d3d1;
+      --text: #1c1917;
+      --text-muted: #57534e;
+      --text-subtle: #78716c;
+
+      /* Risk palette: editorial, restrained */
+      --accent: #1f4d3a;
+      --accent-soft: #eef5f1;
+      --accent-border: #b8d3c5;
+
+      --gated: #854d0e;
+      --gated-soft: #fcf7ec;
+      --gated-border: #e2cfa8;
+
+      --approval: #7c2d12;
+      --approval-soft: #fbf3ee;
+      --approval-border: #dfb9a8;
+
+      --radius: 16px;
+      --radius-sm: 10px;
+      --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --transition: 140ms ease;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :root {
+        --transition: 0ms;
+      }
+      *, *::before, *::after {
+        animation-duration: 0ms !important;
+        transition-duration: 0ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .diagram-shell {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 20px 24px 24px;
+    }
+
+    /* Header */
+    .diagram-header {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px 16px;
+    }
+
+    .diagram-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+
+    .pack-meta {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 12px;
+      white-space: nowrap;
+    }
+
+    .diagram-caption {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text-subtle);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 18px;
+      padding-top: 2px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      border: 1.5px solid transparent;
+    }
+
+    .legend-swatch--readonly {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .legend-swatch--gated {
+      background: var(--gated-soft);
+      border-color: var(--gated);
+    }
+
+    .legend-swatch--approval {
+      background: var(--approval-soft);
+      border-color: var(--approval);
+      border-radius: 999px;
+    }
+
+    /* Workflow track */
+    .workflow-track {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+
+    .stage-slot {
+      position: relative;
+      display: flex;
+    }
+
+    /* Horizontal connector between stage cards on desktop */
+    .stage-slot:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -18px;
+      width: 18px;
+      height: 1.5px;
+      background: var(--border-strong);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .stage-slot:not(:last-child)::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -15px;
+      width: 6px;
+      height: 6px;
+      border-top: 1.5px solid var(--text-subtle);
+      border-right: 1.5px solid var(--text-subtle);
+      transform: translateY(-50%) rotate(45deg);
+      pointer-events: none;
+    }
+
+    /* Stage button card */
+    .stage-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      color: var(--text);
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 13px 13px 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      transition: border-color var(--transition), background-color var(--transition), box-shadow var(--transition), transform var(--transition);
+    }
+
+    .stage-btn::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 14px;
+      right: 14px;
+      height: 3px;
+      border-radius: 0 0 3px 3px;
+      background: var(--accent);
+      opacity: 0.35;
+      transition: opacity var(--transition);
+    }
+
+    .stage-btn[data-risk="readonly"]::before {
+      background: var(--accent);
+    }
+
+    .stage-btn[data-risk="gated"]::before {
+      background: var(--gated);
+    }
+
+    .stage-btn[data-risk="approval"]::before {
+      background: var(--approval);
+    }
+
+    .stage-btn[data-risk="gated-approval"]::before {
+      background: linear-gradient(90deg, var(--gated) 0 50%, var(--approval) 50% 100%);
+    }
+
+    .stage-btn:hover {
+      border-color: var(--border-strong);
+      background: #ffffff;
+    }
+
+    .stage-btn:hover::before {
+      opacity: 0.75;
+    }
+
+    .stage-btn:focus-visible {
+      outline: 2.5px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .stage-btn[aria-expanded="true"] {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+      background: var(--surface);
+    }
+
+    .stage-btn[aria-expanded="true"]::before {
+      opacity: 1;
+    }
+
+    .stage-btn[data-risk="gated"][aria-expanded="true"] {
+      border-color: var(--gated);
+      box-shadow: 0 0 0 1px var(--gated), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+    }
+
+    .stage-btn[data-risk="approval"][aria-expanded="true"],
+    .stage-btn[data-risk="gated-approval"][aria-expanded="true"] {
+      border-color: var(--approval);
+      box-shadow: 0 0 0 1px var(--approval), 0 6px 18px -12px rgba(28, 25, 23, 0.25);
+    }
+
+    .stage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .stage-index {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      letter-spacing: 0.04em;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1.2;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .badge--readonly {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+    }
+
+    .badge--gated {
+      color: var(--gated);
+      background: var(--gated-soft);
+      border-color: var(--gated-border);
+    }
+
+    .badge--approval {
+      color: var(--approval);
+      background: var(--approval-soft);
+      border-color: var(--approval-border);
+    }
+
+    .stage-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--text);
+    }
+
+    .stage-summary {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      margin-top: auto;
+    }
+
+    /* Detail Panel */
+    .detail-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .detail-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detail-title-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .detail-step {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-subtle);
+      background: var(--surface-subtle);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 9px;
+    }
+
+    .detail-heading {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .detail-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .detail-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      font: inherit;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      cursor: pointer;
+      transition: border-color var(--transition), color var(--transition), background-color var(--transition);
+    }
+
+    .nav-btn:hover:not(:disabled) {
+      border-color: var(--border-strong);
+      color: var(--text);
+      background: var(--surface);
+    }
+
+    .nav-btn:focus-visible {
+      outline: 2.5px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .detail-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .detail-label {
+      margin: 0;
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-subtle);
+    }
+
+    .detail-copy {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .detail-list {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .detail-list li + li {
+      margin-top: 4px;
+    }
+
+    .detail-footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .footer-label {
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .footer-sep {
+      color: var(--border-strong);
+      user-select: none;
+    }
+
+    /* Medium screens: 3x2 grid */
+    @media (max-width: 1020px) {
+      .workflow-track {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .stage-slot:nth-child(3n)::after,
+      .stage-slot:nth-child(3n)::before {
+        display: none;
+      }
+
+      .stage-slot:not(:nth-child(3n))::after {
+        right: -16px;
+        width: 16px;
+      }
+
+      .stage-slot:not(:nth-child(3n))::before {
+        right: -13px;
+      }
+
+      .detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .detail-block:last-child {
+        grid-column: 1 / -1;
+      }
+    }
+
+    /* Small screens: stack vertically down to 360px */
+    @media (max-width: 680px) {
+      .diagram-shell {
+        padding: 16px 14px 20px;
+      }
+
+      .pack-meta {
+        white-space: normal;
+        border-radius: 10px;
+      }
+
+      .workflow-track {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .stage-slot:not(:last-child)::after {
+        display: block;
+        top: auto;
+        bottom: -16px;
+        left: 24px;
+        right: auto;
+        width: 1.5px;
+        height: 16px;
+        transform: none;
+      }
+
+      .stage-slot:not(:last-child)::before {
+        display: block;
+        top: auto;
+        bottom: -13px;
+        left: 21.75px;
+        right: auto;
+        width: 6px;
+        height: 6px;
+        transform: rotate(135deg);
+      }
+
+      .stage-slot:nth-child(3n)::after,
+      .stage-slot:nth-child(3n)::before {
+        display: block;
+      }
+
+      .stage-slot:last-child::after,
+      .stage-slot:last-child::before {
+        display: none;
+      }
+
+      .detail-panel {
+        padding: 16px;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
+      .detail-block:last-child {
+        grid-column: auto;
+      }
+
+      .footer-sep {
+        display: none;
+      }
+
+      .detail-footer {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+    }
+
+    /* Sample [TEST] digest preview */
+    .preview-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      margin-top: 16px;
+    }
+
+    .preview-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1.5px solid var(--accent-border);
+      border-radius: 999px;
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: border-color var(--transition), background-color var(--transition);
+    }
+
+    .preview-btn:hover {
+      border-color: var(--accent);
+    }
+
+    .preview-btn:focus-visible {
+      outline: 2.5px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .preview-hint {
+      font-size: 11.5px;
+      color: var(--text-subtle);
+    }
+
+    .preview-panel {
+      margin-top: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 22px 20px;
+    }
+
+    .preview-panel[hidden] {
+      display: none;
+    }
+
+    .preview-ribbon {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+      border-bottom: 1px dashed var(--border-strong);
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gated);
+    }
+
+    .preview-ribbon .badge {
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .pv {
+      max-width: 820px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
+    .pv-title {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .pv-meta {
+      margin: 0 0 10px;
+      color: var(--text-subtle);
+    }
+
+    .pv-banner {
+      margin: 0 0 4px;
+      padding: 7px 10px;
+      background: var(--gated-soft);
+      border: 1px solid var(--gated-border);
+      border-radius: var(--radius-sm);
+      color: var(--gated);
+    }
+
+    .pv-h {
+      margin: 16px 0 6px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+    }
+
+    .pv-h--draft {
+      color: var(--approval);
+    }
+
+    .pv-line {
+      margin: 0;
+      padding-left: 14px;
+      text-indent: -14px;
+    }
+
+    .pv-line::before {
+      content: "- ";
+      color: var(--text-subtle);
+    }
+
+    .pv-line--plain {
+      padding-left: 0;
+      text-indent: 0;
+    }
+
+    .pv-line--plain::before {
+      content: none;
+    }
+
+    .pv-sub {
+      margin-left: 16px;
+      color: var(--text-muted);
+    }
+
+    .pv-warn {
+      color: var(--gated);
+    }
+
+    .pv-foot {
+      margin: 16px 0 0;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      color: var(--text-subtle);
+    }
+
+    .pv-excerpt {
+      margin: 12px 0 0;
+      font-size: 11px;
+      color: var(--text-subtle);
+    }
+
+    @media (max-width: 680px) {
+      .preview-panel {
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="diagram-shell" aria-label="ServiceTitan Dispatch and Capacity Copilot workflow diagram">
+    <header class="diagram-header">
+      <div class="header-top">
+        <h1 class="diagram-title">ServiceTitan Dispatch &amp; Capacity Copilot — workflow</h1>
+        <div class="pack-meta">ServiceTitan Dispatch &amp; Capacity Copilot v0.1.0 (draft) · 1 n8n workflow · 27 executable nodes</div>
+      </div>
+      <p class="diagram-caption">Architecture diagram of the draft pack, not a live product screenshot. Select any stage to inspect its role and guardrails. It has not been tested against a live ServiceTitan account.</p>
+      <div class="legend" aria-label="Risk color legend">
+        <span class="legend-item">
+          <span class="legend-swatch legend-swatch--readonly" aria-hidden="true"></span>
+          <span>Read-only / owner-only</span>
+        </span>
+        <span class="legend-item">
+          <span class="legend-swatch legend-swatch--gated" aria-hidden="true"></span>
+          <span>Gated write-or-send</span>
+        </span>
+        <span class="legend-item">
+          <span class="legend-swatch legend-swatch--approval" aria-hidden="true"></span>
+          <span>Human approval / draft-only</span>
+        </span>
+      </div>
+    </header>
+
+    <section class="workflow-track" aria-label="Workflow stages">
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-0"
+          data-stage="0"
+          data-risk="approval"
+          aria-expanded="true"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">01</span>
+            <span class="badge-row">
+              <span class="badge badge--approval">human approval</span>
+            </span>
+          </span>
+          <span class="stage-name">Start, Config &amp; data source</span>
+          <span class="stage-summary">Manual test run, Config, then built-in sample data, your CSV exports, or live reads.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-1"
+          data-stage="1"
+          data-risk="readonly"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">02</span>
+            <span class="badge-row">
+              <span class="badge badge--readonly">read-only</span>
+            </span>
+          </span>
+          <span class="stage-name">Booking QA &amp; skill-tier routing</span>
+          <span class="stage-summary">Flags thin job scope and old-equipment repairs. Suggests a sales-capable tech.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-2"
+          data-stage="2"
+          data-risk="approval"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">03</span>
+            <span class="badge-row">
+              <span class="badge badge--readonly">read-only</span>
+              <span class="badge badge--approval">draft-only</span>
+            </span>
+          </span>
+          <span class="stage-name">Open-capacity &amp; unsold-estimate filler</span>
+          <span class="stage-summary">Open windows paired with overdue agreements and stale estimates. Dispatcher queue.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-3"
+          data-stage="3"
+          data-risk="readonly"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">04</span>
+            <span class="badge-row">
+              <span class="badge badge--readonly">read-only</span>
+            </span>
+          </span>
+          <span class="stage-name">Morning Dispatch KPI digest</span>
+          <span class="stage-summary">Utilization, response time, open capacity, unworked estimates.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-4"
+          data-stage="4"
+          data-risk="readonly"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">05</span>
+            <span class="badge-row">
+              <span class="badge badge--readonly">read-only</span>
+            </span>
+          </span>
+          <span class="stage-name">After-hours handoff summary</span>
+          <span class="stage-summary">Overnight emergency calls as a 7:00 AM brief for the morning shift.</span>
+        </button>
+      </div>
+
+      <div class="stage-slot">
+        <button
+          type="button"
+          class="stage-btn"
+          id="stage-btn-5"
+          data-stage="5"
+          data-risk="gated-approval"
+          aria-expanded="false"
+          aria-controls="stage-detail-panel"
+        >
+          <span class="stage-top">
+            <span class="stage-index">06</span>
+            <span class="badge-row">
+              <span class="badge badge--gated">gated</span>
+              <span class="badge badge--approval">approval</span>
+            </span>
+          </span>
+          <span class="stage-name">Deliver to the owner</span>
+          <span class="stage-summary">Gmail and/or Slack to you only. [TEST] label in testMode. No customer send path.</span>
+        </button>
+      </div>
+
+    </section>
+
+    <section
+      id="stage-detail-panel"
+      class="detail-panel"
+      aria-live="polite"
+      aria-labelledby="detail-heading"
+    >
+      <div class="detail-header">
+        <div class="detail-title-group">
+          <span class="detail-step" id="detail-step">Stage 01 / 06</span>
+          <h2 class="detail-heading" id="detail-heading">Start, Config &amp; data source</h2>
+          <div class="detail-badges" id="detail-badges">
+            <span class="badge badge--approval">human approval</span>
+          </div>
+        </div>
+        <div class="detail-nav" aria-label="Stage navigation">
+          <button type="button" class="nav-btn" id="prev-stage-btn" disabled>Prev</button>
+          <button type="button" class="nav-btn" id="next-stage-btn">Next</button>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-block">
+          <h3 class="detail-label">What happens</h3>
+          <p class="detail-copy" id="detail-what"></p>
+        </div>
+        <div class="detail-block">
+          <h3 class="detail-label" id="detail-inputs-label">Inputs &amp; controls</h3>
+          <ul class="detail-list" id="detail-inputs"></ul>
+        </div>
+        <div class="detail-block">
+          <h3 class="detail-label">Guardrails</h3>
+          <ul class="detail-list" id="detail-guardrails"></ul>
+        </div>
+      </div>
+
+      <div class="detail-footer" aria-label="Pack safety defaults">
+        <span class="footer-label">Pack defaults:</span>
+        <span>Imported inactive</span>
+        <span class="footer-sep" aria-hidden="true">/</span>
+        <span>Schedule off</span>
+        <span class="footer-sep" aria-hidden="true">/</span>
+        <span>testMode default</span>
+        <span class="footer-sep" aria-hidden="true">/</span>
+        <span>Read-only, owner-only (never contacts customers)</span>
+      </div>
+    </section>
+
+    <div class="preview-bar">
+      <button type="button" class="preview-btn" id="preview-toggle" aria-expanded="false" aria-controls="digest-preview">Show sample [TEST] digest</button>
+      <span class="preview-hint">Architecture preview of what the owner would receive. Fictional data, not a live product screenshot.</span>
+    </div>
+
+    <section id="digest-preview" class="preview-panel" aria-label="Sample TEST Morning Dispatch KPI Digest" hidden>
+      <div class="preview-ribbon">
+        <span class="badge badge--gated">sample / architecture preview</span>
+        <span>Fictional HVAC, plumbing, and electrical shop. Excerpt of sample_test_digest.md.</span>
+      </div>
+      <div class="pv">
+        <h3 class="pv-title">[TEST] Morning Dispatch KPI Digest: Cedar Ridge Mechanical (fictional sample)</h3>
+          <p class="pv-line pv-line--plain pv-meta">Tue Mar 10 7:00 AM America/Chicago | KPIs are for 2026-03-09 | source: test</p>
+          <p class="pv-line pv-line--plain pv-banner">[TEST] Preview only. Sent to the owner address or channel you set, never to a customer. Built from fictional sample data.</p>
+
+        <h4 class="pv-h">Dispatch KPIs</h4>
+          <p class="pv-line">Technician utilization (team): 61.0% (1464 on-site minutes of 2400 shift minutes)</p>
+          <p class="pv-line pv-line--plain pv-sub">Dana Whitfield (HVAC): 62.5%, 2 completed jobs</p>
+          <p class="pv-line pv-line--plain pv-sub">Luis Brandt (Plumbing): 87.5%, 2 completed jobs</p>
+          <p class="pv-line pv-line--plain pv-sub">Gil Ramsey (HVAC): n/a, 0 completed jobs</p>
+          <p class="pv-line">Response time, emergency and same-day jobs (booked to arrival): average 55.0 min, longest 90 min, across 3 jobs</p>
+          <p class="pv-line">Open capacity, next 2 days: 10.0 hours in 5 open slots across 4 windows</p>
+          <p class="pv-line">Unworked estimates: 3 open estimates worth $21,450 with no activity for 7+ days</p>
+          <p class="pv-line pv-line--plain pv-warn">Heads-up: Gil Ramsey has no shift hours in the data, so utilization is not shown for them and they are left out of the team figure.</p>
+          <p class="pv-line pv-line--plain pv-warn">Heads-up: 1 emergency or same-day job on 2026-03-09 has no usable arrival time and is left out of response time.</p>
+
+        <h4 class="pv-h">Booking QA &amp; skill-tier routing</h4>
+          <p class="pv-line pv-line--plain">Newly booked jobs reviewed (last 24 hours): 7. Flagged: 5. Routing lines are suggestions; nothing is reassigned automatically.</p>
+          <p class="pv-line">Job J1103 | Tue Mar 10 9:00 AM-11:00 AM | HVAC, residential | Sample Household 1103 | tech: Marcus Hale</p>
+          <p class="pv-line pv-line--plain pv-sub">Possible replacement opportunity: condenser is 17 years old (threshold 12)</p>
+          <p class="pv-line pv-line--plain pv-sub">Suggested: ask dispatch to consider Dana Whitfield (sales-capable, no overlapping job)</p>
+          <p class="pv-line">Job J1108 | Tue Mar 10 3:00 PM-5:00 PM | Electrical, unknown | Sample Household 1108 | tech: Tessa Okafor</p>
+          <p class="pv-line pv-line--plain pv-sub">Commercial vs residential not recorded</p>
+          <p class="pv-line pv-line--plain pv-sub">Equipment type not recorded</p>
+          <p class="pv-line pv-line--plain pv-sub">Equipment age not recorded</p>
+
+        <h4 class="pv-h pv-h--draft">Dispatcher callback queue (DRAFT, nothing is sent)</h4>
+          <p class="pv-line pv-line--plain">Internal list for dispatchers only. Each row pairs a customer with an open window. The workflow never texts or emails customers.</p>
+          <p class="pv-line">Tamsin Okoye, (555) 010-0121 | HVAC | window Tue Mar 10 1:00 PM-3:00 PM</p>
+          <p class="pv-line pv-line--plain pv-sub">Unsold estimate E01 ($11,800, no activity for 9 days)</p>
+          <p class="pv-line">Wendell Pruitt, (555) 010-0112 | HVAC | window Tue Mar 10 1:00 PM-3:00 PM</p>
+          <p class="pv-line pv-line--plain pv-sub">Unsold estimate E02 ($6,450, no activity for 13 days)</p>
+          <p class="pv-line pv-line--plain pv-sub">Maintenance agreement M02 overdue 49 days (Comfort Club)</p>
+
+        <h4 class="pv-h">After-hours handoff for the morning shift</h4>
+          <p class="pv-line pv-line--plain">Window: Mon Mar 9 5:00 PM to Tue Mar 10 7:00 AM. Emergency calls: 4 (2 need action, 2 resolved). Non-emergency messages: 1.</p>
+          <p class="pv-line">NEEDS ACTION | Mon Mar 9 9:15 PM | Cormac Ridley, (555) 010-0132 | 88 Sample Spruce St, Testville, TX 00000</p>
+          <p class="pv-line pv-line--plain pv-sub">Burst pipe in basement | status: dispatched | handled by: Luis Brandt | Temporary repair done; permanent repair needs parts</p>
+          <p class="pv-line">NEEDS ACTION | Tue Mar 10 2:30 AM | Beatrix Lund, (555) 010-0133 | 310 Sample Fir Ct, Testville, TX 00000</p>
+          <p class="pv-line pv-line--plain pv-sub">Burning smell near panel, breaker tripping | status: unresolved | handled by: nobody recorded | Voicemail only; no callback recorded</p>
+
+        <p class="pv-foot pv-line pv-line--plain">[TEST] Draft pack, not yet tested against a live ServiceTitan account. Read-only. Owner-only delivery.</p>
+        <p class="pv-excerpt">Excerpt. Two more flagged jobs, three more callbacks, and two resolved calls are in the full sample_test_digest.md.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var stages = [
+        {
+          step: "Stage 01 / 06",
+          title: "Start, Config & data source",
+          badges: [{ label: "human approval", cls: "badge--approval" }],
+          what: "Entry point for the single n8n workflow. It is imported inactive with the Schedule switched off. A manual test run reads the Config node, then loads data from the source you chose.",
+          inputsLabel: "Triggers & controls",
+          inputs: [
+            "Manual test run, or a 7:00 AM America/Chicago Schedule that ships disabled.",
+            "Config source: test (built-in fictional data, default), csv (your own exports), or servicetitan.",
+            "Thresholds: replacement age, overdue agreement days, stale estimate days, after-hours start."
+          ],
+          guardrails: [
+            "Imported inactive; testMode is on by default.",
+            "The ServiceTitan branch is skipped unless source is servicetitan. Unknown values fall back to test.",
+            "Live reads are GET only and unverified against a real tenant."
+          ]
+        },
+        {
+          step: "Stage 02 / 06",
+          title: "Booking QA & skill-tier routing",
+          badges: [{ label: "read-only", cls: "badge--readonly" }],
+          what: "Reviews jobs booked in the last 24 hours and flags thin details, plus repair calls on old equipment that may be replacement opportunities.",
+          inputsLabel: "Flags",
+          inputs: [
+            "Missing equipment age or type; commercial vs residential not recorded.",
+            "Repeat address: earlier completed visits within the window.",
+            "Equipment at or above the replacement age (12 years by default) on a repair call."
+          ],
+          guardrails: [
+            "Output is a flagged list. It suggests a free sales-capable tech but never reassigns a job.",
+            "Read-only; changes nothing in ServiceTitan."
+          ]
+        },
+        {
+          step: "Stage 03 / 06",
+          title: "Open-capacity & unsold-estimate filler",
+          badges: [
+            { label: "read-only", cls: "badge--readonly" },
+            { label: "draft-only", cls: "badge--approval" }
+          ],
+          what: "Finds open schedule windows in the next two days and pairs them with customers whose maintenance agreement is overdue or whose estimate has gone quiet. The result is a callback queue for dispatchers.",
+          inputsLabel: "Inputs",
+          inputs: [
+            "Open capacity windows (or shift time minus booked appointments on the live path).",
+            "Active agreements overdue by 30+ days and open estimates idle 7+ days (defaults).",
+            "One row per customer, ranked by estimate value, then days overdue."
+          ],
+          guardrails: [
+            "Draft-only: an internal list. A person decides who to call.",
+            "Never texts or emails a customer. There is no customer send step in the workflow.",
+            "Customers that do not fit an open window are listed as not placed."
+          ]
+        },
+        {
+          step: "Stage 04 / 06",
+          title: "Morning Dispatch KPI digest",
+          badges: [{ label: "read-only", cls: "badge--readonly" }],
+          what: "Works out the previous day's technician utilization, response time on emergency and same-day jobs, open capacity, and unworked estimates for the Operations Manager.",
+          inputsLabel: "KPIs",
+          inputs: [
+            "Utilization: on-site job minutes over shift minutes, per tech and team.",
+            "Response time: booked to arrival on emergency and same-day jobs.",
+            "Open capacity hours and unworked estimates (count and value)."
+          ],
+          guardrails: [
+            "Never invents numbers. A metric that cannot be computed becomes a Heads-up line.",
+            "Use the sample digest button below to see a [TEST] example."
+          ]
+        },
+        {
+          step: "Stage 05 / 06",
+          title: "After-hours handoff summary",
+          badges: [{ label: "read-only", cls: "badge--readonly" }],
+          what: "Compiles overnight emergency calls (5:00 PM to the 7:00 AM run, by default) into a brief for the morning shift, with unresolved calls first.",
+          inputsLabel: "Brief contents",
+          inputs: [
+            "Emergency calls in the after-hours window, with calls that still need action listed first.",
+            "Who handled each call, its status, and whether follow-up is needed.",
+            "A count of non-emergency messages."
+          ],
+          guardrails: [
+            "A summary only: it does not call anyone back or dispatch a tech.",
+            "If no call data is available, the brief says so instead of showing zero."
+          ]
+        },
+        {
+          step: "Stage 06 / 06",
+          title: "Deliver to the owner",
+          badges: [
+            { label: "gated", cls: "badge--gated" },
+            { label: "human approval", cls: "badge--approval" }
+          ],
+          what: "Assembles one message from all four workflows and sends it to the owner only, by Gmail and/or Slack. Moving from the [TEST] preview to live delivery is a conscious go-live step.",
+          inputsLabel: "Delivery",
+          inputs: [
+            "Owner email and/or a private Slack channel set in Config.",
+            "In testMode (default) the subject and heading carry [TEST].",
+            "A placeholder owner address is blocked from sending."
+          ],
+          guardrails: [
+            "Owner-only. There is no Twilio, SMS, or customer-email node.",
+            "Going live needs a clean test on your own export and an owner sign-off."
+          ]
+        }
+      ];
+
+      var buttons = Array.prototype.slice.call(document.querySelectorAll(".stage-btn"));
+      var stepEl = document.getElementById("detail-step");
+      var headingEl = document.getElementById("detail-heading");
+      var badgesEl = document.getElementById("detail-badges");
+      var whatEl = document.getElementById("detail-what");
+      var inputsLabelEl = document.getElementById("detail-inputs-label");
+      var inputsEl = document.getElementById("detail-inputs");
+      var guardrailsEl = document.getElementById("detail-guardrails");
+      var prevBtn = document.getElementById("prev-stage-btn");
+      var nextBtn = document.getElementById("next-stage-btn");
+      var activeIndex = 0;
+
+      function renderList(target, items) {
+        target.textContent = "";
+        items.forEach(function (text) {
+          var li = document.createElement("li");
+          li.textContent = text;
+          target.appendChild(li);
+        });
+      }
+
+      function selectStage(index) {
+        if (index < 0 || index >= stages.length) return;
+        activeIndex = index;
+        var stage = stages[index];
+
+        buttons.forEach(function (btn, idx) {
+          btn.setAttribute("aria-expanded", idx === index ? "true" : "false");
+        });
+
+        stepEl.textContent = stage.step;
+        headingEl.textContent = stage.title;
+
+        badgesEl.textContent = "";
+        stage.badges.forEach(function (b) {
+          var span = document.createElement("span");
+          span.className = "badge " + b.cls;
+          span.textContent = b.label;
+          badgesEl.appendChild(span);
+        });
+
+        whatEl.textContent = stage.what;
+        inputsLabelEl.textContent = stage.inputsLabel;
+        renderList(inputsEl, stage.inputs);
+        renderList(guardrailsEl, stage.guardrails);
+
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === stages.length - 1;
+      }
+
+      buttons.forEach(function (btn, idx) {
+        btn.addEventListener("click", function () {
+          selectStage(idx);
+        });
+
+        btn.addEventListener("keydown", function (event) {
+          if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            event.preventDefault();
+            var next = (idx + 1) % stages.length;
+            selectStage(next);
+            buttons[next].focus();
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            event.preventDefault();
+            var prev = (idx - 1 + stages.length) % stages.length;
+            selectStage(prev);
+            buttons[prev].focus();
+          } else if (event.key === "Home") {
+            event.preventDefault();
+            selectStage(0);
+            buttons[0].focus();
+          } else if (event.key === "End") {
+            event.preventDefault();
+            var last = stages.length - 1;
+            selectStage(last);
+            buttons[last].focus();
+          }
+        });
+      });
+
+      prevBtn.addEventListener("click", function () {
+        if (activeIndex > 0) selectStage(activeIndex - 1);
+      });
+
+      nextBtn.addEventListener("click", function () {
+        if (activeIndex < stages.length - 1) selectStage(activeIndex + 1);
+      });
+
+      var previewBtn = document.getElementById("preview-toggle");
+      var previewPanel = document.getElementById("digest-preview");
+      previewBtn.addEventListener("click", function () {
+        var open = previewPanel.hasAttribute("hidden");
+        if (open) previewPanel.removeAttribute("hidden"); else previewPanel.setAttribute("hidden", "");
+        previewBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        previewBtn.textContent = open ? "Hide sample [TEST] digest" : "Show sample [TEST] digest";
+        window.dispatchEvent(new Event("resize"));
+      });
+
+      selectStage(0);
+    })();
+  </script>
+
+<script>
+  (function () {
+    var TYPE = "prewired-diagram-height";
+    function report() {
+      var shell = document.querySelector(".diagram-shell") || document.body;
+      var h = Math.ceil((shell.getBoundingClientRect && shell.getBoundingClientRect().height) || shell.scrollHeight || 0);
+      if (h && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: TYPE, height: h }, "*");
+      }
+    }
+    window.addEventListener("load", report);
+    window.addEventListener("resize", report);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(report).catch(function () {});
+    }
+    setTimeout(report, 50);
+    setTimeout(report, 300);
+  })();
+</script>
+
+</body>
+</html>

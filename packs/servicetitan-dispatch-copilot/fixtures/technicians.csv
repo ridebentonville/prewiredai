@@ -1,0 +1,7 @@
+tech_id,name,trade,sales_capable,shift_hours
+T01,Dana Whitfield,HVAC,yes,8
+T02,Marcus Hale,HVAC,no,8
+T03,Priya Voss,Plumbing,yes,8
+T04,Luis Brandt,Plumbing,no,8
+T05,Tessa Okafor,Electrical,no,8
+T06,Gil Ramsey,HVAC,no,

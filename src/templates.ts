@@ -113,6 +113,8 @@ export interface TemplatePack {
   /** Filter chips this pack appears under (primary is added automatically). */
   filterTags: CategoryId[];
   free?: boolean;
+  /** Optional small pill on the card and pack page, e.g. "New". */
+  badge?: string;
   /** Problem solved, from the listing headline. */
   headline: string;
   /** Short card summary. */
@@ -141,7 +143,7 @@ export interface TemplatePack {
   faq: Faq[];
   /** Optional factual footnote on live testing. Never phrase as a customer result. */
   testingNote: string;
-  /** True for the five packs with an interactive diagram at /diagrams/<slug>.html. */
+  /** True for packs with an interactive diagram at /diagrams/<slug>.html. */
   diagram?: boolean;
   related?: string[];
 }
@@ -149,10 +151,10 @@ export interface TemplatePack {
 export const templatesPage = {
   title: "Templates | Prewired AI automation packs for n8n",
   description:
-    "Draft catalog of 11 Prewired AI automation packs for n8n: lead response, booking reminders, invoice sync, CRM cleanup, Jobber, and draft-first AI agents. Test mode on by default. Manager Digest is free. Not for sale yet.",
+    "Draft catalog of 12 Prewired AI automation packs for n8n: lead response, booking reminders, invoice sync, CRM cleanup, Jobber, ServiceTitan field-service dispatch, and draft-first AI agents. Test mode on by default. Manager Digest is free. Not for sale yet.",
   heading: "Prewired AI automation packs",
   intro:
-    "Eleven n8n automation packs and post-sales AI agents for small sales and service teams. Each one imports inactive with test mode on, so nothing reaches a real customer until you test it and sign off.",
+    "Twelve n8n automation packs and post-sales AI agents for small sales and service teams, including dispatch reporting for HVAC, plumbing, and electrical shops. Each one imports inactive with test mode on, so nothing reaches a real customer until you test it and sign off.",
   notForSale:
     "Nothing on this page is for sale yet. Every pack is a draft, there is no checkout, and paid prices are coming soon. Manager Digest will be free. Join the waitlist by email and you will hear when a pack is ready.",
   sampleDataNote: "Every pack ships with fictional sample data only.",
@@ -161,7 +163,7 @@ export const templatesPage = {
 export const templatesTeaser = {
   heading: "Templates",
   summary:
-    "Eleven draft n8n automation packs and post-sales AI agents. Every pack imports inactive with test mode on and a hard stop before the first live action. Not for sale yet; Manager Digest will be free.",
+    "Twelve draft n8n automation packs and post-sales AI agents, including ServiceTitan dispatch reporting for field-service shops. Every pack imports inactive with test mode on and a hard stop before the first live action. Not for sale yet; Manager Digest will be free.",
   linkLabel: "See the template packs",
 };
 
@@ -316,6 +318,97 @@ export const templatePacks: TemplatePack[] = [
     testingNote: draftNote("HubSpot, Gmail, Slack, or Google"),
     diagram: true,
     related: ["account-health-onboarding-qa", "hubspot-cleanup-kit"],
+  },
+  {
+    slug: "servicetitan-dispatch-copilot",
+    name: "ServiceTitan Dispatch & Capacity Copilot",
+    version: "v0.1.0",
+    category: "field-service",
+    filterTags: ["reporting"],
+    badge: "New",
+    headline:
+      "Four read-only dispatch reports for HVAC, plumbing, and electrical shops: which new bookings are missing details, who to call to fill open schedule time, yesterday's dispatch numbers, and what happened overnight. Sent to you, never to a customer.",
+    summary:
+      "Booking QA and skill-tier routing flags, a draft callback queue for open capacity, a morning Dispatch KPI digest, and an after-hours handoff brief for the Operations Manager.",
+    safety:
+      "Read-only and owner-only. The callback queue is a draft list for dispatchers, and nothing is ever sent to a customer. Test mode and sample data are the default.",
+    whoFor:
+      "Operations Managers and owners of HVAC, plumbing, and electrical shops that dispatch in ServiceTitan and want a daily read on thin bookings, open schedule time, and overnight calls.",
+    whatItDoes: [
+      "Booking QA and skill-tier routing: reviews jobs booked in the last 24 hours and flags missing equipment age or type, commercial vs residential not recorded, repeat addresses, and repair calls on old equipment that may be replacement opportunities. It can suggest a free sales-capable tech. It never reassigns a job.",
+      "Open-capacity and unsold-estimate filler: finds open schedule windows and pairs them with customers whose maintenance agreement is overdue or whose estimate has no activity. The result is a draft callback queue for dispatchers.",
+      "Morning Dispatch KPI digest: technician utilization, response time on emergency and same-day jobs, open capacity, and unworked estimates for the previous day. If a number cannot be computed, you get a Heads-up line.",
+      "After-hours handoff summary: overnight emergency calls in one brief for the 7:00 AM morning shift, with calls that still need action first.",
+    ],
+    workflows: [
+      {
+        name: "ServiceTitan Dispatch & Capacity Copilot",
+        nodes: 27,
+        description:
+          "Reads sample data, a CSV export, or ServiceTitan (read-only), runs the four dispatch workflows, and sends one message to the owner.",
+      },
+    ],
+    totalNodes: 27,
+    totalNodesWithNotes: 34,
+    defaults: [
+      "testMode on: the message is labeled [TEST] and goes only to the owner email or Slack channel you set.",
+      "Source defaults to built-in fictional sample data, so the ServiceTitan steps are skipped.",
+      "Imported inactive, and the Schedule node (7:00 AM America/Chicago) is switched off on import.",
+    ],
+    testModeWrites:
+      "Nothing is written to ServiceTitan in any mode. In test mode the only output is a [TEST] message to the owner address or channel you set.",
+    included: [
+      "One importable n8n workflow (saved inactive)",
+      "Plain-English README with a field-by-field Config table",
+      "Fictional HVAC, plumbing, and electrical sample data (CSV) and a generated sample [TEST] digest",
+      "A test script that checks the workflow's safety settings and runs its logic against the sample data",
+      "Changelog",
+    ],
+    guardrails: [
+      "Read-only: the ServiceTitan steps are GET requests only. It does not create, change, or delete anything in ServiceTitan.",
+      "No customer messages: the workflow has no SMS, Twilio, or customer-email step.",
+      "The callback queue is draft-only. A dispatcher decides who to call.",
+      "Routing is a suggestion. It never reassigns a job.",
+      "Never invents numbers. If something cannot be computed, the digest shows a \"Heads-up\" line instead.",
+      "The ServiceTitan endpoint paths and field mapping are unverified. The CSV export path is the recommended way to start.",
+    ],
+    hardStop:
+      "Run the [TEST] digest on the sample data, then on your own CSV export, and spot-check several numbers by hand against ServiceTitan. Going live is the owner's decision: turn test mode off, switch the Schedule on, and set the workflow Active, after a written sign-off.",
+    willNot: [
+      "Text, call, or email a customer.",
+      "Create, change, assign, or delete anything in ServiceTitan.",
+      "Reassign a job or book a callback for you.",
+      "Invent numbers.",
+    ],
+    faq: [
+      {
+        q: "Does it contact my customers?",
+        a: "No. It has no step that can message a customer. The callback queue is an internal list for your dispatchers, and the only things it sends are one message to your own email and/or Slack.",
+      },
+      {
+        q: "Does it change anything in ServiceTitan?",
+        a: "No. It only reads. The live path uses GET requests, and the CSV path only reads files.",
+      },
+      {
+        q: "Do I need ServiceTitan API access?",
+        a: "Not to start. You can run it on sample data, then on CSV exports from your own ServiceTitan reports. The live ServiceTitan path needs your own API credentials, and its endpoint paths are unverified.",
+      },
+      {
+        q: "Will I get a message just because I imported it?",
+        a: "No. The workflow is inactive and the Schedule node is off until you switch them on.",
+      },
+      {
+        q: "Is there a pilot?",
+        a: "A 10-Day Founding Client Pilot is planned for this pack. Use the Book a 15-min ops audit button on this page to talk it through. Pricing coming soon.",
+      },
+      {
+        q: "Has it been tested live?",
+        a: "Not yet. It has only been checked against fictional sample data. It has not been tested against a live ServiceTitan, Gmail, or Slack account.",
+      },
+    ],
+    testingNote: draftNote("ServiceTitan, Gmail, Slack, or a CSV export"),
+    diagram: true,
+    related: ["manager-digest", "jobber-connector"],
   },
   {
     slug: "speed-to-lead",

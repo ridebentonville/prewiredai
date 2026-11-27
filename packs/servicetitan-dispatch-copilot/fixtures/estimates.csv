@@ -1,0 +1,8 @@
+estimate_id,customer_name,customer_phone,business_unit,status,amount,created_at,last_followup_at
+E01,Tamsin Okoye,(555) 010-0121,HVAC,Open,11800,2026-03-01T10:00:00-06:00,
+E02,Wendell Pruitt,(555) 010-0112,HVAC,Open,6450,2026-02-20T10:00:00-06:00,2026-02-25T15:00:00-06:00
+E03,Corliss Vane,(555) 010-0123,Plumbing,Open,4900,2026-03-03T10:00:00-06:00,2026-03-08T10:00:00-05:00
+E04,Dov Ashgrove,(555) 010-0124,Electrical,Open,3200,2026-02-25T10:00:00-06:00,
+E05,Lysander Pike,(555) 010-0125,HVAC,Sold,9000,2026-02-10T10:00:00-06:00,2026-02-12T10:00:00-06:00
+E06,Marguerite Tolliver,(555) 010-0126,Plumbing,Open,2750,2026-03-07T10:00:00-06:00,
+E07,Bram Hollis,(555) 010-0127,Electrical,Dismissed,1500,2026-01-15T10:00:00-06:00,

@@ -43,7 +43,7 @@ const shortGuardrails = sharedGuardrails.slice(0, 9);
       <section class="border-b border-stone-200">
         <div class="mx-auto max-w-6xl px-6 py-16 sm:px-10 lg:py-24">
           <p class="text-xs uppercase tracking-[0.16em] text-stone-500">
-            Draft catalog · 11 packs for n8n
+            Draft catalog · 12 packs for n8n
           </p>
           <h1 class="mt-3 text-3xl font-medium tracking-tight text-stone-950 sm:text-4xl lg:text-5xl">
             {templatesPage.heading}
@@ -160,12 +160,24 @@ const shortGuardrails = sharedGuardrails.slice(0, 9);
                       </span>
                       <span class="text-xs text-stone-400" aria-hidden="true">·</span>
                       <span class="text-xs text-stone-500">{pack.version}</span>
-                      {pack.free && (
-                        <span
-                          class="ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
-                          style={`background-color: ${accent}`}
-                        >
-                          Free
+                      {(pack.free || pack.badge) && (
+                        <span class="ml-auto flex items-center gap-2">
+                          {pack.badge && (
+                            <span
+                              class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                              style={`background-color: ${accent}`}
+                            >
+                              {pack.badge}
+                            </span>
+                          )}
+                          {pack.free && (
+                            <span
+                              class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                              style={`background-color: ${accent}`}
+                            >
+                              Free
+                            </span>
+                          )}
                         </span>
                       )}
                     </div>

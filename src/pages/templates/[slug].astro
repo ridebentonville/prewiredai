@@ -61,6 +61,16 @@ const schedulingUrl = siteConfig.schedulingUrl?.trim();
             <span class="text-xs text-stone-400" aria-hidden="true">·</span>
             <span class="text-xs text-stone-500">{pack.version} draft</span>
             {
+              pack.badge && (
+                <span
+                  class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"
+                  style={`background-color: ${accent}`}
+                >
+                  {pack.badge}
+                </span>
+              )
+            }
+            {
               pack.free ? (
                 <span
                   class="rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-white"

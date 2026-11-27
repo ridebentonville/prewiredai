@@ -1,0 +1,7 @@
+call_id,received_at,caller_name,caller_phone,address,summary,urgency,status,handled_by,follow_up_needed,notes
+C01,2026-03-09T18:42:00-05:00,Isolde Fairbanks,(555) 010-0131,"15 Sample Aspen Ln, Testville, TX 00000","No heat, elderly resident at home",emergency,resolved,T02,no,Limit switch reset on site
+C02,2026-03-09T21:15:00-05:00,Cormac Ridley,(555) 010-0132,"88 Sample Spruce St, Testville, TX 00000",Burst pipe in basement,emergency,dispatched,T04,yes,Temporary repair done; permanent repair needs parts
+C03,2026-03-10T02:30:00-05:00,Beatrix Lund,(555) 010-0133,"310 Sample Fir Ct, Testville, TX 00000","Burning smell near panel, breaker tripping",emergency,unresolved,,yes,Voicemail only; no callback recorded
+C04,2026-03-09T19:05:00-05:00,Hollis Winter,(555) 010-0134,"12 Sample Poplar Way, Testville, TX 00000",Quote request for AC replacement,non-emergency,voicemail,,yes,
+C05,2026-03-09T16:30:00-05:00,Aldous Kent,(555) 010-0135,"40 Sample Oak Ct, Testville, TX 00000",Clogged drain during business hours,emergency,resolved,T04,no,Before the after-hours window
+C06,2026-03-10T05:50:00-05:00,Philippa Crane,(555) 010-0136,"73 Sample Walnut Dr, Testville, TX 00000",Water heater leaking into garage,emergency,resolved,T04,no,Shutoff closed; replacement quote requested

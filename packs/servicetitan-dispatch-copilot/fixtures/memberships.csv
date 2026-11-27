@@ -1,0 +1,8 @@
+membership_id,customer_name,customer_phone,business_unit,plan,status,next_service_due
+M01,Odette Marsh,(555) 010-0111,HVAC,Comfort Club,Active,2025-11-15
+M02,Wendell Pruitt,(555) 010-0112,HVAC,Comfort Club,Active,2026-01-20
+M03,Fiona Achterberg,(555) 010-0113,Plumbing,Water Guard,Active,2026-02-01
+M04,Ramon Keller,(555) 010-0114,Electrical,Safety Check,Active,2025-12-20
+M05,Gus Lindell,(555) 010-0115,HVAC,Comfort Club,Active,2026-02-20
+M06,Nell Brandt,(555) 010-0116,HVAC,Comfort Club,Cancelled,2025-10-01
+M07,Pia Hargrove,(555) 010-0117,Plumbing,Water Guard,Active,2026-03-25

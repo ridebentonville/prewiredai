@@ -1,0 +1,1296 @@
+{
+  "name": "ServiceTitan Dispatch & Capacity Copilot (DRAFT): Prewired AI",
+  "nodes": [
+    {
+      "id": "3c6de431-c6f7-5c04-ae95-bb06d39be80e",
+      "name": "Manual Test Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "94853fbd-5bcf-5e08-aa3e-6a8f3ff8012d",
+      "name": "Schedule 7:00 AM (disabled until you are ready)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        720
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "ce0d2713-1a97-56a3-a0e0-2501eb2319d3",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        280,
+        520
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5e0b3d55-0e35-5c61-aabf-27d78383fc61",
+              "name": "businessName",
+              "value": "Your Business Name",
+              "type": "string"
+            },
+            {
+              "id": "6a857e4b-7d4b-5c03-a5ac-1059be97e100",
+              "name": "timezone",
+              "value": "America/Chicago",
+              "type": "string"
+            },
+            {
+              "id": "f8d24dcb-24d7-558a-a522-3e6efffcb159",
+              "name": "source",
+              "value": "test",
+              "type": "string"
+            },
+            {
+              "id": "bee59305-1300-5a33-ae17-890d5ca2b1fa",
+              "name": "testMode",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "a93f5de1-e34d-568e-a9f3-4b92c498630a",
+              "name": "delivery",
+              "value": "email",
+              "type": "string"
+            },
+            {
+              "id": "66eee425-207c-5d0d-a4aa-bbbe178b0861",
+              "name": "ownerEmail",
+              "value": "owner@example.com",
+              "type": "string"
+            },
+            {
+              "id": "8f8ce8fe-8ee7-5cd4-ada8-313e8fc4b2f2",
+              "name": "ownerSlackChannel",
+              "value": "#dispatch-owner-only",
+              "type": "string"
+            },
+            {
+              "id": "eb9a6777-801d-50d0-a031-cfa91e69aaa6",
+              "name": "stApiBase",
+              "value": "https://api.servicetitan.io",
+              "type": "string"
+            },
+            {
+              "id": "3660b457-a14f-5d1d-afcf-901bc19205ea",
+              "name": "stTenantId",
+              "value": "PASTE_TENANT_ID_HERE",
+              "type": "string"
+            },
+            {
+              "id": "df6ad629-fa95-5ad1-a87f-b3706fea5b71",
+              "name": "stAppKey",
+              "value": "PASTE_APP_KEY_HERE",
+              "type": "string"
+            },
+            {
+              "id": "63af69db-c92d-55e5-a747-65e3e63af1f0",
+              "name": "csvFolder",
+              "value": "/home/node/.n8n-files/dispatch-exports",
+              "type": "string"
+            },
+            {
+              "id": "69b24cc4-d794-562d-a905-dbe13a149cb3",
+              "name": "asOfOverride",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "221cf18e-0cde-5856-adf2-bd67952c9045",
+              "name": "digestHour",
+              "value": 7,
+              "type": "number"
+            },
+            {
+              "id": "143bfffc-c7df-57b4-a0e6-8c373e97dfa4",
+              "name": "bookingLookbackHours",
+              "value": 24,
+              "type": "number"
+            },
+            {
+              "id": "30cc772f-1360-5a63-ad2f-f1dffb5df369",
+              "name": "replacementAgeYears",
+              "value": 12,
+              "type": "number"
+            },
+            {
+              "id": "fc2bd3ac-1796-54f3-a613-4a2b66178cdc",
+              "name": "repeatWindowDays",
+              "value": 180,
+              "type": "number"
+            },
+            {
+              "id": "c91fe2d0-e0b0-5dec-aaa7-dea84b448005",
+              "name": "membershipOverdueDays",
+              "value": 30,
+              "type": "number"
+            },
+            {
+              "id": "03fd7244-26dd-5e8a-ae66-407d8157cab0",
+              "name": "estimateStaleDays",
+              "value": 7,
+              "type": "number"
+            },
+            {
+              "id": "cf72b42e-7a7a-5a6e-a960-977a1d803fc7",
+              "name": "capacityLookaheadDays",
+              "value": 2,
+              "type": "number"
+            },
+            {
+              "id": "84e16615-92b9-5b86-ac41-ec7d940bf6eb",
+              "name": "afterHoursStartHour",
+              "value": 17,
+              "type": "number"
+            },
+            {
+              "id": "18a94c5b-eeac-521e-ac22-eef230f31d70",
+              "name": "maxItemsPerSection",
+              "value": 10,
+              "type": "number"
+            },
+            {
+              "id": "c029f09b-4e59-572c-ac77-474130487f8a",
+              "name": "historyDays",
+              "value": 90,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "603ed939-51e4-5e18-a7a3-45680d00017a",
+      "name": "Prepare Settings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction prepareSettings(cfg, nowMs) {\n  const notes = [];\n  let source = lc(cfg.source);\n  if (['test', 'csv', 'servicetitan'].indexOf(source) === -1) {\n    notes.push('Config source \"' + (cfg.source === undefined ? '' : cfg.source) + '\" is not test, csv, or servicetitan. Using test instead.');\n    source = 'test';\n  }\n  let testMode = toBool(cfg.testMode, true);\n  if (source === 'test' && !testMode) {\n    testMode = true;\n    notes.push('source \"test\" uses built-in fictional data, so testMode was forced on.');\n  }\n  const tz = isBlank(cfg.timezone) ? 'America/Chicago' : String(cfg.timezone);\n  const override = parseTime(cfg.asOfOverride);\n  const asOfMs = override !== null ? override : nowMs;\n  const delivery = ['email', 'slack', 'both', 'none'].indexOf(lc(cfg.delivery)) === -1 ? 'email' : lc(cfg.delivery);\n  const s = {\n    businessName: isBlank(cfg.businessName) ? 'Your Business Name' : String(cfg.businessName),\n    timezone: tz,\n    source: source,\n    testMode: testMode,\n    delivery: delivery,\n    ownerEmail: isBlank(cfg.ownerEmail) ? '' : String(cfg.ownerEmail).trim(),\n    ownerSlackChannel: isBlank(cfg.ownerSlackChannel) ? '' : String(cfg.ownerSlackChannel).trim(),\n    stApiBase: isBlank(cfg.stApiBase) ? 'https://api.servicetitan.io' : String(cfg.stApiBase).replace(/\\/+$/, ''),\n    stTenantId: isBlank(cfg.stTenantId) ? '' : String(cfg.stTenantId).trim(),\n    stAppKey: isBlank(cfg.stAppKey) ? '' : String(cfg.stAppKey).trim(),\n    csvFolder: isBlank(cfg.csvFolder) ? '' : String(cfg.csvFolder).trim(),\n    asOf: new Date(asOfMs).toISOString(),\n    headsUp: notes,\n  };\n  Object.keys(DEFAULTS).forEach(function (k) {\n    s[k] = toNum(cfg[k], DEFAULTS[k]);\n  });\n  s.historyStart = new Date(asOfMs - s.historyDays * DAY).toISOString();\n  s.lookaheadEnd = new Date(asOfMs + s.capacityLookaheadDays * DAY).toISOString();\n  s.callsSince = new Date(asOfMs - 36 * HOUR).toISOString();\n  return s;\n}\n\nconst cfg = $input.first().json;\nreturn [{ json: { settings: prepareSettings(cfg, Date.now()) } }];\n"
+      }
+    },
+    {
+      "id": "acf6f18a-9a2e-5a38-a53a-9de73f44872b",
+      "name": "Source is ServiceTitan?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        800,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "b171f398-5ca9-5d2b-a32e-0ef00d16778c",
+              "leftValue": "={{ $json.settings.source }}",
+              "rightValue": "servicetitan",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4ce14e98-9596-5d81-a98e-25262ed9a0f9",
+      "name": "Source is CSV?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1060,
+        760
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "5387432d-6e7d-58a4-aa21-af4e9635bce8",
+              "leftValue": "={{ $json.settings.source }}",
+              "rightValue": "csv",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "dbf3bfdb-fa52-5651-a8c9-ede078958d59",
+      "name": "ServiceTitan: Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/jpm/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/jobs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "createdOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.historyStart }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "a0af10a3-0790-562c-ae95-164516171286",
+      "name": "ServiceTitan: Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/jpm/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/appointments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startsOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.historyStart }}"
+            },
+            {
+              "name": "startsBefore",
+              "value": "={{ $('Prepare Settings').first().json.settings.lookaheadEnd }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "aa250202-2543-5ff5-a800-06e6f7790ea6",
+      "name": "ServiceTitan: Appointment Assignments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/dispatch/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/appointment-assignments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "createdOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.historyStart }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "61dfdc20-64e6-5d7c-af88-e7ea845e6ffc",
+      "name": "ServiceTitan: Technicians",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/settings/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/technicians",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "active",
+              "value": "True"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "207c70bf-267f-50e5-a0a2-ab68891f741a",
+      "name": "ServiceTitan: Technician Shifts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/dispatch/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/technician-shifts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "startsOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.asOf }}"
+            },
+            {
+              "name": "endsOnOrBefore",
+              "value": "={{ $('Prepare Settings').first().json.settings.lookaheadEnd }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "3eb4bc18-c138-5187-a395-ebca760d9745",
+      "name": "ServiceTitan: Estimates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2260,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/sales/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/estimates",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "createdOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.historyStart }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "f889e8e3-055c-5e08-ab57-dfa2af7e4964",
+      "name": "ServiceTitan: Recurring Service Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2500,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/memberships/v2/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/recurring-service-events",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "dateBefore",
+              "value": "={{ $('Prepare Settings').first().json.settings.asOf }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "9bf41e59-2b50-5948-a412-6f2c92a1d533",
+      "name": "ServiceTitan: Calls",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2740,
+        280
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Prepare Settings').first().json.settings.stApiBase }}/telecom/v3/tenant/{{ $('Prepare Settings').first().json.settings.stTenantId }}/calls",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "createdOnOrAfter",
+              "value": "={{ $('Prepare Settings').first().json.settings.callsSince }}"
+            },
+            {
+              "name": "pageSize",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ST-App-Key",
+              "value": "={{ $('Prepare Settings').first().json.settings.stAppKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "oAuth2Api": {
+          "id": "PLACEHOLDER_SERVICETITAN",
+          "name": "ServiceTitan OAuth2 client credentials (PLACEHOLDER)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "6304c070-ca38-5397-a455-5cd82412f4f1",
+      "name": "Normalize ServiceTitan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2980,
+        280
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\n// DRAFT, UNVERIFIED mapping. Field names below follow ServiceTitan's public v2 docs as remembered\n// and have NOT been checked against a real tenant. Fields that a record does not carry stay blank so\n// Booking QA flags them instead of guessing.\nfunction normalizeServiceTitan(settings, raw) {\n  const rows = function (r) { return r && Array.isArray(r.data) ? r.data : []; };\n  const headsUp = (settings.headsUp || []).concat([\n    'ServiceTitan live mapping is an unverified first draft. Customer names, phone numbers, business-unit names, equipment type and age, and customer type are not read, so Booking QA will flag them as missing. The CSV export path is the recommended way to start.',\n  ]);\n  Object.keys(raw).forEach(function (name) {\n    const r = raw[name];\n    if (!r || r.error || (r.data === undefined && !Array.isArray(r))) headsUp.push('ServiceTitan \"' + name + '\" read returned no usable data.');\n    else if (r.hasMore === true) headsUp.push('ServiceTitan \"' + name + '\" has more pages than this draft reads. Totals may be incomplete.');\n  });\n  const appts = rows(raw.appointments);\n  const apptById = {};\n  appts.forEach(function (a) { apptById[a.id] = a; });\n  const assignByJob = {};\n  rows(raw.assignments).forEach(function (a) { if (!assignByJob[a.jobId]) assignByJob[a.jobId] = a; });\n  const apptByJob = {};\n  appts.forEach(function (a) { if (!apptByJob[a.jobId]) apptByJob[a.jobId] = a; });\n  const technicians = rows(raw.technicians).map(function (t) {\n    return { id: String(t.id), name: t.name || ('Technician ' + t.id), trade: '', salesCapable: false, shiftHours: null };\n  });\n  const jobs = rows(raw.jobs).map(function (j) {\n    const a = apptByJob[j.id] || {};\n    const asg = assignByJob[j.id] || {};\n    return {\n      id: String(j.jobNumber || j.id), bookedAt: j.createdOn, start: a.start, end: a.end, status: j.jobStatus || '',\n      techId: asg.technicianId !== undefined ? String(asg.technicianId) : '', customerName: 'Customer #' + j.customerId, customerPhone: '',\n      customerType: '', jobType: '', equipmentType: '', equipmentAgeYears: null, address: j.locationId ? 'Location #' + j.locationId : '',\n      priority: j.priority || '', arrivedAt: '', actualMinutes: null, businessUnit: j.businessUnitId ? String(j.businessUnitId) : '', summary: j.summary || '',\n    };\n  });\n  // Open windows are derived as shift time minus booked appointment time, because the Dispatch capacity\n  // query endpoint is a POST and this pack never writes. Gaps under 60 minutes are ignored.\n  const capacityWindows = [];\n  rows(raw.shifts).forEach(function (sh) {\n    const s0 = parseTime(sh.start), e0 = parseTime(sh.end);\n    if (s0 === null || e0 === null) return;\n    const busy = rows(raw.assignments).filter(function (a) { return String(a.technicianId) === String(sh.technicianId); })\n      .map(function (a) { return apptById[a.appointmentId]; }).filter(Boolean)\n      .map(function (a) { return [parseTime(a.start), parseTime(a.end)]; })\n      .filter(function (p) { return p[0] !== null && p[1] !== null; })\n      .sort(function (x, y) { return x[0] - y[0]; });\n    let cursor = s0;\n    const gaps = [];\n    busy.forEach(function (p) {\n      if (p[0] > cursor) gaps.push([cursor, Math.min(p[0], e0)]);\n      cursor = Math.max(cursor, p[1]);\n    });\n    if (cursor < e0) gaps.push([cursor, e0]);\n    gaps.forEach(function (g, i) {\n      if (g[1] - g[0] >= HOUR) capacityWindows.push({ id: 'ST-' + sh.technicianId + '-' + i + '-' + g[0], businessUnit: '', start: new Date(g[0]).toISOString(), end: new Date(g[1]).toISOString(), openSlots: 1 });\n    });\n  });\n  const memberships = rows(raw.memberships).map(function (m) {\n    return { id: String(m.id), customerName: 'Customer #' + (m.customerId || m.membershipId || m.id), customerPhone: '', businessUnit: '', plan: 'membership', status: 'active', nextServiceDue: m.date || m.nextServiceDate || '' };\n  });\n  const estimates = rows(raw.estimates).map(function (e) {\n    return {\n      id: String(e.id), customerName: 'Customer #' + e.customerId, customerPhone: '', businessUnit: e.businessUnitId ? String(e.businessUnitId) : '',\n      status: (e.status && e.status.name ? e.status.name : String(e.status || '')), amount: toNum(e.total !== undefined ? e.total : e.subtotal, null),\n      createdAt: e.createdOn, lastFollowupAt: '',\n    };\n  });\n  const calls = rows(raw.calls).map(function (c) {\n    return {\n      id: String(c.id), receivedAt: c.receivedOn || c.createdOn, callerName: c.from ? String(c.from) : 'Unknown caller', callerPhone: c.from ? String(c.from) : '',\n      address: '', summary: c.reason ? String(c.reason) : 'Call recorded', urgency: '', status: c.callType ? String(c.callType) : 'unknown', handledBy: '', followUpNeeded: false, notes: '',\n    };\n  });\n  return {\n    settings: Object.assign({}, settings, { headsUp: headsUp }),\n    technicians: technicians, jobs: jobs, capacityWindows: capacityWindows, memberships: memberships, estimates: estimates, calls: calls,\n  };\n}\n\nconst settings = $('Prepare Settings').first().json.settings;\nconst raw = {\n    jobs: $('ServiceTitan: Jobs').first().json,\n    appointments: $('ServiceTitan: Appointments').first().json,\n    assignments: $('ServiceTitan: Appointment Assignments').first().json,\n    technicians: $('ServiceTitan: Technicians').first().json,\n    shifts: $('ServiceTitan: Technician Shifts').first().json,\n    estimates: $('ServiceTitan: Estimates').first().json,\n    memberships: $('ServiceTitan: Recurring Service Events').first().json,\n    calls: $('ServiceTitan: Calls').first().json,\n};\nreturn [{ json: normalizeServiceTitan(settings, raw) }];\n"
+      }
+    },
+    {
+      "id": "b006a565-46b7-5951-a10f-95a392f3f68b",
+      "name": "Read CSV Exports",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1320,
+        680
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "={{ $('Prepare Settings').first().json.settings.csvFolder }}/*.csv",
+        "options": {}
+      }
+    },
+    {
+      "id": "be5537ed-4bd4-5c98-a9ca-c4a5540e883a",
+      "name": "Parse CSV Exports",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        680
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction parseCsv(text) {\n  const rows = [];\n  let row = [];\n  let field = '';\n  let inQuotes = false;\n  const src = String(text).replace(/^﻿/, '');\n  for (let i = 0; i < src.length; i++) {\n    const c = src[i];\n    if (inQuotes) {\n      if (c === '\"') {\n        if (src[i + 1] === '\"') { field += '\"'; i++; } else { inQuotes = false; }\n      } else { field += c; }\n    } else if (c === '\"') {\n      inQuotes = true;\n    } else if (c === ',') {\n      row.push(field); field = '';\n    } else if (c === '\\n' || c === '\\r') {\n      if (c === '\\r' && src[i + 1] === '\\n') i++;\n      row.push(field); field = '';\n      if (row.some(function (x) { return x !== ''; })) rows.push(row);\n      row = [];\n    } else { field += c; }\n  }\n  row.push(field);\n  if (row.some(function (x) { return x !== ''; })) rows.push(row);\n  if (rows.length === 0) return [];\n  const header = rows[0].map(function (h) { return h.trim(); });\n  return rows.slice(1).map(function (r) {\n    const o = {};\n    header.forEach(function (h, i) { o[h] = r[i] === undefined ? '' : r[i].trim(); });\n    return o;\n  });\n}\n\nfunction datasetFromTables(settings, tables) {\n  const t = tables || {};\n  const headsUp = [];\n  ['technicians', 'jobs', 'capacity', 'memberships', 'estimates', 'calls'].forEach(function (name) {\n    if (!Array.isArray(t[name])) headsUp.push('CSV export \"' + name + '.csv\" was not found. Anything that needs it is skipped.');\n  });\n  const numOrNull = function (v) { return toNum(v, null); };\n  return {\n    settings: Object.assign({}, settings, { headsUp: (settings.headsUp || []).concat(headsUp) }),\n    technicians: (t.technicians || []).map(function (r) {\n      return { id: r.tech_id, name: r.name, trade: r.trade, salesCapable: toBool(r.sales_capable, false), shiftHours: numOrNull(r.shift_hours) };\n    }),\n    jobs: (t.jobs || []).map(function (r) {\n      return {\n        id: r.job_id, bookedAt: r.booked_at, start: r.scheduled_start, end: r.scheduled_end, status: r.status,\n        techId: r.tech_id, customerName: r.customer_name, customerPhone: r.customer_phone, customerType: r.customer_type,\n        jobType: r.job_type, equipmentType: r.equipment_type, equipmentAgeYears: numOrNull(r.equipment_age_years),\n        address: r.address, priority: r.priority, arrivedAt: r.arrived_at, actualMinutes: numOrNull(r.actual_minutes),\n        businessUnit: r.business_unit, summary: r.summary || '',\n      };\n    }),\n    capacityWindows: (t.capacity || []).map(function (r) {\n      return { id: r.window_id, businessUnit: r.business_unit, start: r.window_start, end: r.window_end, openSlots: toNum(r.open_slots, 0) };\n    }),\n    memberships: (t.memberships || []).map(function (r) {\n      return {\n        id: r.membership_id, customerName: r.customer_name, customerPhone: r.customer_phone, businessUnit: r.business_unit,\n        plan: r.plan, status: r.status, nextServiceDue: r.next_service_due,\n      };\n    }),\n    estimates: (t.estimates || []).map(function (r) {\n      return {\n        id: r.estimate_id, customerName: r.customer_name, customerPhone: r.customer_phone, businessUnit: r.business_unit,\n        status: r.status, amount: numOrNull(r.amount), createdAt: r.created_at, lastFollowupAt: r.last_followup_at,\n      };\n    }),\n    calls: Array.isArray(t.calls) ? t.calls.map(function (r) {\n      return {\n        id: r.call_id, receivedAt: r.received_at, callerName: r.caller_name, callerPhone: r.caller_phone, address: r.address,\n        summary: r.summary, urgency: r.urgency, status: r.status, handledBy: r.handled_by,\n        followUpNeeded: toBool(r.follow_up_needed, false), notes: r.notes || '',\n      };\n    }) : null,\n  };\n}\n\nconst settings = $('Prepare Settings').first().json.settings;\nconst tables = {};\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const bin = items[i].binary && items[i].binary.data;\n  if (!bin) continue;\n  const buf = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const name = String(bin.fileName || '').toLowerCase().replace(/\\.csv$/, '');\n  tables[name] = parseCsv(buf.toString('utf8'));\n}\nreturn [{ json: datasetFromTables(settings, tables) }];\n"
+      }
+    },
+    {
+      "id": "7cf083e2-6a37-5f4d-a360-3a7365c5e10e",
+      "name": "Load Built-in Test Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        860
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction loadTestData(settings, dataset) {\n  return Object.assign({}, dataset, {\n    settings: Object.assign({}, settings, { asOf: dataset.referenceTime }),\n  });\n}\n\nconst DATASET = {\"technicians\":[{\"id\":\"T01\",\"name\":\"Dana Whitfield\",\"trade\":\"HVAC\",\"salesCapable\":true,\"shiftHours\":8},{\"id\":\"T02\",\"name\":\"Marcus Hale\",\"trade\":\"HVAC\",\"salesCapable\":false,\"shiftHours\":8},{\"id\":\"T03\",\"name\":\"Priya Voss\",\"trade\":\"Plumbing\",\"salesCapable\":true,\"shiftHours\":8},{\"id\":\"T04\",\"name\":\"Luis Brandt\",\"trade\":\"Plumbing\",\"salesCapable\":false,\"shiftHours\":8},{\"id\":\"T05\",\"name\":\"Tessa Okafor\",\"trade\":\"Electrical\",\"salesCapable\":false,\"shiftHours\":8},{\"id\":\"T06\",\"name\":\"Gil Ramsey\",\"trade\":\"HVAC\",\"salesCapable\":false,\"shiftHours\":null}],\"jobs\":[{\"id\":\"J0900\",\"bookedAt\":\"2025-05-28T09:00:00-05:00\",\"start\":\"2025-06-01T09:00:00-05:00\",\"end\":\"2025-06-01T11:00:00-05:00\",\"status\":\"Completed\",\"techId\":\"T01\",\"customerName\":\"Sample Household 900\",\"customerPhone\":\"(555) 010-0900\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":9,\"address\":\"9 Sample Maple Ct, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2025-06-01T09:05:00-05:00\",\"actualMinutes\":100,\"businessUnit\":\"HVAC\",\"summary\":\"Old visit outside the repeat window\"},{\"id\":\"J0950\",\"bookedAt\":\"2026-02-10T09:00:00-06:00\",\"start\":\"2026-02-12T09:00:00-06:00\",\"end\":\"2026-02-12T11:00:00-06:00\",\"status\":\"Completed\",\"techId\":\"T02\",\"customerName\":\"Sample Household 950\",\"customerPhone\":\"(555) 010-0950\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":10,\"address\":\"9 Sample Maple Ct, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2026-02-12T09:10:00-06:00\",\"actualMinutes\":95,\"businessUnit\":\"HVAC\",\"summary\":\"Igniter replaced\"},{\"id\":\"J0988\",\"bookedAt\":\"2026-01-18T09:00:00-06:00\",\"start\":\"2026-01-20T13:00:00-06:00\",\"end\":\"2026-01-20T15:00:00-06:00\",\"status\":\"Completed\",\"techId\":\"T01\",\"customerName\":\"Sample Household 988\",\"customerPhone\":\"(555) 010-0988\",\"customerType\":\"residential\",\"jobType\":\"Diagnostic\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":10,\"address\":\"9 Sample Maple Ct, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2026-01-20T13:05:00-06:00\",\"actualMinutes\":70,\"businessUnit\":\"HVAC\",\"summary\":\"Intermittent no heat\"},{\"id\":\"J1001\",\"bookedAt\":\"2026-03-06T10:00:00-06:00\",\"start\":\"2026-03-09T08:00:00-05:00\",\"end\":\"2026-03-09T10:00:00-05:00\",\"status\":\"Completed\",\"techId\":\"T01\",\"customerName\":\"Sample Household 1001\",\"customerPhone\":\"(555) 010-1001\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":8,\"address\":\"101 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2026-03-09T08:05:00-05:00\",\"actualMinutes\":120,\"businessUnit\":\"HVAC\",\"summary\":\"Blower motor\"},{\"id\":\"J1002\",\"bookedAt\":\"2026-03-06T10:30:00-06:00\",\"start\":\"2026-03-09T10:30:00-05:00\",\"end\":\"2026-03-09T13:30:00-05:00\",\"status\":\"Completed\",\"techId\":\"T01\",\"customerName\":\"Sample Household 1002\",\"customerPhone\":\"(555) 010-1002\",\"customerType\":\"residential\",\"jobType\":\"Maintenance\",\"equipmentType\":\"heat pump\",\"equipmentAgeYears\":5,\"address\":\"102 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2026-03-09T10:35:00-05:00\",\"actualMinutes\":180,\"businessUnit\":\"HVAC\",\"summary\":\"Seasonal tune-up\"},{\"id\":\"J1003\",\"bookedAt\":\"2026-03-09T08:10:00-05:00\",\"start\":\"2026-03-09T08:30:00-05:00\",\"end\":\"2026-03-09T10:00:00-05:00\",\"status\":\"Completed\",\"techId\":\"T02\",\"customerName\":\"Sample Household 1003\",\"customerPhone\":\"(555) 010-1003\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"air handler\",\"equipmentAgeYears\":9,\"address\":\"103 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"emergency\",\"arrivedAt\":\"2026-03-09T08:55:00-05:00\",\"actualMinutes\":90,\"businessUnit\":\"HVAC\",\"summary\":\"No cooling\"},{\"id\":\"J1004\",\"bookedAt\":\"2026-03-05T14:00:00-06:00\",\"start\":\"2026-03-09T10:30:00-05:00\",\"end\":\"2026-03-09T13:00:00-05:00\",\"status\":\"Completed\",\"techId\":\"T02\",\"customerName\":\"Sample Office 1004\",\"customerPhone\":\"(555) 010-1004\",\"customerType\":\"commercial\",\"jobType\":\"Maintenance\",\"equipmentType\":\"rooftop unit\",\"equipmentAgeYears\":7,\"address\":\"700 Fixture Industrial Dr, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2026-03-09T10:35:00-05:00\",\"actualMinutes\":150,\"businessUnit\":\"HVAC\",\"summary\":\"Quarterly maintenance\"},{\"id\":\"J1005\",\"bookedAt\":\"2026-03-09T13:00:00-05:00\",\"start\":\"2026-03-09T13:15:00-05:00\",\"end\":\"2026-03-09T15:15:00-05:00\",\"status\":\"Completed\",\"techId\":\"T02\",\"customerName\":\"Sample Household 1005\",\"customerPhone\":\"(555) 010-1005\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"condenser\",\"equipmentAgeYears\":11,\"address\":\"105 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"same-day\",\"arrivedAt\":\"2026-03-09T13:30:00-05:00\",\"actualMinutes\":120,\"businessUnit\":\"HVAC\",\"summary\":\"Capacitor\"},{\"id\":\"J1006\",\"bookedAt\":\"2026-03-06T09:00:00-06:00\",\"start\":\"2026-03-09T08:00:00-05:00\",\"end\":\"2026-03-09T12:00:00-05:00\",\"status\":\"Completed\",\"techId\":\"T03\",\"customerName\":\"Sample Household 1006\",\"customerPhone\":\"(555) 010-1006\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"water heater\",\"equipmentAgeYears\":6,\"address\":\"106 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2026-03-09T08:10:00-05:00\",\"actualMinutes\":240,\"businessUnit\":\"Plumbing\",\"summary\":\"Leaking tank fitting\"},{\"id\":\"J1007\",\"bookedAt\":\"2026-03-09T09:00:00-05:00\",\"start\":\"2026-03-09T09:30:00-05:00\",\"end\":\"2026-03-09T12:30:00-05:00\",\"status\":\"Completed\",\"techId\":\"T04\",\"customerName\":\"Sample Household 1007\",\"customerPhone\":\"(555) 010-1007\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"drain line\",\"equipmentAgeYears\":null,\"address\":\"107 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"same-day\",\"arrivedAt\":\"2026-03-09T10:30:00-05:00\",\"actualMinutes\":180,\"businessUnit\":\"Plumbing\",\"summary\":\"Main line backup\"},{\"id\":\"J1008\",\"bookedAt\":\"2026-03-06T11:00:00-06:00\",\"start\":\"2026-03-09T13:00:00-05:00\",\"end\":\"2026-03-09T17:00:00-05:00\",\"status\":\"Completed\",\"techId\":\"T04\",\"customerName\":\"Sample Household 1008\",\"customerPhone\":\"(555) 010-1008\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"fixture\",\"equipmentAgeYears\":4,\"address\":\"108 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"2026-03-09T13:05:00-05:00\",\"actualMinutes\":240,\"businessUnit\":\"Plumbing\",\"summary\":\"Fixture replacement\"},{\"id\":\"J1009\",\"bookedAt\":\"2026-03-09T08:45:00-05:00\",\"start\":\"2026-03-09T09:00:00-05:00\",\"end\":\"2026-03-09T11:30:00-05:00\",\"status\":\"Completed\",\"techId\":\"T05\",\"customerName\":\"Sample Household 1009\",\"customerPhone\":\"(555) 010-1009\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"panel\",\"equipmentAgeYears\":20,\"address\":\"109 Sample Birch Ln, Testville, TX 00000\",\"priority\":\"emergency\",\"arrivedAt\":\"\",\"actualMinutes\":144,\"businessUnit\":\"Electrical\",\"summary\":\"Breaker tripping\"},{\"id\":\"J1101\",\"bookedAt\":\"2026-03-09T16:20:00-05:00\",\"start\":\"2026-03-10T08:00:00-05:00\",\"end\":\"2026-03-10T09:30:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T06\",\"customerName\":\"Sample Household 1101\",\"customerPhone\":\"(555) 010-1101\",\"customerType\":\"residential\",\"jobType\":\"Maintenance\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":6,\"address\":\"20 Sample Pine Rd, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"HVAC\",\"summary\":\"Heating tune-up\"},{\"id\":\"J1102\",\"bookedAt\":\"2026-03-09T17:05:00-05:00\",\"start\":\"2026-03-10T11:30:00-05:00\",\"end\":\"2026-03-10T13:30:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T02\",\"customerName\":\"Sample Household 1102\",\"customerPhone\":\"(555) 010-1102\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"air handler\",\"equipmentAgeYears\":null,\"address\":\"31 Sample Cedar Way, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"HVAC\",\"summary\":\"Weak airflow\"},{\"id\":\"J1103\",\"bookedAt\":\"2026-03-09T18:10:00-05:00\",\"start\":\"2026-03-10T09:00:00-05:00\",\"end\":\"2026-03-10T11:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T02\",\"customerName\":\"Sample Household 1103\",\"customerPhone\":\"(555) 010-1103\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"condenser\",\"equipmentAgeYears\":17,\"address\":\"42 Sample Elm St, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"HVAC\",\"summary\":\"Not cooling\"},{\"id\":\"J1104\",\"bookedAt\":\"2026-03-09T19:30:00-05:00\",\"start\":\"2026-03-10T13:00:00-05:00\",\"end\":\"2026-03-10T15:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T04\",\"customerName\":\"Sample Household 1104\",\"customerPhone\":\"(555) 010-1104\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"water heater\",\"equipmentAgeYears\":14,\"address\":\"55 Sample Alder Ave, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"Plumbing\",\"summary\":\"Pilot will not stay lit\"},{\"id\":\"J1105\",\"bookedAt\":\"2026-03-05T09:00:00-06:00\",\"start\":\"2026-03-10T13:00:00-05:00\",\"end\":\"2026-03-10T15:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T01\",\"customerName\":\"Sample Office 1105\",\"customerPhone\":\"(555) 010-1105\",\"customerType\":\"commercial\",\"jobType\":\"Maintenance\",\"equipmentType\":\"rooftop unit\",\"equipmentAgeYears\":10,\"address\":\"500 Fixture Industrial Dr, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"HVAC\",\"summary\":\"Scheduled maintenance\"},{\"id\":\"J1106\",\"bookedAt\":\"2026-03-05T11:00:00-06:00\",\"start\":\"2026-03-10T13:30:00-05:00\",\"end\":\"2026-03-10T15:30:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T03\",\"customerName\":\"Sample Household 1106\",\"customerPhone\":\"(555) 010-1106\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"water heater\",\"equipmentAgeYears\":null,\"address\":\"77 Sample Willow Ave, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"Plumbing\",\"summary\":\"Booked earlier; outside the QA window\"},{\"id\":\"J1107\",\"bookedAt\":\"2026-03-09T14:00:00-05:00\",\"start\":\"2026-03-10T08:00:00-05:00\",\"end\":\"2026-03-10T10:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T04\",\"customerName\":\"Sample Office 1107\",\"customerPhone\":\"(555) 010-1107\",\"customerType\":\"commercial\",\"jobType\":\"Repair\",\"equipmentType\":\"backflow assembly\",\"equipmentAgeYears\":9,\"address\":\"800 Fixture Commerce Pkwy, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"Plumbing\",\"summary\":\"Annual test\"},{\"id\":\"J1108\",\"bookedAt\":\"2026-03-09T15:45:00-05:00\",\"start\":\"2026-03-10T15:00:00-05:00\",\"end\":\"2026-03-10T17:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T05\",\"customerName\":\"Sample Household 1108\",\"customerPhone\":\"(555) 010-1108\",\"customerType\":\"\",\"jobType\":\"Repair\",\"equipmentType\":\"\",\"equipmentAgeYears\":null,\"address\":\"64 Sample Hickory Dr, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"Electrical\",\"summary\":\"Lights flicker\"},{\"id\":\"J1109\",\"bookedAt\":\"2026-03-09T12:30:00-05:00\",\"start\":\"2026-03-10T10:00:00-05:00\",\"end\":\"2026-03-10T12:00:00-05:00\",\"status\":\"Scheduled\",\"techId\":\"T06\",\"customerName\":\"Sample Household 1109\",\"customerPhone\":\"(555) 010-1109\",\"customerType\":\"residential\",\"jobType\":\"Repair\",\"equipmentType\":\"furnace\",\"equipmentAgeYears\":10,\"address\":\"9 Sample Maple Ct, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"HVAC\",\"summary\":\"No heat again\"},{\"id\":\"J1110\",\"bookedAt\":\"2026-03-09T10:00:00-05:00\",\"start\":\"2026-03-10T11:00:00-05:00\",\"end\":\"2026-03-10T12:00:00-05:00\",\"status\":\"Canceled\",\"techId\":\"T05\",\"customerName\":\"Sample Household 1110\",\"customerPhone\":\"(555) 010-1110\",\"customerType\":\"\",\"jobType\":\"Repair\",\"equipmentType\":\"\",\"equipmentAgeYears\":null,\"address\":\"66 Sample Hickory Dr, Testville, TX 00000\",\"priority\":\"standard\",\"arrivedAt\":\"\",\"actualMinutes\":null,\"businessUnit\":\"Electrical\",\"summary\":\"Canceled by customer\"}],\"capacityWindows\":[{\"id\":\"W01\",\"businessUnit\":\"HVAC\",\"start\":\"2026-03-10T13:00:00-05:00\",\"end\":\"2026-03-10T15:00:00-05:00\",\"openSlots\":2},{\"id\":\"W02\",\"businessUnit\":\"Plumbing\",\"start\":\"2026-03-10T15:00:00-05:00\",\"end\":\"2026-03-10T17:00:00-05:00\",\"openSlots\":1},{\"id\":\"W03\",\"businessUnit\":\"Electrical\",\"start\":\"2026-03-11T09:00:00-05:00\",\"end\":\"2026-03-11T11:00:00-05:00\",\"openSlots\":1},{\"id\":\"W04\",\"businessUnit\":\"HVAC\",\"start\":\"2026-03-11T14:00:00-05:00\",\"end\":\"2026-03-11T16:00:00-05:00\",\"openSlots\":1},{\"id\":\"W05\",\"businessUnit\":\"HVAC\",\"start\":\"2026-03-14T09:00:00-05:00\",\"end\":\"2026-03-14T11:00:00-05:00\",\"openSlots\":2},{\"id\":\"W06\",\"businessUnit\":\"Plumbing\",\"start\":\"2026-03-09T15:00:00-05:00\",\"end\":\"2026-03-09T17:00:00-05:00\",\"openSlots\":1}],\"memberships\":[{\"id\":\"M01\",\"customerName\":\"Odette Marsh\",\"customerPhone\":\"(555) 010-0111\",\"businessUnit\":\"HVAC\",\"plan\":\"Comfort Club\",\"status\":\"Active\",\"nextServiceDue\":\"2025-11-15\"},{\"id\":\"M02\",\"customerName\":\"Wendell Pruitt\",\"customerPhone\":\"(555) 010-0112\",\"businessUnit\":\"HVAC\",\"plan\":\"Comfort Club\",\"status\":\"Active\",\"nextServiceDue\":\"2026-01-20\"},{\"id\":\"M03\",\"customerName\":\"Fiona Achterberg\",\"customerPhone\":\"(555) 010-0113\",\"businessUnit\":\"Plumbing\",\"plan\":\"Water Guard\",\"status\":\"Active\",\"nextServiceDue\":\"2026-02-01\"},{\"id\":\"M04\",\"customerName\":\"Ramon Keller\",\"customerPhone\":\"(555) 010-0114\",\"businessUnit\":\"Electrical\",\"plan\":\"Safety Check\",\"status\":\"Active\",\"nextServiceDue\":\"2025-12-20\"},{\"id\":\"M05\",\"customerName\":\"Gus Lindell\",\"customerPhone\":\"(555) 010-0115\",\"businessUnit\":\"HVAC\",\"plan\":\"Comfort Club\",\"status\":\"Active\",\"nextServiceDue\":\"2026-02-20\"},{\"id\":\"M06\",\"customerName\":\"Nell Brandt\",\"customerPhone\":\"(555) 010-0116\",\"businessUnit\":\"HVAC\",\"plan\":\"Comfort Club\",\"status\":\"Cancelled\",\"nextServiceDue\":\"2025-10-01\"},{\"id\":\"M07\",\"customerName\":\"Pia Hargrove\",\"customerPhone\":\"(555) 010-0117\",\"businessUnit\":\"Plumbing\",\"plan\":\"Water Guard\",\"status\":\"Active\",\"nextServiceDue\":\"2026-03-25\"}],\"estimates\":[{\"id\":\"E01\",\"customerName\":\"Tamsin Okoye\",\"customerPhone\":\"(555) 010-0121\",\"businessUnit\":\"HVAC\",\"status\":\"Open\",\"amount\":11800,\"createdAt\":\"2026-03-01T10:00:00-06:00\",\"lastFollowupAt\":\"\"},{\"id\":\"E02\",\"customerName\":\"Wendell Pruitt\",\"customerPhone\":\"(555) 010-0112\",\"businessUnit\":\"HVAC\",\"status\":\"Open\",\"amount\":6450,\"createdAt\":\"2026-02-20T10:00:00-06:00\",\"lastFollowupAt\":\"2026-02-25T15:00:00-06:00\"},{\"id\":\"E03\",\"customerName\":\"Corliss Vane\",\"customerPhone\":\"(555) 010-0123\",\"businessUnit\":\"Plumbing\",\"status\":\"Open\",\"amount\":4900,\"createdAt\":\"2026-03-03T10:00:00-06:00\",\"lastFollowupAt\":\"2026-03-08T10:00:00-05:00\"},{\"id\":\"E04\",\"customerName\":\"Dov Ashgrove\",\"customerPhone\":\"(555) 010-0124\",\"businessUnit\":\"Electrical\",\"status\":\"Open\",\"amount\":3200,\"createdAt\":\"2026-02-25T10:00:00-06:00\",\"lastFollowupAt\":\"\"},{\"id\":\"E05\",\"customerName\":\"Lysander Pike\",\"customerPhone\":\"(555) 010-0125\",\"businessUnit\":\"HVAC\",\"status\":\"Sold\",\"amount\":9000,\"createdAt\":\"2026-02-10T10:00:00-06:00\",\"lastFollowupAt\":\"2026-02-12T10:00:00-06:00\"},{\"id\":\"E06\",\"customerName\":\"Marguerite Tolliver\",\"customerPhone\":\"(555) 010-0126\",\"businessUnit\":\"Plumbing\",\"status\":\"Open\",\"amount\":2750,\"createdAt\":\"2026-03-07T10:00:00-06:00\",\"lastFollowupAt\":\"\"},{\"id\":\"E07\",\"customerName\":\"Bram Hollis\",\"customerPhone\":\"(555) 010-0127\",\"businessUnit\":\"Electrical\",\"status\":\"Dismissed\",\"amount\":1500,\"createdAt\":\"2026-01-15T10:00:00-06:00\",\"lastFollowupAt\":\"\"}],\"calls\":[{\"id\":\"C01\",\"receivedAt\":\"2026-03-09T18:42:00-05:00\",\"callerName\":\"Isolde Fairbanks\",\"callerPhone\":\"(555) 010-0131\",\"address\":\"15 Sample Aspen Ln, Testville, TX 00000\",\"summary\":\"No heat, elderly resident at home\",\"urgency\":\"emergency\",\"status\":\"resolved\",\"handledBy\":\"T02\",\"followUpNeeded\":false,\"notes\":\"Limit switch reset on site\"},{\"id\":\"C02\",\"receivedAt\":\"2026-03-09T21:15:00-05:00\",\"callerName\":\"Cormac Ridley\",\"callerPhone\":\"(555) 010-0132\",\"address\":\"88 Sample Spruce St, Testville, TX 00000\",\"summary\":\"Burst pipe in basement\",\"urgency\":\"emergency\",\"status\":\"dispatched\",\"handledBy\":\"T04\",\"followUpNeeded\":true,\"notes\":\"Temporary repair done; permanent repair needs parts\"},{\"id\":\"C03\",\"receivedAt\":\"2026-03-10T02:30:00-05:00\",\"callerName\":\"Beatrix Lund\",\"callerPhone\":\"(555) 010-0133\",\"address\":\"310 Sample Fir Ct, Testville, TX 00000\",\"summary\":\"Burning smell near panel, breaker tripping\",\"urgency\":\"emergency\",\"status\":\"unresolved\",\"handledBy\":\"\",\"followUpNeeded\":true,\"notes\":\"Voicemail only; no callback recorded\"},{\"id\":\"C04\",\"receivedAt\":\"2026-03-09T19:05:00-05:00\",\"callerName\":\"Hollis Winter\",\"callerPhone\":\"(555) 010-0134\",\"address\":\"12 Sample Poplar Way, Testville, TX 00000\",\"summary\":\"Quote request for AC replacement\",\"urgency\":\"non-emergency\",\"status\":\"voicemail\",\"handledBy\":\"\",\"followUpNeeded\":true,\"notes\":\"\"},{\"id\":\"C05\",\"receivedAt\":\"2026-03-09T16:30:00-05:00\",\"callerName\":\"Aldous Kent\",\"callerPhone\":\"(555) 010-0135\",\"address\":\"40 Sample Oak Ct, Testville, TX 00000\",\"summary\":\"Clogged drain during business hours\",\"urgency\":\"emergency\",\"status\":\"resolved\",\"handledBy\":\"T04\",\"followUpNeeded\":false,\"notes\":\"Before the after-hours window\"},{\"id\":\"C06\",\"receivedAt\":\"2026-03-10T05:50:00-05:00\",\"callerName\":\"Philippa Crane\",\"callerPhone\":\"(555) 010-0136\",\"address\":\"73 Sample Walnut Dr, Testville, TX 00000\",\"summary\":\"Water heater leaking into garage\",\"urgency\":\"emergency\",\"status\":\"resolved\",\"handledBy\":\"T04\",\"followUpNeeded\":false,\"notes\":\"Shutoff closed; replacement quote requested\"}],\"referenceTime\":\"2026-03-10T07:00:00-05:00\"};\nconst settings = $('Prepare Settings').first().json.settings;\nreturn [{ json: loadTestData(settings, DATASET) }];\n"
+      }
+    },
+    {
+      "id": "4fa03218-a3eb-5d2e-a648-2d90d6d1555c",
+      "name": "1. Booking QA & Skill-Tier Routing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction bookingQa(data) {\n  const s = data.settings;\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const since = asOf - s.bookingLookbackHours * HOUR;\n  const jobs = data.jobs || [];\n  const techs = data.technicians || [];\n  const techById = {};\n  techs.forEach(function (t) { techById[t.id] = t; });\n  const open = { scheduled: true, dispatched: true };\n  const reviewed = jobs.filter(function (j) {\n    const b = parseTime(j.bookedAt);\n    return b !== null && b >= since && b <= asOf && open[lc(j.status)] === true;\n  });\n  const repeatSince = asOf - s.repeatWindowDays * DAY;\n  const overlaps = function (a, b) {\n    const as = parseTime(a.start), ae = parseTime(a.end), bs = parseTime(b.start), be = parseTime(b.end);\n    return as !== null && ae !== null && bs !== null && be !== null && as < be && bs < ae;\n  };\n  const flagged = [];\n  reviewed.forEach(function (job) {\n    const flags = [];\n    if (isBlank(job.customerType)) flags.push({ code: 'missing_customer_type', text: 'Commercial vs residential not recorded' });\n    if (isBlank(job.equipmentType)) flags.push({ code: 'missing_equipment_type', text: 'Equipment type not recorded' });\n    if (job.equipmentAgeYears === null || job.equipmentAgeYears === undefined) flags.push({ code: 'missing_equipment_age', text: 'Equipment age not recorded' });\n    const key = normAddr(job.address);\n    if (key) {\n      const priors = jobs.filter(function (o) {\n        const st = parseTime(o.start);\n        return o.id !== job.id && normAddr(o.address) === key && lc(o.status) === 'completed' && st !== null && st >= repeatSince && st <= asOf;\n      });\n      if (priors.length > 0) {\n        const last = Math.max.apply(null, priors.map(function (o) { return parseTime(o.start); }));\n        flags.push({\n          code: 'repeat_address',\n          text: 'Repeat address: ' + priors.length + ' completed ' + plural(priors.length, 'visit') + ' in the last ' + s.repeatWindowDays + ' days (latest ' + fmtDay(last, tz) + ')',\n        });\n      }\n    }\n    let routing = null;\n    const isRepair = lc(job.jobType) === 'repair' || lc(job.jobType) === 'diagnostic';\n    if (isRepair && job.equipmentAgeYears !== null && job.equipmentAgeYears !== undefined && job.equipmentAgeYears >= s.replacementAgeYears) {\n      flags.push({\n        code: 'replacement_opportunity',\n        text: 'Possible replacement opportunity: ' + (job.equipmentType || 'equipment') + ' is ' + job.equipmentAgeYears + ' years old (threshold ' + s.replacementAgeYears + ')',\n      });\n      const assigned = techById[job.techId];\n      if (assigned && assigned.salesCapable) {\n        routing = { status: 'already_sales_capable', suggested: [] };\n      } else {\n        const free = techs.filter(function (t) {\n          if (!t.salesCapable || t.id === job.techId || lc(t.trade) !== lc(job.businessUnit)) return false;\n          return !jobs.some(function (o) { return o.techId === t.id && open[lc(o.status)] === true && overlaps(o, job); });\n        }).map(function (t) { return { id: t.id, name: t.name }; });\n        routing = { status: free.length > 0 ? 'suggested' : 'none_free', suggested: free };\n      }\n    }\n    if (flags.length > 0) {\n      const st = parseTime(job.start), en = parseTime(job.end);\n      flagged.push({\n        jobId: job.id,\n        window: st !== null && en !== null ? fmtWindow(st, en, tz) : 'time not set',\n        customerName: job.customerName,\n        businessUnit: job.businessUnit,\n        customerType: isBlank(job.customerType) ? 'unknown' : job.customerType,\n        assignedTech: techById[job.techId] ? techById[job.techId].name : 'unassigned',\n        address: job.address,\n        flags: flags,\n        routing: routing,\n      });\n    }\n  });\n  return { lookbackHours: s.bookingLookbackHours, reviewedCount: reviewed.length, flaggedCount: flagged.length, flagged: flagged };\n}\n\nconst d = $input.first().json;\nreturn [{ json: Object.assign({}, d, { bookingQa: bookingQa(d) }) }];\n"
+      }
+    },
+    {
+      "id": "93fd986c-6192-58f2-adfe-bbf7539da43c",
+      "name": "2. Open-Capacity & Unsold-Estimate Filler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2380,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction capacityFiller(data) {\n  const s = data.settings;\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const horizon = asOf + s.capacityLookaheadDays * DAY;\n  const today = localDate(asOf, tz);\n  const windows = (data.capacityWindows || []).filter(function (w) {\n    const st = parseTime(w.start), en = parseTime(w.end);\n    return st !== null && en !== null && en > st && st >= asOf && st < horizon && w.openSlots > 0;\n  }).map(function (w) {\n    return { id: w.id, businessUnit: w.businessUnit, startMs: parseTime(w.start), endMs: parseTime(w.end), openSlots: w.openSlots, left: w.openSlots };\n  }).sort(function (a, b) { return a.startMs - b.startMs; });\n  let openHours = 0, openSlots = 0;\n  windows.forEach(function (w) {\n    openHours += w.openSlots * (w.endMs - w.startMs) / HOUR;\n    openSlots += w.openSlots;\n  });\n\n  // Unworked estimates: open, and no follow-up (or creation) in estimateStaleDays or more.\n  const unworked = [];\n  let openEstimateCount = 0;\n  (data.estimates || []).forEach(function (e) {\n    if (lc(e.status) !== 'open') return;\n    openEstimateCount++;\n    const touch = Math.max(parseTime(e.createdAt) || 0, parseTime(e.lastFollowupAt) || 0);\n    if (touch === 0) return;\n    const idle = dayDiff(localDate(touch, tz), today);\n    if (idle >= s.estimateStaleDays) unworked.push({ estimate: e, idleDays: idle });\n  });\n  const unworkedTotal = unworked.reduce(function (sum, u) { return sum + (u.estimate.amount || 0); }, 0);\n\n  // Callback candidates, one per customer + business unit.\n  const cands = {};\n  const keyOf = function (x) { return (normPhone(x.customerPhone) || lc(x.customerName)) + '|' + lc(x.businessUnit); };\n  unworked.forEach(function (u) {\n    const e = u.estimate;\n    const k = keyOf(e);\n    cands[k] = cands[k] || { customerName: e.customerName, customerPhone: e.customerPhone, businessUnit: e.businessUnit, reasons: [], estimateAmount: 0, overdueDays: 0 };\n    cands[k].reasons.push('Unsold estimate ' + e.id + ' (' + fmtMoney(e.amount || 0) + ', no activity for ' + u.idleDays + ' days)');\n    cands[k].estimateAmount += e.amount || 0;\n  });\n  let overdueCount = 0;\n  (data.memberships || []).forEach(function (m) {\n    if (lc(m.status) !== 'active' || isBlank(m.nextServiceDue)) return;\n    const od = dayDiff(String(m.nextServiceDue).slice(0, 10), today);\n    if (od < s.membershipOverdueDays) return;\n    overdueCount++;\n    const k = keyOf(m);\n    cands[k] = cands[k] || { customerName: m.customerName, customerPhone: m.customerPhone, businessUnit: m.businessUnit, reasons: [], estimateAmount: 0, overdueDays: 0 };\n    cands[k].reasons.push('Maintenance agreement ' + m.id + ' overdue ' + od + ' days (' + (m.plan || 'plan') + ')');\n    cands[k].overdueDays = Math.max(cands[k].overdueDays, od);\n  });\n  const ranked = Object.keys(cands).map(function (k) { return cands[k]; }).sort(function (a, b) {\n    return (b.estimateAmount - a.estimateAmount) || (b.overdueDays - a.overdueDays) || String(a.customerName).localeCompare(String(b.customerName));\n  });\n  const queue = [];\n  const overflow = [];\n  ranked.forEach(function (c) {\n    const w = windows.find(function (x) {\n      return x.left > 0 && (lc(x.businessUnit) === lc(c.businessUnit) || isBlank(x.businessUnit) || isBlank(c.businessUnit));\n    });\n    if (!w) { overflow.push(c); return; }\n    w.left--;\n    queue.push({\n      customerName: c.customerName, customerPhone: c.customerPhone, businessUnit: c.businessUnit, reasons: c.reasons,\n      windowId: w.id, windowStartMs: w.startMs, windowLabel: fmtWindow(w.startMs, w.endMs, tz),\n      note: 'DRAFT for dispatcher review. Nothing has been sent to this customer.',\n    });\n  });\n  queue.sort(function (a, b) { return a.windowStartMs - b.windowStartMs; });\n  return {\n    lookaheadDays: s.capacityLookaheadDays,\n    openWindowCount: windows.length,\n    openSlots: openSlots,\n    openHours: round1(openHours),\n    windows: windows.map(function (w) { return { id: w.id, businessUnit: w.businessUnit, label: fmtWindow(w.startMs, w.endMs, tz), openSlots: w.openSlots }; }),\n    overdueMembershipCount: overdueCount,\n    openEstimateCount: openEstimateCount,\n    unworkedEstimates: {\n      count: unworked.length,\n      total: unworkedTotal,\n      items: unworked.map(function (u) { return { id: u.estimate.id, customerName: u.estimate.customerName, amount: u.estimate.amount, idleDays: u.idleDays }; }),\n    },\n    queue: queue,\n    overflow: overflow.map(function (c) { return { customerName: c.customerName, businessUnit: c.businessUnit, reasons: c.reasons }; }),\n  };\n}\n\nconst d = $input.first().json;\nreturn [{ json: Object.assign({}, d, { capacity: capacityFiller(d) }) }];\n"
+      }
+    },
+    {
+      "id": "1d58d1f7-74aa-5760-aab9-dc3845e629f6",
+      "name": "3. Morning Dispatch KPI Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction kpiDigest(data) {\n  const s = data.settings;\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const reportDate = dayAdd(localDate(asOf, tz), -1);\n  const techs = data.technicians || [];\n  const jobs = data.jobs || [];\n  const headsUp = (s.headsUp || []).slice();\n  const onDay = jobs.filter(function (j) {\n    const st = parseTime(j.start);\n    return st !== null && localDate(st, tz) === reportDate && lc(j.status) === 'completed';\n  });\n  let missingMinutes = 0;\n  const perTech = techs.map(function (t) {\n    const mine = onDay.filter(function (j) { return j.techId === t.id; });\n    let minutes = 0;\n    mine.forEach(function (j) {\n      if (j.actualMinutes === null || j.actualMinutes === undefined) missingMinutes++; else minutes += j.actualMinutes;\n    });\n    const shiftMinutes = t.shiftHours && t.shiftHours > 0 ? t.shiftHours * 60 : null;\n    return {\n      id: t.id, name: t.name, trade: t.trade, jobs: mine.length, minutes: minutes, shiftHours: t.shiftHours,\n      utilizationPct: shiftMinutes === null ? null : round1(minutes / shiftMinutes * 100),\n    };\n  });\n  const counted = perTech.filter(function (p) { return p.utilizationPct !== null; });\n  const shiftTotal = counted.reduce(function (a, p) { return a + p.shiftHours * 60; }, 0);\n  const minutesTotal = counted.reduce(function (a, p) { return a + p.minutes; }, 0);\n  const team = shiftTotal > 0 ? { pct: round1(minutesTotal / shiftTotal * 100), minutes: minutesTotal, shiftMinutes: shiftTotal } : null;\n  if (techs.length === 0) headsUp.push('Technician utilization could not be computed: no technicians in the data.');\n  else if (team === null) headsUp.push('Technician utilization could not be computed: no technician has shift hours.');\n  perTech.filter(function (p) { return p.utilizationPct === null; }).forEach(function (p) {\n    headsUp.push(p.name + ' has no shift hours in the data, so utilization is not shown for them and they are left out of the team figure.');\n  });\n  if (missingMinutes > 0) headsUp.push(missingMinutes + ' completed ' + plural(missingMinutes, 'job has', 'jobs have') + ' no on-site minutes recorded and ' + plural(missingMinutes, 'is', 'are') + ' not counted in utilization.');\n\n  const urgent = jobs.filter(function (j) {\n    const st = parseTime(j.start);\n    return (lc(j.priority) === 'emergency' || lc(j.priority) === 'same-day') && st !== null && localDate(st, tz) === reportDate && lc(j.status) !== 'canceled';\n  });\n  const times = [];\n  let missingArrival = 0;\n  urgent.forEach(function (j) {\n    const b = parseTime(j.bookedAt), a = parseTime(j.arrivedAt);\n    if (b === null || a === null || a < b) { missingArrival++; return; }\n    times.push((a - b) / 60000);\n  });\n  const responseTime = times.length > 0\n    ? { count: times.length, avgMinutes: round1(times.reduce(function (x, y) { return x + y; }, 0) / times.length), maxMinutes: Math.round(Math.max.apply(null, times)), missing: missingArrival }\n    : null;\n  if (responseTime === null) headsUp.push('Response time could not be computed: no emergency or same-day job on ' + reportDate + ' has both a booked time and an arrival time.');\n  else if (missingArrival > 0) headsUp.push(missingArrival + ' emergency or same-day ' + plural(missingArrival, 'job') + ' on ' + reportDate + ' ' + plural(missingArrival, 'has', 'have') + ' no usable arrival time and ' + plural(missingArrival, 'is', 'are') + ' left out of response time.');\n\n  const cap = data.capacity;\n  const qa = data.bookingQa;\n  if (!cap) headsUp.push('Open capacity and unworked estimates could not be computed: the capacity step did not run.');\n  return {\n    reportDate: reportDate,\n    utilization: { team: team, perTech: perTech },\n    responseTime: responseTime,\n    openCapacity: cap ? { hours: cap.openHours, slots: cap.openSlots, windows: cap.openWindowCount, lookaheadDays: cap.lookaheadDays } : null,\n    unworkedEstimates: cap ? { count: cap.unworkedEstimates.count, total: cap.unworkedEstimates.total } : null,\n    bookingQa: qa ? { reviewed: qa.reviewedCount, flagged: qa.flaggedCount } : null,\n    headsUp: headsUp,\n  };\n}\n\nconst d = $input.first().json;\nreturn [{ json: Object.assign({}, d, { kpis: kpiDigest(d) }) }];\n"
+      }
+    },
+    {
+      "id": "f02cdad8-17a6-5885-aad9-adf5a3a80e9b",
+      "name": "4. After-Hours Handoff Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2940,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction afterHoursHandoff(data) {\n  const s = data.settings;\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  if (!Array.isArray(data.calls)) {\n    return { computed: false, headsUp: 'After-hours handoff could not be computed: no call data was supplied.' };\n  }\n  let t = Math.floor(asOf / 900000) * 900000;\n  for (let i = 0; i < 120; i++) {\n    const p = localParts(t, tz);\n    if (p.hour === s.afterHoursStartHour && p.minute === 0) break;\n    t -= 900000;\n  }\n  const windowStart = t;\n  const techById = {};\n  (data.technicians || []).forEach(function (x) { techById[x.id] = x; });\n  const inWindow = data.calls.filter(function (c) {\n    const r = parseTime(c.receivedAt);\n    return r !== null && r >= windowStart && r <= asOf;\n  });\n  const urgencyOf = function (c) { return lc(c.urgency) === 'emergency' ? 'emergency' : (isBlank(c.urgency) ? 'unclassified' : 'non-emergency'); };\n  const needsAction = function (c) { return lc(c.status) !== 'resolved' || c.followUpNeeded === true; };\n  const emergencies = inWindow.filter(function (c) { return urgencyOf(c) === 'emergency'; });\n  const unclassified = inWindow.filter(function (c) { return urgencyOf(c) === 'unclassified'; });\n  const nonEmergency = inWindow.filter(function (c) { return urgencyOf(c) === 'non-emergency'; });\n  const listed = emergencies.concat(unclassified).map(function (c) {\n    const h = techById[c.handledBy];\n    return {\n      id: c.id, time: fmtDay(parseTime(c.receivedAt), tz) + ' ' + fmtTime(parseTime(c.receivedAt), tz), receivedMs: parseTime(c.receivedAt),\n      urgency: urgencyOf(c), callerName: c.callerName, callerPhone: c.callerPhone, address: c.address, summary: c.summary,\n      status: lc(c.status) || 'unknown', handledBy: h ? h.name : (isBlank(c.handledBy) ? 'nobody recorded' : c.handledBy),\n      followUpNeeded: c.followUpNeeded === true, notes: c.notes, needsAction: needsAction(c),\n    };\n  }).sort(function (a, b) { return (Number(b.needsAction) - Number(a.needsAction)) || (a.receivedMs - b.receivedMs); });\n  return {\n    computed: true,\n    windowLabel: fmtDay(windowStart, tz) + ' ' + fmtTime(windowStart, tz) + ' to ' + fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz),\n    emergencyCount: emergencies.length,\n    unclassifiedCount: unclassified.length,\n    nonEmergencyCount: nonEmergency.length,\n    needsActionCount: listed.filter(function (c) { return c.needsAction; }).length,\n    resolvedCount: listed.filter(function (c) { return !c.needsAction; }).length,\n    calls: listed,\n  };\n}\n\nconst d = $input.first().json;\nreturn [{ json: Object.assign({}, d, { afterHours: afterHoursHandoff(d) }) }];\n"
+      }
+    },
+    {
+      "id": "2695a41c-4430-52cb-ab2b-de2dd97b4f5a",
+      "name": "Assemble Owner Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3220,
+        520
+      ],
+      "parameters": {
+        "jsCode": "// Generated from dispatch_logic.cjs by build_workflow.cjs. Edit the module, not this node.\n// DRAFT v0.1.0. No network calls and nothing is sent from this node.\nconst DEFAULTS = {\n  bookingLookbackHours: 24,\n  replacementAgeYears: 12,\n  repeatWindowDays: 180,\n  membershipOverdueDays: 30,\n  estimateStaleDays: 7,\n  capacityLookaheadDays: 2,\n  afterHoursStartHour: 17,\n  maxItemsPerSection: 10,\n  historyDays: 90,\n};\nconst HOUR = 3600000;\nconst DAY = 86400000;\n\nfunction isBlank(v) {\n  return v === null || v === undefined || String(v).trim() === '';\n}\nfunction toNum(v, d) {\n  if (isBlank(v)) return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n}\nfunction toBool(v, d) {\n  if (typeof v === 'boolean') return v;\n  if (isBlank(v)) return d;\n  const s = String(v).trim().toLowerCase();\n  if (['true', 'yes', 'y', '1'].includes(s)) return true;\n  if (['false', 'no', 'n', '0'].includes(s)) return false;\n  return d;\n}\nfunction parseTime(iso) {\n  if (isBlank(iso)) return null;\n  const t = Date.parse(iso);\n  return Number.isFinite(t) ? t : null;\n}\nfunction round1(n) {\n  return Math.round(n * 10) / 10;\n}\nfunction localParts(ms, tz) {\n  const f = new Intl.DateTimeFormat('en-US', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',\n  });\n  const o = {};\n  f.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });\n  return { date: o.year + '-' + o.month + '-' + o.day, hour: Number(o.hour), minute: Number(o.minute) };\n}\nfunction localDate(ms, tz) {\n  return localParts(ms, tz).date;\n}\nfunction dayMs(dateStr) {\n  const p = String(dateStr).split('-').map(Number);\n  return Date.UTC(p[0], p[1] - 1, p[2]);\n}\nfunction dayDiff(fromDate, toDate) {\n  return Math.round((dayMs(toDate) - dayMs(fromDate)) / DAY);\n}\nfunction dayAdd(dateStr, n) {\n  return new Date(dayMs(dateStr) + n * DAY).toISOString().slice(0, 10);\n}\nfunction cleanSpaces(s) {\n  return s.replace(/[  ]/g, ' ');\n}\nfunction fmtTime(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms)));\n}\nfunction fmtDay(ms, tz) {\n  return cleanSpaces(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms))).replace(',', '');\n}\nfunction fmtWindow(startMs, endMs, tz) {\n  return fmtDay(startMs, tz) + ' ' + fmtTime(startMs, tz) + '-' + fmtTime(endMs, tz);\n}\nfunction fix1(n) {\n  return Number(n).toFixed(1);\n}\nfunction fmtMoney(n) {\n  return '$' + Math.round(n).toLocaleString('en-US');\n}\nfunction normAddr(a) {\n  return isBlank(a) ? '' : String(a).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();\n}\nfunction normPhone(p) {\n  return isBlank(p) ? '' : String(p).replace(/\\D/g, '');\n}\nfunction lc(v) {\n  return isBlank(v) ? '' : String(v).trim().toLowerCase();\n}\nfunction plural(n, one, many) {\n  return n === 1 ? one : (many || one + 's');\n}\n\nfunction renderMessage(data) {\n  const s = data.settings;\n  const tz = s.timezone;\n  const asOf = parseTime(s.asOf);\n  const max = s.maxItemsPerSection;\n  const k = data.kpis;\n  const qa = data.bookingQa;\n  const cap = data.capacity;\n  const ah = data.afterHours;\n  const tag = s.testMode ? '[TEST] ' : '';\n  const L = [];\n  const more = function (arr) { return arr.length > max ? ['- ...and ' + (arr.length - max) + ' more (see the workflow output)'] : []; };\n\n  L.push('# ' + tag + 'Morning Dispatch KPI Digest: ' + s.businessName);\n  L.push('');\n  L.push(fmtDay(asOf, tz) + ' ' + fmtTime(asOf, tz) + ' ' + tz + ' | KPIs are for ' + k.reportDate + ' | source: ' + s.source);\n  if (s.testMode) {\n    L.push('');\n    L.push('> [TEST] Preview only. Sent to the owner address or channel you set, never to a customer.' + (s.source === 'test' ? ' Built from fictional sample data.' : ''));\n  }\n  L.push('');\n  L.push('## Dispatch KPIs');\n  L.push('');\n  const u = k.utilization;\n  L.push(u.team ? '- Technician utilization (team): ' + fix1(u.team.pct) + '% (' + u.team.minutes + ' on-site minutes of ' + u.team.shiftMinutes + ' shift minutes)' : '- Technician utilization: not available (see Heads-up)');\n  u.perTech.forEach(function (p) {\n    L.push('  - ' + p.name + ' (' + p.trade + '): ' + (p.utilizationPct === null ? 'n/a' : fix1(p.utilizationPct) + '%') + ', ' + p.jobs + ' completed ' + plural(p.jobs, 'job'));\n  });\n  L.push(k.responseTime\n    ? '- Response time, emergency and same-day jobs (booked to arrival): average ' + fix1(k.responseTime.avgMinutes) + ' min, longest ' + k.responseTime.maxMinutes + ' min, across ' + k.responseTime.count + ' ' + plural(k.responseTime.count, 'job')\n    : '- Response time: not available (see Heads-up)');\n  L.push(k.openCapacity\n    ? '- Open capacity, next ' + k.openCapacity.lookaheadDays + ' days: ' + fix1(k.openCapacity.hours) + ' hours in ' + k.openCapacity.slots + ' open ' + plural(k.openCapacity.slots, 'slot') + ' across ' + k.openCapacity.windows + ' ' + plural(k.openCapacity.windows, 'window')\n    : '- Open capacity: not available (see Heads-up)');\n  L.push(k.unworkedEstimates\n    ? '- Unworked estimates: ' + k.unworkedEstimates.count + ' open ' + plural(k.unworkedEstimates.count, 'estimate') + ' worth ' + fmtMoney(k.unworkedEstimates.total) + ' with no activity for ' + s.estimateStaleDays + '+ days'\n    : '- Unworked estimates: not available (see Heads-up)');\n  L.push('- Utilization counts on-site job minutes only. Drive time and non-job time are not in the data.');\n  const hu = k.headsUp.concat(ah && ah.computed === false ? [ah.headsUp] : []);\n  if (hu.length > 0) {\n    L.push('');\n    hu.forEach(function (h) { L.push('Heads-up: ' + h); });\n  }\n\n  L.push('');\n  L.push('## Booking QA & skill-tier routing');\n  L.push('');\n  L.push('Newly booked jobs reviewed (last ' + qa.lookbackHours + ' hours): ' + qa.reviewedCount + '. Flagged: ' + qa.flaggedCount + '. Routing lines are suggestions; nothing is reassigned automatically.');\n  L.push('');\n  qa.flagged.slice(0, max).forEach(function (f) {\n    L.push('- Job ' + f.jobId + ' | ' + f.window + ' | ' + f.businessUnit + ', ' + f.customerType + ' | ' + f.customerName + ' | tech: ' + f.assignedTech);\n    f.flags.forEach(function (x) { L.push('  - ' + x.text); });\n    if (f.routing) {\n      if (f.routing.status === 'suggested') L.push('  - Suggested: ask dispatch to consider ' + f.routing.suggested.map(function (x) { return x.name; }).join(' or ') + ' (sales-capable, no overlapping job)');\n      else if (f.routing.status === 'none_free') L.push('  - No sales-capable ' + f.businessUnit + ' tech is free in that window. Dispatcher decides.');\n      else L.push('  - Already assigned to a sales-capable tech.');\n    }\n  });\n  more(qa.flagged).forEach(function (x) { L.push(x); });\n  if (qa.flagged.length === 0) L.push('- No flags.');\n\n  L.push('');\n  L.push('## Dispatcher callback queue (DRAFT, nothing is sent)');\n  L.push('');\n  L.push('Internal list for dispatchers only. Each row pairs a customer with an open window. The workflow never texts or emails customers.');\n  L.push('');\n  cap.queue.slice(0, max).forEach(function (q, i) {\n    L.push((i + 1) + '. ' + q.customerName + ', ' + q.customerPhone + ' | ' + q.businessUnit + ' | window ' + q.windowLabel);\n    q.reasons.forEach(function (r) { L.push('   - ' + r); });\n  });\n  more(cap.queue).forEach(function (x) { L.push(x); });\n  if (cap.queue.length === 0) L.push('- No callbacks queued.');\n  if (cap.overflow.length > 0) {\n    L.push('');\n    L.push('Not placed (no open window left for that business unit): ' + cap.overflow.map(function (o) { return o.customerName + ' (' + o.businessUnit + ')'; }).join('; '));\n  }\n\n  L.push('');\n  L.push('## After-hours handoff for the morning shift');\n  L.push('');\n  if (ah && ah.computed) {\n    L.push('Window: ' + ah.windowLabel + '. Emergency calls: ' + ah.emergencyCount + ' (' + ah.needsActionCount + ' need action, ' + ah.resolvedCount + ' resolved). Non-emergency messages: ' + ah.nonEmergencyCount + '.' + (ah.unclassifiedCount > 0 ? ' Calls with no urgency recorded: ' + ah.unclassifiedCount + '.' : ''));\n    L.push('');\n    ah.calls.slice(0, max).forEach(function (c) {\n      L.push('- ' + (c.needsAction ? 'NEEDS ACTION' : 'Resolved') + ' | ' + c.time + ' | ' + c.callerName + ', ' + c.callerPhone + ' | ' + c.address);\n      L.push('  - ' + c.summary + ' | status: ' + c.status + ' | handled by: ' + c.handledBy + (c.notes ? ' | ' + c.notes : ''));\n    });\n    more(ah.calls).forEach(function (x) { L.push(x); });\n    if (ah.calls.length === 0) L.push('- No emergency calls recorded overnight.');\n  } else {\n    L.push('Not available (see Heads-up).');\n  }\n  L.push('');\n  L.push('---');\n  L.push(tag + 'Draft pack, not yet tested against a live ServiceTitan account. Read-only. Owner-only delivery.');\n  const text = L.join('\\n');\n  const esc = function (x) { return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };\n  const placeholderEmail = !/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(s.ownerEmail) || /@example\\.(com|org|net)$/i.test(s.ownerEmail);\n  const wantsEmail = s.delivery === 'email' || s.delivery === 'both';\n  const wantsSlack = s.delivery === 'slack' || s.delivery === 'both';\n  const out = {\n    subject: tag + 'Dispatch KPI Digest: ' + s.businessName + ' (' + fmtDay(asOf, tz) + ')',\n    text: text,\n    html: '<pre style=\"font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap\">' + esc(text) + '</pre>',\n    emailTo: s.ownerEmail,\n    slackChannel: s.ownerSlackChannel,\n    sendEmail: wantsEmail && !placeholderEmail,\n    sendSlack: wantsSlack && !isBlank(s.ownerSlackChannel),\n    testMode: s.testMode,\n    deliveryNotes: [],\n  };\n  if (wantsEmail && placeholderEmail) out.deliveryNotes.push('Email not sent: ownerEmail is blank, invalid, or still the example.com placeholder.');\n  if (wantsSlack && isBlank(s.ownerSlackChannel)) out.deliveryNotes.push('Slack not sent: ownerSlackChannel is blank.');\n  return out;\n}\n\nconst d = $input.first().json;\nreturn [{ json: renderMessage(d) }];\n"
+      }
+    },
+    {
+      "id": "876ed976-e7b7-530b-ae03-c84787c7fe9f",
+      "name": "Send email to owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3500,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "2694d141-8575-5aad-a1c9-3aa77eb2e2cc",
+              "leftValue": "={{ $json.sendEmail }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ab8afdfd-78c8-5f1a-afb7-ac7ca6c5d1ff",
+      "name": "Send Slack to owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3500,
+        640
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "8a79c8b9-e111-5b4a-abc1-5261a0b37974",
+              "leftValue": "={{ $json.sendSlack }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f33769c7-9fac-50cf-a501-c37ea8835448",
+      "name": "Email owner (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3780,
+        420
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.emailTo }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PLACEHOLDER_GMAIL",
+          "name": "Gmail account (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "a1d14fb6-a2bc-534c-a17a-72c13256c777",
+      "name": "Post to owner Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        3780,
+        640
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.slackChannel.replace(/^#/, '') }}",
+          "mode": "name"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "PLACEHOLDER_SLACK",
+          "name": "Slack account (PLACEHOLDER)"
+        }
+      }
+    },
+    {
+      "id": "9421b6bd-9685-5d19-aaf1-d92549559bea",
+      "name": "Note: Start here",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        80
+      ],
+      "parameters": {
+        "content": "## START HERE: ServiceTitan Dispatch & Capacity Copilot (DRAFT v0.1.0)\nFour read-only dispatch reports for an Operations Manager, delivered to the OWNER only: (1) Booking QA & skill-tier routing, (2) open-capacity & unsold-estimate callback queue, (3) Morning Dispatch KPI digest, (4) after-hours handoff.\n\n**Do these in order:**\n1. Import this file (done). It is inactive, and the Schedule node is switched off.\n2. Leave **source** = test and click **Execute workflow** on Manual Test Run. The result is a [TEST] message built from fictional HVAC / plumbing / electrical sample data.\n3. Compare it with sample_test_digest.md.\n4. Switch to **csv** (your own ServiceTitan report exports) and re-run. Still [TEST].\n5. Only then think about go-live. See the Go live note.\n\nStatus: DRAFT. Designed from public ServiceTitan docs and checked as importable JSON. NOT tested against a live ServiceTitan, Gmail, or Slack account.",
+        "height": 330,
+        "width": 620,
+        "color": 4
+      }
+    },
+    {
+      "id": "50c993b8-50b8-5716-abdd-56c2d24c96de",
+      "name": "Note: Config guide",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        280,
+        80
+      ],
+      "parameters": {
+        "content": "## Config fields\n- **source**: test (built-in fictional data, default) | csv (read exports from csvFolder) | servicetitan (live read-only GETs). Anything else falls back to test.\n- **testMode**: ON by default. Messages are labeled [TEST]. source = test always forces it on.\n- **delivery**: email | slack | both | none. Owner only.\n- **ownerEmail / ownerSlackChannel**: YOUR address and a private channel. Never a customer.\n- **stApiBase / stTenantId / stAppKey**: paste-here placeholders for the live path. Unused unless source = servicetitan.\n- **csvFolder**: folder with technicians.csv, jobs.csv, capacity.csv, memberships.csv, estimates.csv, calls.csv. n8n only reads files inside its allowed folder.\n- **asOfOverride**: optional ISO time to pretend it is a different moment (needed to run old exports). Blank = now.\n- Thresholds: replacementAgeYears, membershipOverdueDays, estimateStaleDays, bookingLookbackHours, repeatWindowDays, capacityLookaheadDays, afterHoursStartHour (17 = 5 PM), maxItemsPerSection, historyDays. digestHour is informational; the Schedule node sets the real time (7:00 AM).",
+        "height": 330,
+        "width": 560,
+        "color": 5
+      }
+    },
+    {
+      "id": "f6063812-f202-5419-a964-7bbc6a829d57",
+      "name": "Note: Safety defaults",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        80
+      ],
+      "parameters": {
+        "content": "## Safety defaults\n- Imported **inactive**; Schedule **disabled**.\n- **testMode** ON; source = **test**.\n- **Read-only**: ServiceTitan nodes are GET only. No POST, PUT, PATCH, or DELETE.\n- **No customer messages**: there is no SMS, no Twilio, and no customer email node anywhere in this file.\n- The callback queue is a **draft list for dispatchers**. A person decides who to call.\n- Booking QA **suggests** routing. It never reassigns a job.\n- Never invents numbers. A metric that cannot be computed becomes a \"Heads-up\" line.",
+        "height": 330,
+        "width": 520,
+        "color": 6
+      }
+    },
+    {
+      "id": "2194dcac-0486-5e6e-af22-64c9a75c14a3",
+      "name": "Note: ServiceTitan v2 endpoints (UNVERIFIED)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        20
+      ],
+      "parameters": {
+        "content": "## Live path: ServiceTitan v2 REST reads (all GET). UNVERIFIED against a real tenant.\nBase: {stApiBase}/{module}/v2/tenant/{tenantId}/... plus header ST-App-Key. Auth is an n8n OAuth2 credential (client credentials) named PLACEHOLDER_SERVICETITAN; n8n fetches the token, so this workflow never POSTs to ServiceTitan.\nJobs: jpm/v2/.../jobs | Appointments: jpm/v2/.../appointments | Appointment assignments: dispatch/v2/.../appointment-assignments | Technicians: settings/v2/.../technicians | Technician shifts: dispatch/v2/.../technician-shifts | Estimates: sales/v2/.../estimates | Recurring service events (membership due dates): memberships/v2/.../recurring-service-events | Calls: telecom/v3/.../calls\nThe Dispatch capacity query is a POST, so it is NOT used. Open windows are derived as shift time minus booked appointments. Exact paths, query names, response fields, and API-version numbers are from public docs and memory and must be confirmed before use. Customer names, phones, equipment, and customer type need extra lookups this draft does not make. First page only (pageSize 200).",
+        "height": 230,
+        "width": 1900,
+        "color": 3
+      }
+    },
+    {
+      "id": "5a7d05f3-7589-5224-ab4d-80f3a93c0de9",
+      "name": "Note: CSV fallback",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        940
+      ],
+      "parameters": {
+        "content": "## CSV export fallback (recommended first step)\nExport your own reports to the six CSV files named in the Config note, drop them in csvFolder, set source = csv, and set asOfOverride if the export is not from today. This path only READS files. See fixtures/ in the pack for the exact columns. Source = test uses the same fictional files, built in.",
+        "height": 200,
+        "width": 640,
+        "color": 4
+      }
+    },
+    {
+      "id": "38464264-ad66-5818-a0e9-b825a05981c2",
+      "name": "Note: Credentials",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3460,
+        220
+      ],
+      "parameters": {
+        "content": "## Credentials (placeholders only)\nPLACEHOLDER_SERVICETITAN (OAuth2, live path only), PLACEHOLDER_GMAIL, PLACEHOLDER_SLACK. Attach your own. No secrets, client IDs, or tenant IDs are stored in this file. Do not paste real ones into Config and then share the workflow.",
+        "height": 160,
+        "width": 520,
+        "color": 2
+      }
+    },
+    {
+      "id": "7f878bc9-38f0-53a1-ab13-d12059c54a4b",
+      "name": "Note: Go live",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3460,
+        800
+      ],
+      "parameters": {
+        "content": "## Hard stop before go-live\nDo not turn testMode off or switch the Schedule on until: (1) a clean [TEST] run from sample data, (2) a clean [TEST] run from YOUR csv export, spot-checked by hand against ServiceTitan, (3) ownerEmail / ownerSlackChannel confirmed as owner-only, (4) an owner has signed off in writing. Even live, this workflow only reports to the owner. It will not contact customers or change ServiceTitan.",
+        "height": 250,
+        "width": 520,
+        "color": 6
+      }
+    }
+  ],
+  "connections": {
+    "Manual Test Run": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule 7:00 AM (disabled until you are ready)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Prepare Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Settings": {
+      "main": [
+        [
+          {
+            "node": "Source is ServiceTitan?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source is ServiceTitan?": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Source is CSV?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Jobs": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Appointments": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Appointment Assignments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Appointment Assignments": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Technicians",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Technicians": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Technician Shifts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Technician Shifts": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Estimates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Estimates": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Recurring Service Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Recurring Service Events": {
+      "main": [
+        [
+          {
+            "node": "ServiceTitan: Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ServiceTitan: Calls": {
+      "main": [
+        [
+          {
+            "node": "Normalize ServiceTitan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize ServiceTitan": {
+      "main": [
+        [
+          {
+            "node": "1. Booking QA & Skill-Tier Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source is CSV?": {
+      "main": [
+        [
+          {
+            "node": "Read CSV Exports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load Built-in Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV Exports": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV Exports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV Exports": {
+      "main": [
+        [
+          {
+            "node": "1. Booking QA & Skill-Tier Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Built-in Test Data": {
+      "main": [
+        [
+          {
+            "node": "1. Booking QA & Skill-Tier Routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Booking QA & Skill-Tier Routing": {
+      "main": [
+        [
+          {
+            "node": "2. Open-Capacity & Unsold-Estimate Filler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Open-Capacity & Unsold-Estimate Filler": {
+      "main": [
+        [
+          {
+            "node": "3. Morning Dispatch KPI Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Morning Dispatch KPI Digest": {
+      "main": [
+        [
+          {
+            "node": "4. After-Hours Handoff Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. After-Hours Handoff Summary": {
+      "main": [
+        [
+          {
+            "node": "Assemble Owner Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Owner Message": {
+      "main": [
+        [
+          {
+            "node": "Send email to owner?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Slack to owner?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email to owner?": {
+      "main": [
+        [
+          {
+            "node": "Email owner (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack to owner?": {
+      "main": [
+        [
+          {
+            "node": "Post to owner Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Chicago"
+  }
+}
